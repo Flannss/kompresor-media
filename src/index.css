@@ -1,0 +1,28 @@
+@import "tailwindcss";
+@import "./design-system/tokens.css";
+
+@layer base {
+  html,
+  body {
+    background-color: var(--surface-canvas);
+    color: var(--ink-primary);
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href] {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

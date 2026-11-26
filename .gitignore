@@ -1,0 +1,19 @@
+# Dependencies & build outputs
+node_modules/
+dist/
+coverage/
+
+# Phase 5 lazy-copied WASM core assets (copied at build time, never committed)
+public/ffmpeg/
+
+# Environment & local files
+.env
+.env.*
+!.env.example
+*.log
+
+# OS & editor junk
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
