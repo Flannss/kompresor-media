@@ -15,8 +15,9 @@ export function formatBytes(bytes: number): string {
     unitIndex += 1;
   }
 
-  const decimals = value >= 100 ? 1 : 2;
-  return `${value.toFixed(decimals)} ${UNITS[unitIndex]}`;
+  const decimals = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+  const formatted = value.toFixed(decimals).replace('.', ',');
+  return `${formatted} ${UNITS[unitIndex]}`;
 }
 
 export function formatByteDelta(deltaBytes: number): string {

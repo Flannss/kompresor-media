@@ -20,7 +20,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return {
       hasError: true,
-      message: error instanceof Error ? error.message : 'Unexpected application error.',
+      message: error instanceof Error ? error.message : 'Terjadi gangguan pada halaman.',
     };
   }
 
@@ -36,16 +36,16 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   render() {
     if (this.state.hasError) {
       return (
-        <div className="mx-auto my-12 max-w-lg rounded-xl border border-[var(--status-err-border)] bg-[var(--surface-card)] p-6">
-          <h1 className="text-base font-semibold text-[var(--ink-primary)]">
-            Workspace encountered an error
+        <div className="mx-auto my-12 max-w-lg rounded-2xl border border-[var(--status-err-border)] bg-[var(--bg-surface)] p-6">
+          <h1 className="text-base font-semibold text-[var(--text-primary)]">
+            Halaman mengalami kendala
           </h1>
-          <p className="mt-2 text-xs leading-relaxed text-[var(--ink-secondary)]">
+          <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">
             {this.state.message}
           </p>
           <div className="mt-4">
             <Button variant="primary" size="sm" onClick={this.handleReset}>
-              Reset Workspace
+              Muat Ulang Tampilan
             </Button>
           </div>
         </div>

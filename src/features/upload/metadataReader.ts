@@ -29,7 +29,7 @@ function gcd(a: number, b: number): number {
 
 export function computeAspectRatioLabel(width: number, height: number): string {
   if (width <= 0 || height <= 0) {
-    return 'n/a';
+    return '—';
   }
   const divisor = gcd(width, height);
   const w = Math.round(width / divisor);
@@ -65,7 +65,6 @@ export function parseJpegExifOrientation(bytes: Uint8Array): ExifOrientation | n
     const marker = bytes[offset + 1];
     offset += 2;
 
-    // SOS (Start of Scan) or EOI terminates metadata headers
     if (marker === 0xda || marker === 0xd9) {
       break;
     }
@@ -81,7 +80,6 @@ export function parseJpegExifOrientation(bytes: Uint8Array): ExifOrientation | n
       break;
     }
 
-    // APP1 marker with "Exif\0\0"
     if (
       marker === 0xe1 &&
       segmentLength >= 16 &&
@@ -224,10 +222,9 @@ function analyzeImageHeaderHints(
     };
   }
 
-  // AVIF
   return {
     exifOrientation: null,
-    hasAlpha: bytesContainSequence(bytes, [0x61, 0x75, 0x78, 0x43]), // auxC
+    hasAlpha: bytesContainSequence(bytes, [0x61, 0x75, 0x78, 0x43]),
     isAnimated: false,
   };
 }
@@ -235,7 +232,7 @@ function analyzeImageHeaderHints(
 async function decodeImageDimensions(file: File): Promise<{ width: number; height: number }> {
   if (typeof createImageBitmap === 'function') {
     try {
-      const bitmap = await createImageBitmap(file);
+      const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
       try {
         if (bitmap.width > 0 && bitmap.height > 0) {
           return { width: bitmap.width, height: bitmap.height };
@@ -256,11 +253,11 @@ async function decodeImageDimensions(file: File): Promise<{ width: number; heigh
         if (img.naturalWidth > 0 && img.naturalHeight > 0) {
           resolve({ width: img.naturalWidth, height: img.naturalHeight });
         } else {
-          reject(new Error(`Unable to decode image dimensions for "${file.name}".`));
+          reject(new Error(`Tidak dapat membaca ukuran foto "${file.name}".`));
         }
       };
       img.onerror = () => {
-        reject(new Error(`Browser failed to decode "${file.name}" (corrupt or unsupported pixels).`));
+        reject(new Error(`Foto "${file.name}" rusak atau tidak dapat dibuka oleh browser.`));
       };
       img.src = objectUrl;
     });
@@ -351,7 +348,7 @@ export async function readVideoMetadata(
         const onLoaded = () => {
           cleanup();
           if (video.videoWidth <= 0 || video.videoHeight <= 0) {
-            reject(new Error(`No playable video track found in "${file.name}".`));
+            reject(new Error(`Tidak ditemukan trek video yang dapat diputar di "${file.name}".`));
             return;
           }
           resolve({
@@ -362,8 +359,7 @@ export async function readVideoMetadata(
         };
         const onError = () => {
           cleanup();
-          const msg = video.error?.message || 'unsupported codec or corrupt container';
-          reject(new Error(`Unable to read video metadata for "${file.name}": ${msg}`));
+          reject(new Error(`Video "${file.name}" rusak atau formatnya tidak didukung browser.`));
         };
         const cleanup = () => {
           video.removeEventListener('loadedmetadata', onLoaded);

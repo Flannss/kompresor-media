@@ -120,7 +120,7 @@ export function scanMagicSignature(bytes: Uint8Array): SignatureScanResult {
       return {
         signature: null,
         unsupportedReason:
-          'Matroska (MKV) containers are not supported for browser preview/metadata. Convert or remux to MP4 or WebM.',
+          'Format video MKV belum didukung oleh browser. Ubah atau simpan ulang ke MP4 atau WebM.',
         unsupportedLabel: 'Matroska (MKV)',
       };
     }
@@ -138,7 +138,7 @@ export function scanMagicSignature(bytes: Uint8Array): SignatureScanResult {
       return {
         signature: null,
         unsupportedReason:
-          'HEIC/HEIF images are not supported natively in most browsers. Export as JPEG or PNG first.',
+          'Foto HEIC/HEIF belum didukung langsung oleh sebagian besar browser. Ubah ke JPG atau PNG terlebih dahulu.',
         unsupportedLabel: `HEIC/HEIF (${majorBrand})`,
       };
     }
@@ -222,7 +222,7 @@ export async function validateMediaFile(
     return {
       valid: false,
       errorCode: 'EMPTY_FILE',
-      reason: `"${file.name}" is empty (0 bytes).`,
+      reason: `File "${file.name}" kosong dan tidak memiliki isi.`,
       declaredMime,
       detectedSignatureLabel: null,
       fileName: file.name,
@@ -253,8 +253,8 @@ export async function validateMediaFile(
       valid: false,
       errorCode: declaredKind ? 'CORRUPT_HEADER' : 'UNSUPPORTED_TYPE',
       reason: declaredKind
-        ? `"${file.name}" claims ${declaredMime}, but its file header does not match a valid image or video signature.`
-        : `Unsupported file format for "${file.name}". Drop a JPEG, PNG, WebP, GIF, AVIF photo or MP4, MOV, WebM video.`,
+        ? `File "${file.name}" rusak atau format aslinya tidak sesuai. Pilih foto atau video lain.`
+        : `Format file "${file.name}" tidak didukung. Pilih foto JPG, PNG, WebP, GIF, AVIF atau video MP4, MOV, WebM.`,
       declaredMime,
       detectedSignatureLabel: null,
       fileName: file.name,
@@ -268,7 +268,7 @@ export async function validateMediaFile(
     return {
       valid: false,
       errorCode: 'SIGNATURE_MISMATCH',
-      reason: `File type mismatch: "${file.name}" declares "${declaredMime}" (${declaredKind}), but its header is ${detected.label} (${detected.mimeType}).`,
+      reason: `Isi file "${file.name}" tidak sesuai dengan ekstensinya (terdeteksi sebagai ${detected.label}).`,
       declaredMime,
       detectedSignatureLabel: detected.label,
       fileName: file.name,
@@ -278,10 +278,11 @@ export async function validateMediaFile(
 
   const limitBytes = detected.kind === 'image' ? maxImageBytes : maxVideoBytes;
   if (file.size > limitBytes) {
+    const kindLabel = detected.kind === 'image' ? 'foto' : 'video';
     return {
       valid: false,
       errorCode: 'FILE_TOO_LARGE',
-      reason: `"${file.name}" exceeds the ${formatLimitMb(limitBytes)} ${detected.kind} limit.`,
+      reason: `Ukuran file "${file.name}" melebihi batas maksimal ${formatLimitMb(limitBytes)} untuk ${kindLabel}.`,
       declaredMime,
       detectedSignatureLabel: detected.label,
       fileName: file.name,
@@ -292,7 +293,7 @@ export async function validateMediaFile(
   const warnings: string[] = [];
   if (declaredMime && declaredMime !== detected.mimeType) {
     warnings.push(
-      `Browser reported "${declaredMime}", but file header is ${detected.label} (${detected.mimeType}); using detected signature.`
+      `Ekstensi file berbeda dengan isi aslinya; dibaca sebagai format ${detected.label}.`
     );
   }
 

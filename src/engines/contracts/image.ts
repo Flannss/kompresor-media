@@ -4,14 +4,19 @@ export type ImagePresetId = 'whatsapp-chat' | 'whatsapp-status' | 'instagram-sto
 
 export type ImageOutputFormat = 'image/jpeg' | 'image/webp' | 'image/png';
 
+export type ImageRotation = 0 | 90 | 180 | 270;
+
 export interface ImageEditState {
   presetId: ImagePresetId;
-  maxEdgePx: number;
+  /** Longest edge target in pixels; null keeps original dimensions. */
+  maxEdgePx: number | null;
   outputFormat: ImageOutputFormat;
   /** Normalized quality between 0.1 and 1.0 (ignored for lossless PNG). */
   quality: number;
-  /** Unsharp/sharpen convolution strength between 0.0 and 2.0. */
+  /** Post-resize sharpening level between 0 and 100. */
   sharpenAmount: number;
+  /** Clockwise rotation in degrees. */
+  rotationDeg: ImageRotation;
   stripMetadata: boolean;
 }
 

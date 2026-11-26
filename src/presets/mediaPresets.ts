@@ -1,4 +1,9 @@
-import type { ImageEditState, ImagePresetId, VideoEditState, VideoPresetId } from '../engines/contracts';
+import type {
+  ImageEditState,
+  ImagePresetId,
+  VideoEditState,
+  VideoPresetId,
+} from '../engines/contracts';
 
 export type MediaPresetId = ImagePresetId & VideoPresetId;
 
@@ -15,16 +20,17 @@ export interface MediaPresetSpec {
 export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
   {
     id: 'whatsapp-chat',
-    label: 'WhatsApp Chat',
-    shortLabel: 'WA Chat',
-    summary: 'Balanced 1600 px photo / 720p H.264 MP4 tuned to avoid harsh chat re-compression.',
-    targetLimitLabel: '<= 16 MB fast share',
+    label: 'WhatsApp',
+    shortLabel: 'WhatsApp',
+    summary: 'Foto dikecilkan ke 1600 px dengan format JPG agar tetap jernih dan ringan dikirim lewat chat.',
+    targetLimitLabel: 'Ringan & cepat kirim',
     image: {
       presetId: 'whatsapp-chat',
       maxEdgePx: 1600,
       outputFormat: 'image/jpeg',
-      quality: 0.84,
-      sharpenAmount: 0.35,
+      quality: 0.82,
+      sharpenAmount: 20,
+      rotationDeg: 0,
       stripMetadata: true,
     },
     video: {
@@ -39,16 +45,17 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
   },
   {
     id: 'whatsapp-status',
-    label: 'WhatsApp Status',
-    shortLabel: 'WA Status',
-    summary: 'Crisp 1280 px photo / 720p video with 30 s trim ceiling and mild detail sharpen.',
-    targetLimitLabel: '720p / 30 s target',
+    label: 'Status WA',
+    shortLabel: 'Status WA',
+    summary: 'Resolusi hingga 1920 px dengan kualitas 85% supaya foto status tetap tajam.',
+    targetLimitLabel: 'Tajam untuk status',
     image: {
       presetId: 'whatsapp-status',
-      maxEdgePx: 1280,
+      maxEdgePx: 1920,
       outputFormat: 'image/jpeg',
       quality: 0.85,
-      sharpenAmount: 0.45,
+      sharpenAmount: 15,
+      rotationDeg: 0,
       stripMetadata: true,
     },
     video: {
@@ -63,16 +70,17 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
   },
   {
     id: 'instagram-story',
-    label: 'Instagram Story / Feed',
-    shortLabel: 'IG Story',
-    summary: 'High-detail 1920 px photo / 720p higher-bitrate MP4 preserving texture and sharpness.',
-    targetLimitLabel: '1080x1920 / 60 s',
+    label: 'Story IG',
+    shortLabel: 'Story IG',
+    summary: 'Detail tinggi hingga 1920 px dengan kompresi seimbang untuk Story atau Feed.',
+    targetLimitLabel: 'Kualitas visual seimbang',
     image: {
       presetId: 'instagram-story',
       maxEdgePx: 1920,
       outputFormat: 'image/jpeg',
-      quality: 0.9,
-      sharpenAmount: 0.4,
+      quality: 0.86,
+      sharpenAmount: 15,
+      rotationDeg: 0,
       stripMetadata: true,
     },
     video: {
@@ -87,16 +95,17 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
   },
   {
     id: 'custom',
-    label: 'Custom',
-    shortLabel: 'Custom',
-    summary: 'Manual control over target edge, format, quality, sharpen, trim window, and audio.',
-    targetLimitLabel: 'Manual parameters',
+    label: 'Atur Sendiri',
+    shortLabel: 'Atur Sendiri',
+    summary: 'Sesuaikan format, batas ukuran, tingkat kualitas, dan arah foto secara manual.',
+    targetLimitLabel: 'Sesuaikan manual',
     image: {
       presetId: 'custom',
       maxEdgePx: 1600,
-      outputFormat: 'image/webp',
+      outputFormat: 'image/jpeg',
       quality: 0.85,
-      sharpenAmount: 0.3,
+      sharpenAmount: 15,
+      rotationDeg: 0,
       stripMetadata: true,
     },
     video: {

@@ -6,19 +6,19 @@ import { formatByteDelta, formatBytes } from '../shared/utils/formatBytes';
 import { formatDuration, formatDurationPrecise } from '../shared/utils/formatDuration';
 
 describe('formatBytes & formatByteDelta', () => {
-  it('formats byte sizes consistently', () => {
+  it('formats byte sizes in clean Indonesian decimal notation', () => {
     expect(formatBytes(0)).toBe('0 B');
     expect(formatBytes(512)).toBe('512 B');
-    expect(formatBytes(1024)).toBe('1.00 KB');
-    expect(formatBytes(1_964_198)).toBe('1.87 MB');
-    expect(formatBytes(105 * 1024 * 1024)).toBe('105.0 MB');
+    expect(formatBytes(1024)).toBe('1,00 KB');
+    expect(formatBytes(1_964_198)).toBe('1,87 MB');
+    expect(formatBytes(105 * 1024 * 1024)).toBe('105 MB');
     expect(formatBytes(-1)).toBe('0 B');
   });
 
   it('formats byte deltas with sign', () => {
     expect(formatByteDelta(0)).toBe('0 B');
-    expect(formatByteDelta(-1_239_370)).toBe('-1.18 MB');
-    expect(formatByteDelta(2048)).toBe('+2.00 KB');
+    expect(formatByteDelta(-1_239_370)).toBe('-1,18 MB');
+    expect(formatByteDelta(2048)).toBe('+2,00 KB');
   });
 });
 
@@ -44,19 +44,17 @@ describe('metadata helpers', () => {
   });
 
   it('parses JPEG EXIF Orientation in little-endian and big-endian TIFF blocks', () => {
-    // Minimal SOI + APP1 Exif ("II" little-endian, 1 IFD0 entry: tag 0x0112 = 6)
     const leBytes = new Uint8Array([
-      0xff, 0xd8, // SOI
-      0xff, 0xe1, 0x00, 0x20, // APP1 len = 32
-      0x45, 0x78, 0x69, 0x66, 0x00, 0x00, // "Exif\0\0"
-      0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, // TIFF II + IFD0 offset 8
-      0x01, 0x00, // entry count = 1
-      0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, // tag 0x0112 = 6
-      0xff, 0xd9, // EOI
+      0xff, 0xd8,
+      0xff, 0xe1, 0x00, 0x20,
+      0x45, 0x78, 0x69, 0x66, 0x00, 0x00,
+      0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00,
+      0x01, 0x00,
+      0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00,
+      0xff, 0xd9,
     ]);
     expect(parseJpegExifOrientation(leBytes)).toBe(6);
 
-    // Big-endian "MM" with orientation = 3
     const beBytes = new Uint8Array([
       0xff, 0xd8,
       0xff, 0xe1, 0x00, 0x20,

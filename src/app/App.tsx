@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ChangeEvent } from 'react';
+import { disposeImageEngine } from '../engines/image/imageEngineClient';
 import { UploadZone } from '../features/upload/UploadZone';
 import { WorkspaceHeader } from '../features/workspace/WorkspaceHeader';
 import { WorkspaceStage } from '../features/workspace/WorkspaceStage';
@@ -15,16 +16,23 @@ export function App() {
   const validation = useMediaStore((s) => s.validation);
   const metadata = useMediaStore((s) => s.metadata);
   const objectUrl = useMediaStore((s) => s.objectUrl);
-  const revokedUrlCount = useMediaStore((s) => s.revokedUrlCount);
   const errorMessage = useMediaStore((s) => s.errorMessage);
   const selectedPresetId = useMediaStore((s) => s.selectedPresetId);
+  const imageEdit = useMediaStore((s) => s.imageEdit);
+  const imageProcessStatus = useMediaStore((s) => s.imageProcessStatus);
+  const imageProcessResult = useMediaStore((s) => s.imageProcessResult);
+  const processedImageUrl = useMediaStore((s) => s.processedImageUrl);
+  const imageProcessError = useMediaStore((s) => s.imageProcessError);
   const loadMediaFile = useMediaStore((s) => s.loadMediaFile);
   const setPreset = useMediaStore((s) => s.setPreset);
+  const updateImageEdit = useMediaStore((s) => s.updateImageEdit);
+  const rotatePhoto90 = useMediaStore((s) => s.rotatePhoto90);
   const clearMedia = useMediaStore((s) => s.clearMedia);
 
   useEffect(() => {
     return () => {
       useMediaStore.getState().clearMedia();
+      disposeImageEngine();
     };
   }, []);
 
@@ -40,11 +48,12 @@ export function App() {
     e.target.value = '';
   };
 
-  const isReady = status === 'ready' && metadata !== null && validation?.valid === true && objectUrl !== null;
+  const isReady =
+    status === 'ready' && metadata !== null && validation?.valid === true && objectUrl !== null;
 
   return (
     <ErrorBoundary onReset={clearMedia}>
-      <div className="flex min-h-screen flex-col bg-[var(--surface-canvas)] text-[var(--ink-primary)]">
+      <div className="flex min-h-screen flex-col bg-[var(--bg-app)] text-[var(--text-primary)]">
         <WorkspaceHeader
           hasMedia={isReady}
           onReplaceClick={() => replaceInputRef.current?.click()}
@@ -58,18 +67,24 @@ export function App() {
           accept={ACCEPTED_MEDIA}
           onChange={handleReplaceInputChange}
           className="sr-only"
-          aria-label="Replace active photo or video file"
+          aria-label="Ganti file foto atau video"
         />
 
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 sm:px-6 sm:py-6">
+        <main className="flex flex-1 flex-col">
           {isReady ? (
             <WorkspaceStage
               metadata={metadata}
               validation={validation}
               objectUrl={objectUrl}
-              revokedUrlCount={revokedUrlCount}
               selectedPresetId={selectedPresetId}
+              imageEdit={imageEdit}
+              imageProcessStatus={imageProcessStatus}
+              imageProcessResult={imageProcessResult}
+              processedImageUrl={processedImageUrl}
+              imageProcessError={imageProcessError}
               onSelectPreset={setPreset}
+              onUpdateImageEdit={updateImageEdit}
+              onRotatePhoto90={rotatePhoto90}
               onDropReplaceFile={handleFileSelected}
             />
           ) : (

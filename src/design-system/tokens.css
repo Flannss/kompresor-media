@@ -1,37 +1,34 @@
 :root {
-  /* Surfaces */
-  --surface-canvas: #f4f8f9;
-  --surface-card: #ffffff;
-  --surface-subtle: #e9f1f3;
-  --surface-stage: #0e1c22;
+  /* Aquatic Clean Surfaces */
+  --bg-app: #f4f9fa;
+  --bg-stage: #eaf3f6;
+  --bg-surface: #ffffff;
+  --bg-subtle: #edf6f8;
 
-  /* Borders */
-  --border-subtle: #d4e1e6;
-  --border-strong: #9eb6bf;
+  /* Hairline Borders */
+  --border-hairline: #d5e8ed;
+  --border-active: #59afc0;
 
-  /* Ink (Contrast-audited WCAG AA >= 4.5:1 on matching surfaces) */
-  --ink-primary: #0f252d;
-  --ink-secondary: #3d5a64;
-  --ink-muted: #4f6b75;
+  /* Accent (White text contrast >= 5.2:1) */
+  --accent-primary: #2b7387;
+  --accent-primary-hover: #215c6d;
   --ink-on-accent: #ffffff;
-  --ink-on-stage: #e6f0f3;
 
-  /* Aquatic Teal Accent */
-  --accent-primary: #0b7285;
-  --accent-primary-hover: #085a69;
-  --accent-tint: #e3f4f7;
-  --accent-border: #9ad1dc;
+  /* Typography Ink (WCAG AA contrast on light surfaces) */
+  --text-primary: #1b3742;
+  --text-secondary: #4d6872;
+  --text-muted: #58727b;
 
-  /* Semantic Status */
-  --status-ok-bg: #e6f4ee;
-  --status-ok-ink: #0e6245;
-  --status-ok-border: #a8dac5;
+  /* Semantic Feedback */
+  --status-ok-bg: #e7f5ef;
+  --status-ok-ink: #0f5f42;
+  --status-ok-border: #b3decb;
 
-  --status-warn-bg: #fef5e6;
-  --status-warn-ink: #8c4a08;
-  --status-warn-border: #f2ce96;
+  --status-warn-bg: #fef6e8;
+  --status-warn-ink: #824508;
+  --status-warn-border: #efd19d;
 
-  --status-err-bg: #fceef0;
-  --status-err-ink: #a61b2b;
-  --status-err-border: #f0b4bc;
+  --status-err-bg: #fdeff1;
+  --status-err-ink: #9d1a29;
+  --status-err-border: #efc0c6;
 }

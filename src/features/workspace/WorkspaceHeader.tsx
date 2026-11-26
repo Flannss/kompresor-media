@@ -1,5 +1,4 @@
-import { FolderOpen, ShieldCheck, X } from 'lucide-react';
-import { Badge } from '../../design-system/components/Badge';
+import { FolderOpen, X } from 'lucide-react';
 import { Button } from '../../design-system/components/Button';
 
 export interface WorkspaceHeaderProps {
@@ -14,23 +13,34 @@ export function WorkspaceHeader({
   onClearClick,
 }: WorkspaceHeaderProps) {
   return (
-    <header className="sticky top-0 z-20 border-b border-[var(--border-subtle)] bg-[var(--surface-card)]">
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+    <header className="sticky top-0 z-20 h-14 border-b border-[var(--border-hairline)] bg-[var(--bg-surface)]">
+      <div className="mx-auto flex h-full max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--accent-primary)] text-xs font-bold text-[var(--ink-on-accent)]">
-            KM
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#2B7387"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className="shrink-0"
+          >
+            <path d="M4 8V6a2 2 0 0 1 2-2h2" />
+            <path d="M16 4h2a2 2 0 0 1 2 2v2" />
+            <path d="M20 16v2a2 2 0 0 1-2 2h-2" />
+            <path d="M8 20H6a2 2 0 0 1-2-2v-2" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          <span className="truncate text-sm font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
+            Kompresor Media
           </span>
-          <span className="truncate text-sm font-semibold tracking-tight text-[var(--ink-primary)]">
-            KOMPRESOR MEDIA
-          </span>
-          <Badge tone="ok" className="hidden sm:inline-flex">
-            <ShieldCheck className="h-3 w-3" aria-hidden="true" />
-            100% Local
-          </Badge>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {hasMedia && (
+          {hasMedia ? (
             <>
               <Button
                 variant="secondary"
@@ -39,7 +49,7 @@ export function WorkspaceHeader({
                 onClick={onReplaceClick}
               >
                 <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>Replace file</span>
+                <span>Ganti file</span>
               </Button>
               <Button
                 variant="ghost"
@@ -48,9 +58,13 @@ export function WorkspaceHeader({
                 onClick={onClearClick}
               >
                 <X className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>Clear</span>
+                <span>Tutup</span>
               </Button>
             </>
+          ) : (
+            <span className="text-xs text-[var(--text-muted)]">
+              Diproses langsung di perangkat
+            </span>
           )}
         </div>
       </div>
