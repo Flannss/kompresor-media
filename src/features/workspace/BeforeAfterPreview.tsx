@@ -1,38 +1,95 @@
-import { useState } from 'react';
-import { Columns2 } from 'lucide-react';
-import type { ImageRotation } from '../../engines/contracts';
+import { useRef, type PointerEvent } from 'react';
+
+export type StageBackdrop = 'light' | 'dark' | 'checker';
 
 export interface BeforeAfterPreviewProps {
   originalUrl: string;
   processedUrl: string | null;
   fileName: string;
-  rotationDeg: ImageRotation;
+  canSplitCompare: boolean;
+  compareMode: boolean;
+  splitPct: number;
+  onSplitPctChange: (pct: number) => void;
+  showOriginalOnly: boolean;
+  backdrop: StageBackdrop;
+}
+
+export function getBackdropClasses(backdrop: StageBackdrop): string {
+  if (backdrop === 'checker') {
+    return 'bg-checkerboard';
+  }
+  if (backdrop === 'dark') {
+    return 'bg-[#0A1114]';
+  }
+  return 'bg-[#FFFFFF]';
 }
 
 export function BeforeAfterPreview({
   originalUrl,
   processedUrl,
   fileName,
-  rotationDeg,
+  canSplitCompare,
+  compareMode,
+  splitPct,
+  onSplitPctChange,
+  showOriginalOnly,
+  backdrop,
 }: BeforeAfterPreviewProps) {
-  const [compareMode, setCompareMode] = useState(false);
-  const [splitPct, setSplitPct] = useState(50);
-  const [showOriginalOnly, setShowOriginalOnly] = useState(false);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const draggingSplitRef = useRef(false);
 
-  const canSplitOverlay = processedUrl !== null && rotationDeg === 0;
-  const displayUrl =
-    showOriginalOnly || !processedUrl ? originalUrl : processedUrl;
+  const displayUrl = showOriginalOnly || !processedUrl ? originalUrl : processedUrl;
+  const isSplitActive = compareMode && canSplitCompare && processedUrl !== null;
+
+  const updateSplitFromClientX = (clientX: number) => {
+    const el = stageRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const pct = Math.round(((clientX - rect.left) / rect.width) * 100);
+    onSplitPctChange(Math.min(95, Math.max(5, pct)));
+  };
+
+  const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (!isSplitActive) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    draggingSplitRef.current = true;
+    updateSplitFromClientX(e.clientX);
+  };
+
+  const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (!draggingSplitRef.current) return;
+    updateSplitFromClientX(e.clientX);
+  };
+
+  const handlePointerUp = (e: PointerEvent<HTMLDivElement>) => {
+    if (!draggingSplitRef.current) return;
+    draggingSplitRef.current = false;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  };
 
   return (
-    <div className="flex w-full flex-col items-center gap-3">
-      <div className="relative flex max-h-[62vh] max-w-full items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)]">
-        {compareMode && canSplitOverlay ? (
-          <div className="relative select-none" data-testid="compare-split-stage">
+    <div className="flex w-full flex-col items-center gap-2.5">
+      <div
+        className={`relative flex max-h-[58vh] max-w-full items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-hairline)] transition-colors ${getBackdropClasses(backdrop)}`}
+        style={{ boxShadow: 'var(--stage-shadow)' }}
+      >
+        {isSplitActive ? (
+          <div
+            ref={stageRef}
+            data-testid="compare-split-stage"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            className="relative cursor-ew-resize touch-none select-none"
+          >
             <img
               data-testid="preview-image"
               src={processedUrl}
               alt={`${fileName} (Hasil)`}
-              className="block max-h-[62vh] w-auto max-w-full object-contain"
+              className="block max-h-[58vh] w-auto max-w-full object-contain"
               draggable={false}
             />
             <img
@@ -46,89 +103,50 @@ export function BeforeAfterPreview({
               aria-hidden="true"
               className="pointer-events-none absolute inset-y-0 w-0.5 bg-white shadow"
               style={{ left: `${splitPct}%` }}
-            />
-            <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-[#1b3742]/80 px-2 py-0.5 text-[11px] font-medium text-white">
+            >
+              <div className="absolute left-1/2 top-1/2 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[10px] font-bold text-[var(--text-primary)] shadow">
+                ↔
+              </div>
+            </div>
+            <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-[#16303a]/85 px-2 py-0.5 text-[11px] font-medium text-white">
               Asli
             </span>
-            <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-md bg-[#2b7387]/90 px-2 py-0.5 text-[11px] font-medium text-white">
+            <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-md bg-[#21697d]/90 px-2 py-0.5 text-[11px] font-medium text-white">
               Hasil
             </span>
           </div>
         ) : (
-          <img
-            data-testid="preview-image"
-            src={displayUrl}
-            alt={fileName}
-            className="block max-h-[62vh] w-auto max-w-full object-contain"
-          />
+          <div className="relative">
+            <img
+              data-testid="preview-image"
+              src={displayUrl}
+              alt={fileName}
+              className="block max-h-[58vh] w-auto max-w-full object-contain"
+            />
+            {processedUrl && (
+              <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-xs">
+                {showOriginalOnly ? 'Asli' : 'Hasil'}
+              </span>
+            )}
+          </div>
         )}
       </div>
 
-      {processedUrl && (
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          {canSplitOverlay ? (
-            <>
-              <button
-                type="button"
-                data-testid="compare-toggle-btn"
-                aria-pressed={compareMode}
-                onClick={() => setCompareMode((v) => !v)}
-                className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors ${
-                  compareMode
-                    ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-white'
-                    : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
-                }`}
-              >
-                <Columns2 className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>{compareMode ? 'Tutup Perbandingan' : 'Bandingkan: Asli | Hasil'}</span>
-              </button>
-
-              {compareMode && (
-                <label className="flex items-center gap-2 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3 py-1.5 text-xs text-[var(--text-secondary)] tabular-nums">
-                  <span>Geser</span>
-                  <input
-                    data-testid="compare-slider"
-                    type="range"
-                    min={5}
-                    max={95}
-                    value={splitPct}
-                    onChange={(e) => setSplitPct(Number(e.target.value))}
-                    aria-label="Geser pembanding foto asli dan hasil"
-                    className="h-1.5 w-28 accent-[var(--accent-primary)]"
-                  />
-                  <span>{splitPct}%</span>
-                </label>
-              )}
-            </>
-          ) : (
-            <div className="inline-flex rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-0.5 text-xs">
-              <button
-                type="button"
-                data-testid="view-original-btn"
-                onClick={() => setShowOriginalOnly(true)}
-                className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
-                  showOriginalOnly
-                    ? 'bg-[var(--accent-primary)] text-white'
-                    : 'text-[var(--text-secondary)]'
-                }`}
-              >
-                Asli
-              </button>
-              <button
-                type="button"
-                data-testid="view-result-btn"
-                onClick={() => setShowOriginalOnly(false)}
-                className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
-                  !showOriginalOnly
-                    ? 'bg-[var(--accent-primary)] text-white'
-                    : 'text-[var(--text-secondary)]'
-                }`}
-              >
-                Hasil
-              </button>
-            </div>
-          )}
-        </div>
+      {isSplitActive && (
+        <label className="flex items-center gap-2 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3.5 py-1 text-xs text-[var(--text-secondary)] tabular-nums">
+          <span>Geser pembanding</span>
+          <input
+            data-testid="compare-slider"
+            type="range"
+            min={5}
+            max={95}
+            value={splitPct}
+            onChange={(e) => onSplitPctChange(Number(e.target.value))}
+            aria-label="Geser pembanding foto asli dan hasil"
+            className="km-range-input w-28"
+          />
+          <span className="w-8 text-right font-semibold text-[var(--text-primary)]">{splitPct}%</span>
+        </label>
       )}
     </div>
   );

@@ -1,19 +1,26 @@
-import { FolderOpen, X } from 'lucide-react';
+import { FolderOpen, Moon, Sun, X } from 'lucide-react';
 import { Button } from '../../design-system/components/Button';
+import type { AppTheme } from '../../shared/hooks/useTheme';
 
 export interface WorkspaceHeaderProps {
   hasMedia: boolean;
+  theme: AppTheme;
+  onToggleTheme: () => void;
   onReplaceClick: () => void;
   onClearClick: () => void;
 }
 
 export function WorkspaceHeader({
   hasMedia,
+  theme,
+  onToggleTheme,
   onReplaceClick,
   onClearClick,
 }: WorkspaceHeaderProps) {
+  const isDark = theme === 'dark';
+
   return (
-    <header className="sticky top-0 z-20 h-14 border-b border-[var(--border-hairline)] bg-[var(--bg-surface)]">
+    <header className="sticky top-0 z-30 h-14 border-b border-[var(--border-hairline)] bg-[var(--bg-surface)]/95 backdrop-blur-sm transition-colors">
       <div className="mx-auto flex h-full max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-2.5">
           <svg
@@ -21,7 +28,7 @@ export function WorkspaceHeader({
             height="20"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#2B7387"
+            stroke="var(--accent-primary)"
             strokeWidth="1.75"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -40,7 +47,13 @@ export function WorkspaceHeader({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {hasMedia ? (
+          {!hasMedia && (
+            <span className="hidden text-xs text-[var(--text-muted)] sm:inline">
+              Diproses langsung di perangkat
+            </span>
+          )}
+
+          {hasMedia && (
             <>
               <Button
                 variant="secondary"
@@ -58,14 +71,31 @@ export function WorkspaceHeader({
                 onClick={onClearClick}
               >
                 <X className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>Tutup</span>
+                <span className="hidden sm:inline">Tutup</span>
               </Button>
             </>
-          ) : (
-            <span className="text-xs text-[var(--text-muted)]">
-              Diproses langsung di perangkat
-            </span>
           )}
+
+          <button
+            type="button"
+            data-testid="theme-toggle-btn"
+            onClick={onToggleTheme}
+            aria-label={isDark ? 'Ganti ke tema Aquatic Terang' : 'Ganti ke tema Studio Gelap'}
+            title={isDark ? 'Aquatic Terang' : 'Studio Gelap'}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:border-[var(--border-active)] hover:text-[var(--text-primary)] active:scale-[0.97]"
+          >
+            {isDark ? (
+              <>
+                <Sun className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden="true" />
+                <span className="hidden sm:inline">Terang</span>
+              </>
+            ) : (
+              <>
+                <Moon className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden="true" />
+                <span className="hidden sm:inline">Gelap</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
     </header>

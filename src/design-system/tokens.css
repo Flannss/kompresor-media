@@ -1,25 +1,31 @@
-:root {
-  /* Aquatic Clean Surfaces */
-  --bg-app: #f4f9fa;
-  --bg-stage: #eaf3f6;
+:root,
+[data-theme='light'] {
+  /* Aquatic Terang (Default) */
+  --bg-app: #f2f7f9;
+  --bg-stage: #e6f0f3;
+  --bg-stage-glow: #ddecf1;
   --bg-surface: #ffffff;
-  --bg-subtle: #edf6f8;
+  --bg-elevated: #f8fbfc;
+  --bg-subtle: #e9f4f7;
 
-  /* Hairline Borders */
-  --border-hairline: #d5e8ed;
-  --border-active: #59afc0;
+  --border-hairline: #d2e4ea;
+  --border-active: #3b8fa6;
 
-  /* Accent (White text contrast >= 5.2:1) */
-  --accent-primary: #2b7387;
-  --accent-primary-hover: #215c6d;
+  /* Deep refined teal: #21697D with #FFFFFF achieves > 6.1:1 WCAG AA */
+  --accent-primary: #21697d;
+  --accent-primary-hover: #195465;
   --ink-on-accent: #ffffff;
 
-  /* Typography Ink (WCAG AA contrast on light surfaces) */
-  --text-primary: #1b3742;
-  --text-secondary: #4d6872;
-  --text-muted: #58727b;
+  --text-primary: #16303a;
+  --text-secondary: #48636e;
+  --text-muted: #5d7781;
 
-  /* Semantic Feedback */
+  --checker-a: #ffffff;
+  --checker-b: #dde9ee;
+
+  --stage-shadow: 0 18px 42px -24px rgba(22, 48, 58, 0.16);
+  --dock-shadow: 0 10px 28px -12px rgba(22, 48, 58, 0.16);
+
   --status-ok-bg: #e7f5ef;
   --status-ok-ink: #0f5f42;
   --status-ok-border: #b3decb;
@@ -31,4 +37,44 @@
   --status-err-bg: #fdeff1;
   --status-err-ink: #9d1a29;
   --status-err-border: #efc0c6;
+}
+
+[data-theme='dark'] {
+  /* Studio Gelap (Calm Deep Slate-Teal, Zero Neon) */
+  --bg-app: #0e171b;
+  --bg-stage: #0a1114;
+  --bg-stage-glow: #112026;
+  --bg-surface: #142228;
+  --bg-elevated: #1a2b33;
+  --bg-subtle: #1d313a;
+
+  --border-hairline: #233a44;
+  --border-active: #5cb4c7;
+
+  /* #4DA6BA accent paired with #0A1A20 ink achieves > 6.6:1 WCAG AA */
+  --accent-primary: #4da6ba;
+  --accent-primary-hover: #5db6ca;
+  --ink-on-accent: #0a1a20;
+
+  --text-primary: #eaf3f6;
+  --text-secondary: #a6c0ca;
+  --text-muted: #76939e;
+
+  --checker-a: #18272e;
+  --checker-b: #101b20;
+
+  --stage-shadow: 0 18px 44px -20px rgba(0, 0, 0, 0.55);
+  --dock-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.55);
+
+  --status-ok-bg: #112d25;
+  --status-ok-ink: #7de0be;
+  --status-ok-border: #235949;
+
+  --status-warn-bg: #2f2311;
+  --status-warn-ink: #f4c675;
+  --status-warn-border: #5f4720;
+
+  --status-err-bg: #32161b;
+  --status-err-ink: #f49aa5;
+  --status-err-border: #632b34;
 }

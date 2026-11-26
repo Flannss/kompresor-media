@@ -1,10 +1,44 @@
 import type { ImageMetadata } from './media';
 
-export type ImagePresetId = 'whatsapp-chat' | 'whatsapp-status' | 'instagram-story' | 'custom';
+export type ImagePresetId =
+  | 'whatsapp-chat'
+  | 'whatsapp-status'
+  | 'instagram-story'
+  | 'web-light'
+  | 'custom';
 
 export type ImageOutputFormat = 'image/jpeg' | 'image/webp' | 'image/png';
 
 export type ImageRotation = 0 | 90 | 180 | 270;
+
+export type ImageFilterId =
+  | 'original'
+  | 'crisp'
+  | 'warm'
+  | 'cool'
+  | 'film'
+  | 'cinema'
+  | 'mono';
+
+export type CropAspectId = 'free' | '1:1' | '4:5' | '16:9' | '9:16';
+
+export interface NormalizedCropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface ImageColorAdjustments {
+  /** Range: -100..100 (0 = neutral) */
+  brightness: number;
+  /** Range: -100..100 (0 = neutral) */
+  contrast: number;
+  /** Range: -100..100 (0 = neutral) */
+  saturation: number;
+  /** Range: -100..100 (negative = cool, positive = warm) */
+  temperature: number;
+}
 
 export interface ImageEditState {
   presetId: ImagePresetId;
@@ -13,10 +47,17 @@ export interface ImageEditState {
   outputFormat: ImageOutputFormat;
   /** Normalized quality between 0.1 and 1.0 (ignored for lossless PNG). */
   quality: number;
+  /** Optional target ceiling in kilobytes (null = use quality slider directly). */
+  targetSizeKB: number | null;
   /** Post-resize sharpening level between 0 and 100. */
   sharpenAmount: number;
   /** Clockwise rotation in degrees. */
   rotationDeg: ImageRotation;
+  flipH: boolean;
+  flipV: boolean;
+  crop: NormalizedCropRect | null;
+  adjustments: ImageColorAdjustments;
+  filterId: ImageFilterId;
   stripMetadata: boolean;
 }
 
@@ -40,4 +81,6 @@ export interface ImageProcessResult {
   inputBytes: number;
   outputBytes: number;
   durationMs: number;
+  solvedQuality?: number;
+  targetSizeMet?: boolean;
 }

@@ -1,14 +1,26 @@
 import type { VideoMetadata } from './media';
 
-export type VideoPresetId = 'whatsapp-chat' | 'whatsapp-status' | 'instagram-story' | 'custom';
+export type VideoPresetId =
+  | 'whatsapp-chat'
+  | 'whatsapp-status'
+  | 'instagram-story'
+  | 'web-light'
+  | 'custom';
 
 export type VideoExecutionBackend = 'webcodecs-mediabunny' | 'ffmpeg-wasm-st';
 
+export type VideoQualityTier = 'light' | 'balanced' | 'high';
+
 export interface VideoEditState {
   presetId: VideoPresetId;
-  maxHeightPx: number;
+  /** Max height in pixels (null keeps original height while ensuring even dimensions). */
+  maxHeightPx: number | null;
+  qualityTier: VideoQualityTier;
   targetBitrateBps: number;
   crf: number;
+  maxrateKbps: number;
+  bufsizeKbps: number;
+  audioBitrateKbps: number;
   trimStartSec: number;
   trimEndSec: number | null;
   muteAudio: boolean;

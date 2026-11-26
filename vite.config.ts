@@ -8,6 +8,9 @@ export default defineConfig({
   worker: {
     format: 'es',
   },
+  optimizeDeps: {
+    exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
+  },
   test: {
     environment: 'jsdom',
     include: ['src/tests/**/*.test.{ts,tsx}'],

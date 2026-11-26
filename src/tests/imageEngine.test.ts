@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { ImageFilterId } from '../engines/contracts';
 import {
+  FILTER_PRESETS,
+  applyColorAdjustments,
+  applyFilterPreset,
   applySharpen,
   buildExportFileName,
+  computeCropPixels,
   computeProgressiveSteps,
   computeReductionPct,
   computeRotatedDimensions,
@@ -9,13 +14,33 @@ import {
   formatOutputMimeShort,
 } from '../engines/image/pixelOps';
 import { getMediaPreset, MEDIA_PRESETS } from '../presets/mediaPresets';
+import { useMediaStore } from '../store/useMediaStore';
 
-describe('image pixelOps & presets', () => {
+function makeSolidImageData(r: number, g: number, b: number, a = 255): ImageData {
+  const data = new Uint8ClampedArray([r, g, b, a, r + 20, g, Math.max(0, b - 20), a]);
+  return { width: 2, height: 1, data } as unknown as ImageData;
+}
+
+describe('image pixelOps, presets, and studio history', () => {
+  beforeEach(() => {
+    useMediaStore.getState().clearMedia();
+  });
+
   it('computes rotated dimensions accurately for 0/90/180/270', () => {
     expect(computeRotatedDimensions(2400, 1600, 0)).toEqual({ width: 2400, height: 1600 });
     expect(computeRotatedDimensions(2400, 1600, 90)).toEqual({ width: 1600, height: 2400 });
     expect(computeRotatedDimensions(2400, 1600, 180)).toEqual({ width: 2400, height: 1600 });
     expect(computeRotatedDimensions(2400, 1600, 270)).toEqual({ width: 1600, height: 2400 });
+  });
+
+  it('computes normalized crop rectangles in pixels with boundary clamping', () => {
+    expect(computeCropPixels(2000, 1000, null)).toEqual({ sx: 0, sy: 0, sw: 2000, sh: 1000 });
+    expect(
+      computeCropPixels(2000, 1000, { x: 0.1, y: 0.2, width: 0.5, height: 0.5 })
+    ).toEqual({ sx: 200, sy: 200, sw: 1000, sh: 500 });
+    expect(
+      computeCropPixels(1000, 1000, { x: -0.2, y: 0.9, width: 2, height: 0.5 })
+    ).toEqual({ sx: 0, sy: 900, sw: 1000, sh: 100 });
   });
 
   it('computes aspect-preserving target dimensions without upscaling', () => {
@@ -35,6 +60,52 @@ describe('image pixelOps & presets', () => {
     ]);
   });
 
+  it('applies color adjustments accurately with [0, 255] clamping and alpha preservation', () => {
+    const brighter = makeSolidImageData(100, 120, 140, 210);
+    applyColorAdjustments(brighter, { brightness: 50, contrast: 0, saturation: 0, temperature: 0 });
+    expect(brighter.data[0]).toBeGreaterThan(100);
+    expect(brighter.data[3]).toBe(210);
+
+    const desaturated = makeSolidImageData(200, 80, 40, 255);
+    applyColorAdjustments(desaturated, {
+      brightness: 0,
+      contrast: 0,
+      saturation: -100,
+      temperature: 0,
+    });
+    expect(desaturated.data[0]).toBe(desaturated.data[1]);
+    expect(desaturated.data[1]).toBe(desaturated.data[2]);
+
+    const warmer = makeSolidImageData(120, 120, 120, 255);
+    applyColorAdjustments(warmer, { brightness: 0, contrast: 0, saturation: 0, temperature: 60 });
+    expect(warmer.data[0]).toBeGreaterThan(warmer.data[2]);
+  });
+
+  it('applies all 7 studio filters with distinct pixel outputs and mono luma parity', () => {
+    expect(FILTER_PRESETS.map((f) => f.id)).toEqual([
+      'original',
+      'crisp',
+      'warm',
+      'cool',
+      'film',
+      'cinema',
+      'mono',
+    ]);
+
+    const signatures = new Set<string>();
+    for (const preset of FILTER_PRESETS) {
+      const img = makeSolidImageData(150, 110, 90, 240);
+      applyFilterPreset(img, preset.id as ImageFilterId);
+      expect(img.data[3]).toBe(240);
+      signatures.add(`${img.data[0]},${img.data[1]},${img.data[2]}`);
+      if (preset.id === 'mono') {
+        expect(img.data[0]).toBe(img.data[1]);
+        expect(img.data[1]).toBe(img.data[2]);
+      }
+    }
+    expect(signatures.size).toBe(FILTER_PRESETS.length);
+  });
+
   it('applies 3x3 sharpening with [0, 255] clamping and alpha preservation', () => {
     const data = new Uint8ClampedArray(3 * 3 * 4);
     for (let i = 0; i < 9; i += 1) {
@@ -43,7 +114,6 @@ describe('image pixelOps & presets', () => {
       data[i * 4 + 2] = 40;
       data[i * 4 + 3] = 200;
     }
-    // Bright center pixel (index 4)
     data[4 * 4] = 180;
     data[4 * 4 + 1] = 180;
     data[4 * 4 + 2] = 180;
@@ -54,7 +124,6 @@ describe('image pixelOps & presets', () => {
     expect(fakeImageData.data[4 * 4]).toBe(180);
 
     applySharpen(fakeImageData, 50);
-    // alpha = 0.325 => 180*(1+1.3) - 4*40*0.325 = 414 - 52 = 362 -> clamped to 255
     expect(fakeImageData.data[4 * 4]).toBe(255);
     expect(fakeImageData.data[4 * 4 + 3]).toBe(123);
   });
@@ -70,14 +139,61 @@ describe('image pixelOps & presets', () => {
     expect(formatOutputMimeShort('image/png')).toBe('PNG');
   });
 
-  it('exposes all 4 Indonesian share presets with valid image targets', () => {
+  it('exposes all 5 Indonesian share presets with valid image targets', () => {
     expect(MEDIA_PRESETS.map((p) => p.label)).toEqual([
       'WhatsApp',
       'Status WA',
       'Story IG',
+      'Web & Dokumen',
       'Atur Sendiri',
     ]);
     expect(getMediaPreset('whatsapp-chat').image.maxEdgePx).toBe(1600);
     expect(getMediaPreset('whatsapp-status').image.maxEdgePx).toBe(1920);
+    expect(getMediaPreset('web-light').image.outputFormat).toBe('image/webp');
+  });
+
+  it('manages photo Undo, Redo, and Reset history snapshots without losing preset flow', () => {
+    const store = useMediaStore.getState();
+    expect(store.photoHistoryIndex).toBe(0);
+
+    store.rotatePhoto90();
+    store.toggleFlipH();
+    store.selectFilter('cinema');
+
+    let next = useMediaStore.getState();
+    expect(next.photoHistoryIndex).toBe(3);
+    expect(next.imageEdit.rotationDeg).toBe(90);
+    expect(next.imageEdit.flipH).toBe(true);
+    expect(next.imageEdit.filterId).toBe('cinema');
+
+    // Drag slider live (no history push) then commit snapshot on release
+    next.updateImageEdit(
+      { adjustments: { ...next.imageEdit.adjustments, contrast: 25 } },
+      { commitHistory: false, preservePreset: true }
+    );
+    expect(useMediaStore.getState().photoHistoryIndex).toBe(3);
+    useMediaStore.getState().commitCurrentPhotoSnapshot();
+    expect(useMediaStore.getState().photoHistoryIndex).toBe(4);
+    expect(useMediaStore.getState().imageEdit.adjustments.contrast).toBe(25);
+
+    // Undo back 2 steps
+    useMediaStore.getState().undoPhotoEdit();
+    expect(useMediaStore.getState().imageEdit.adjustments.contrast).toBe(0);
+    expect(useMediaStore.getState().imageEdit.filterId).toBe('cinema');
+
+    useMediaStore.getState().undoPhotoEdit();
+    expect(useMediaStore.getState().imageEdit.filterId).toBe('original');
+
+    // Redo forward 1 step
+    useMediaStore.getState().redoPhotoEdit();
+    expect(useMediaStore.getState().imageEdit.filterId).toBe('cinema');
+
+    // Reset restores preset defaults cleanly
+    useMediaStore.getState().resetPhotoEdits();
+    next = useMediaStore.getState();
+    expect(next.imageEdit.rotationDeg).toBe(0);
+    expect(next.imageEdit.flipH).toBe(false);
+    expect(next.imageEdit.filterId).toBe('original');
+    expect(next.imageEdit.adjustments.contrast).toBe(0);
   });
 });

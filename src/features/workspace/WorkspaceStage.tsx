@@ -1,56 +1,86 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import {
-  Check,
+  Camera,
   ChevronDown,
-  Download,
+  Columns2,
+  FlipHorizontal2,
+  Redo2,
+  RotateCcw,
   RotateCw,
-  Share2,
-  SlidersHorizontal,
+  Undo2,
 } from 'lucide-react';
-import { Button } from '../../design-system/components/Button';
 import type {
   ImageEditState,
-  ImageOutputFormat,
+  ImageFilterId,
   ImageProcessResult,
   MediaMetadata,
+  NormalizedCropRect,
   Orientation,
   ValidationResult,
+  VideoEditState,
+  VideoExecutionBackend,
+  VideoProcessProgress,
+  VideoProcessResult,
 } from '../../engines/contracts';
-import { MEDIA_PRESETS, type MediaPresetId } from '../../presets/mediaPresets';
+import { computeRotatedDimensions } from '../../engines/image/pixelOps';
+import type { MediaPresetId } from '../../presets/mediaPresets';
 import { formatBytes } from '../../shared/utils/formatBytes';
 import { formatDuration } from '../../shared/utils/formatDuration';
-import type { ImageProcessStatus } from '../../store/useMediaStore';
+import type { ImageProcessStatus, VideoProcessStatus } from '../../store/useMediaStore';
+import { ExportSharePanel } from '../export-share/ExportSharePanel';
+import { CropOverlay } from '../image-studio/CropOverlay';
+import { PhotoControlPanel } from '../image-studio/PhotoControlPanel';
 import { MediaInfoBar } from '../upload/MediaInfoBar';
-import { BeforeAfterPreview } from './BeforeAfterPreview';
+import { VideoControlPanel, type CapturedFrameInfo } from '../video-studio/VideoControlPanel';
+import {
+  BeforeAfterPreview,
+  getBackdropClasses,
+  type StageBackdrop,
+} from './BeforeAfterPreview';
 
 export interface WorkspaceStageProps {
   metadata: MediaMetadata;
   validation: Extract<ValidationResult, { valid: true }>;
   objectUrl: string;
   selectedPresetId: MediaPresetId;
+
   imageEdit: ImageEditState;
+  canUndoPhoto: boolean;
+  canRedoPhoto: boolean;
   imageProcessStatus: ImageProcessStatus;
   imageProcessResult: ImageProcessResult | null;
   processedImageUrl: string | null;
   imageProcessError: string | null;
+  filterThumbnails: Partial<Record<ImageFilterId, string>>;
+
+  videoEdit: VideoEditState;
+  videoProcessStatus: VideoProcessStatus;
+  videoProgress: VideoProcessProgress | null;
+  videoProcessResult: VideoProcessResult | null;
+  processedVideoUrl: string | null;
+  videoProcessError: string | null;
+
   onSelectPreset: (id: MediaPresetId) => void;
-  onUpdateImageEdit: (patch: Partial<Omit<ImageEditState, 'presetId'>>) => void;
+  onUpdateImageEdit: (
+    patch: Partial<Omit<ImageEditState, 'presetId'>>,
+    options?: { commitHistory?: boolean; preservePreset?: boolean }
+  ) => void;
+  onCommitPhotoSnapshot: () => void;
   onRotatePhoto90: () => void;
+  onFlipH: () => void;
+  onFlipV: () => void;
+  onApplyCrop: (crop: NormalizedCropRect | null) => void;
+  onSelectFilter: (filterId: ImageFilterId) => void;
+  onUndoPhoto: () => void;
+  onRedoPhoto: () => void;
+  onResetPhoto: () => void;
+
+  onUpdateVideoEdit: (patch: Partial<VideoEditState>) => void;
+  onStartVideoProcess: (preferredBackend?: VideoExecutionBackend | 'auto') => void;
+  onCancelVideoProcess: () => void;
+
   onDropReplaceFile: (file: File) => void;
 }
-
-const FORMAT_OPTIONS: ReadonlyArray<{ value: ImageOutputFormat; label: string }> = [
-  { value: 'image/jpeg', label: 'JPG' },
-  { value: 'image/webp', label: 'WebP' },
-  { value: 'image/png', label: 'PNG' },
-];
-
-const MAX_EDGE_OPTIONS: ReadonlyArray<{ value: number | null; label: string }> = [
-  { value: null, label: 'Asli' },
-  { value: 1920, label: '1920 px' },
-  { value: 1600, label: '1600 px' },
-  { value: 1280, label: '1280 px' },
-];
 
 function formatOrientationId(orientation: Orientation): string {
   if (orientation === 'landscape') return 'Mendatar';
@@ -58,19 +88,11 @@ function formatOrientationId(orientation: Orientation): string {
   return 'Persegi';
 }
 
-function canShareFileBlob(blob: Blob, fileName: string, mime: string): boolean {
-  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
-    return false;
-  }
-  if (typeof navigator.canShare !== 'function') {
-    return false;
-  }
-  try {
-    const file = new File([blob], fileName, { type: mime });
-    return navigator.canShare({ files: [file] });
-  } catch {
-    return false;
-  }
+function buildCapturedFrameFileName(videoFileName: string, timeSec: number): string {
+  const dotIdx = videoFileName.lastIndexOf('.');
+  const base = dotIdx > 0 ? videoFileName.slice(0, dotIdx) : videoFileName;
+  const secs = Math.max(0, Math.round(timeSec));
+  return `${base || 'video'}-frame-${secs}s.png`;
 }
 
 export function WorkspaceStage({
@@ -79,28 +101,162 @@ export function WorkspaceStage({
   objectUrl,
   selectedPresetId,
   imageEdit,
+  canUndoPhoto,
+  canRedoPhoto,
   imageProcessStatus,
   imageProcessResult,
   processedImageUrl,
   imageProcessError,
+  filterThumbnails,
+  videoEdit,
+  videoProcessStatus,
+  videoProgress,
+  videoProcessResult,
+  processedVideoUrl,
+  videoProcessError,
   onSelectPreset,
   onUpdateImageEdit,
+  onCommitPhotoSnapshot,
   onRotatePhoto90,
+  onFlipH,
+  onFlipV,
+  onApplyCrop,
+  onSelectFilter,
+  onUndoPhoto,
+  onRedoPhoto,
+  onResetPhoto,
+  onUpdateVideoEdit,
+  onStartVideoProcess,
+  onCancelVideoProcess,
   onDropReplaceFile,
 }: WorkspaceStageProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isDraggingOverStage, setIsDraggingOverStage] = useState(false);
-  const [showPresetManualControls, setShowPresetManualControls] = useState(false);
-  const [downloadConfirmed, setDownloadConfirmed] = useState(false);
-  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
+  const [backdrop, setBackdrop] = useState<StageBackdrop>('light');
+
+  // Photo stage controls
+  const [isCropping, setIsCropping] = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
+  const [splitPct, setSplitPct] = useState(50);
+  const [showOriginalPhoto, setShowOriginalPhoto] = useState(false);
+  const [orientedCropUrl, setOrientedCropUrl] = useState<string | null>(null);
+
+  // Video stage controls
+  const [videoViewMode, setVideoViewMode] = useState<'original' | 'result'>('original');
+  const [capturedFrame, setCapturedFrame] = useState<CapturedFrameInfo | null>(null);
 
   const isImage = metadata.kind === 'image';
-  const showManualControls = selectedPresetId === 'custom' || showPresetManualControls;
+  const canSplitCompare =
+    isImage &&
+    processedImageUrl !== null &&
+    imageEdit.rotationDeg === 0 &&
+    !imageEdit.flipH &&
+    !imageEdit.flipV &&
+    imageEdit.crop === null;
 
+  // Reset stage modes when active media file changes
   useEffect(() => {
-    setDownloadConfirmed(false);
-    setShareFeedback(null);
-  }, [processedImageUrl]);
+    setIsCropping(false);
+    setCompareMode(false);
+    setShowOriginalPhoto(false);
+    setVideoViewMode('original');
+    setCapturedFrame((prev) => {
+      if (prev) {
+        setTimeout(() => URL.revokeObjectURL(prev.url), 50);
+      }
+      return null;
+    });
+  }, [objectUrl]);
+
+  // Auto-switch video stage to Hasil whenever a new processed video finishes
+  useEffect(() => {
+    if (processedVideoUrl) {
+      setVideoViewMode('result');
+    } else {
+      setVideoViewMode('original');
+    }
+  }, [processedVideoUrl]);
+
+  // Revoke any remaining captured frame objectURL on unmount
+  useEffect(() => {
+    return () => {
+      setCapturedFrame((prev) => {
+        if (prev) {
+          setTimeout(() => URL.revokeObjectURL(prev.url), 50);
+        }
+        return null;
+      });
+    };
+  }, []);
+
+  // Build oriented canvas preview URL when cropping a rotated/flipped image so crop matches pixel output 1:1
+  useEffect(() => {
+    if (!isImage || !isCropping) {
+      setOrientedCropUrl(null);
+      return;
+    }
+    if (imageEdit.rotationDeg === 0 && !imageEdit.flipH && !imageEdit.flipV) {
+      setOrientedCropUrl(objectUrl);
+      return;
+    }
+
+    let cancelled = false;
+    const img = new Image();
+    img.onload = () => {
+      if (cancelled) return;
+      const rotated = computeRotatedDimensions(
+        img.naturalWidth || metadata.width,
+        img.naturalHeight || metadata.height,
+        imageEdit.rotationDeg
+      );
+      const maxEdge = 1400;
+      const scale = Math.min(1, maxEdge / Math.max(rotated.width, rotated.height));
+      const canvasW = Math.max(1, Math.round(rotated.width * scale));
+      const canvasH = Math.max(1, Math.round(rotated.height * scale));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = canvasW;
+      canvas.height = canvasH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        setOrientedCropUrl(objectUrl);
+        return;
+      }
+
+      ctx.save();
+      ctx.translate(canvasW / 2, canvasH / 2);
+      if (imageEdit.rotationDeg !== 0) {
+        ctx.rotate((imageEdit.rotationDeg * Math.PI) / 180);
+      }
+      ctx.scale(imageEdit.flipH ? -1 : 1, imageEdit.flipV ? -1 : 1);
+      const drawW =
+        imageEdit.rotationDeg === 90 || imageEdit.rotationDeg === 270 ? canvasH : canvasW;
+      const drawH =
+        imageEdit.rotationDeg === 90 || imageEdit.rotationDeg === 270 ? canvasW : canvasH;
+      ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+      ctx.restore();
+
+      setOrientedCropUrl(canvas.toDataURL('image/png'));
+    };
+    img.src = objectUrl;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isImage,
+    isCropping,
+    objectUrl,
+    imageEdit.rotationDeg,
+    imageEdit.flipH,
+    imageEdit.flipV,
+    metadata.width,
+    metadata.height,
+  ]);
+
+  // Detach video element cleanly on unmount or source switch
+  const activeVideoSrc =
+    !isImage && videoViewMode === 'result' && processedVideoUrl ? processedVideoUrl : objectUrl;
 
   useEffect(() => {
     const videoEl = videoRef.current;
@@ -111,7 +267,7 @@ export function WorkspaceStage({
         videoEl.load();
       }
     };
-  }, [objectUrl]);
+  }, [activeVideoSrc]);
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -139,329 +295,397 @@ export function WorkspaceStage({
     }
   };
 
-  const handleDownloadPhoto = () => {
-    if (!processedImageUrl || !imageProcessResult) {
-      return;
+  const handleSeekVideoPreview = (timeSec: number) => {
+    setVideoViewMode('original');
+    const videoEl = videoRef.current;
+    if (!videoEl) return;
+    if (!Number.isNaN(timeSec) && Number.isFinite(timeSec)) {
+      videoEl.currentTime = Math.max(0, timeSec);
     }
-    const anchor = document.createElement('a');
-    anchor.href = processedImageUrl;
-    anchor.download = imageProcessResult.outputFileName;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    setDownloadConfirmed(true);
   };
 
-  const canShare =
-    isImage &&
-    imageProcessResult !== null &&
-    canShareFileBlob(
-      imageProcessResult.outputBlob,
-      imageProcessResult.outputFileName,
-      imageProcessResult.outputMime
+  const handleCaptureFrame = () => {
+    const videoEl = videoRef.current;
+    if (!videoEl || videoEl.videoWidth <= 0 || videoEl.videoHeight <= 0) {
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = videoEl.videoWidth;
+    canvas.height = videoEl.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        const frameFileName = buildCapturedFrameFileName(
+          metadata.fileName,
+          videoEl.currentTime || 0
+        );
+        const frameFile = new File([blob], frameFileName, { type: 'image/png' });
+        const nextUrl = URL.createObjectURL(blob);
+        setCapturedFrame((prev) => {
+          if (prev) {
+            setTimeout(() => URL.revokeObjectURL(prev.url), 50);
+          }
+          return { file: frameFile, url: nextUrl };
+        });
+      },
+      'image/png',
+      1
     );
-
-  const handleSharePhoto = async () => {
-    if (!imageProcessResult || !canShare) {
-      return;
-    }
-    setShareFeedback(null);
-    try {
-      const file = new File(
-        [imageProcessResult.outputBlob],
-        imageProcessResult.outputFileName,
-        { type: imageProcessResult.outputMime }
-      );
-      await navigator.share({
-        files: [file],
-        title: imageProcessResult.outputFileName,
-      });
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        return;
-      }
-      setShareFeedback('Gagal membuka menu bagikan perangkat.');
-    }
   };
+
+  const handleEditCapturedFrameAsPhoto = () => {
+    if (!capturedFrame) return;
+    onDropReplaceFile(capturedFrame.file);
+  };
+
+  const orientedDimensions = computeRotatedDimensions(
+    metadata.width,
+    metadata.height,
+    imageEdit.rotationDeg
+  );
 
   return (
     <div className="flex min-h-[calc(100vh-56px)] w-full flex-col lg:flex-row">
-      {/* Left Preview Stage */}
+      {/* Left Studio Preview Stage */}
       <section
         data-testid="workspace-preview-stage"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`relative flex min-h-[46vh] flex-1 flex-col items-center justify-center gap-4 bg-[var(--bg-stage)] px-4 py-5 sm:min-h-[52vh] sm:px-8 sm:py-6 lg:min-h-[calc(100vh-56px)] ${
+        className={`relative flex min-h-[46vh] flex-1 flex-col items-center justify-center gap-3.5 bg-[var(--bg-stage)] px-4 py-5 transition-colors sm:min-h-[52vh] sm:px-8 sm:py-6 lg:min-h-[calc(100vh-56px)] ${
           isDraggingOverStage ? 'ring-2 ring-inset ring-[var(--accent-primary)]' : ''
         }`}
       >
         {isImage ? (
-          <BeforeAfterPreview
-            originalUrl={objectUrl}
-            processedUrl={processedImageUrl}
-            fileName={metadata.fileName}
-            rotationDeg={imageEdit.rotationDeg}
-          />
+          isCropping && orientedCropUrl ? (
+            <CropOverlay
+              imageUrl={orientedCropUrl}
+              sourceWidth={orientedDimensions.width}
+              sourceHeight={orientedDimensions.height}
+              initialCrop={imageEdit.crop}
+              onApply={(nextCrop) => {
+                onApplyCrop(nextCrop);
+                setIsCropping(false);
+              }}
+              onCancel={() => setIsCropping(false)}
+            />
+          ) : (
+            <BeforeAfterPreview
+              originalUrl={objectUrl}
+              processedUrl={processedImageUrl}
+              fileName={metadata.fileName}
+              canSplitCompare={canSplitCompare}
+              compareMode={compareMode}
+              splitPct={splitPct}
+              onSplitPctChange={setSplitPct}
+              showOriginalOnly={showOriginalPhoto}
+              backdrop={backdrop}
+            />
+          )
         ) : (
-          <div className="flex w-full max-w-4xl items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-hairline)] bg-black">
+          <div
+            className={`relative flex max-h-[58vh] w-full max-w-[780px] items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-hairline)] p-1 transition-colors ${getBackdropClasses(backdrop)}`}
+            style={{ boxShadow: 'var(--stage-shadow)' }}
+          >
             <video
               ref={videoRef}
+              key={activeVideoSrc}
               data-testid="preview-video"
-              src={objectUrl}
+              src={activeVideoSrc}
               controls
               playsInline
-              className="max-h-[62vh] w-full"
+              preload="metadata"
+              className="max-h-[56vh] w-full rounded-xl object-contain"
             />
+            {processedVideoUrl && (
+              <span className="pointer-events-none absolute left-3 top-3 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white">
+                {videoViewMode === 'result' ? 'Hasil' : 'Asli'}
+              </span>
+            )}
           </div>
         )}
 
+        {/* Summary pill */}
         <MediaInfoBar
           metadata={metadata}
           validation={validation}
           imageProcessStatus={imageProcessStatus}
           imageProcessResult={imageProcessResult}
+          videoProcessStatus={videoProcessStatus}
+          videoProcessResult={videoProcessResult}
         />
 
-        {isDraggingOverStage && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[#1b3742]/75 text-sm font-semibold text-white">
-            Lepas file untuk mengganti media saat ini
+        {/* Floating Studio Stage Dock */}
+        {!isCropping && (
+          <div
+            data-testid="studio-stage-dock"
+            className="flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)]/95 p-1.5 backdrop-blur-md"
+            style={{ boxShadow: 'var(--dock-shadow)' }}
+          >
+            {isImage ? (
+              <>
+                {canSplitCompare ? (
+                  <button
+                    type="button"
+                    data-testid="compare-toggle-btn"
+                    aria-pressed={compareMode}
+                    onClick={() => {
+                      setShowOriginalPhoto(false);
+                      setCompareMode((v) => !v);
+                    }}
+                    className={`inline-flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium transition-all active:scale-[0.97] ${
+                      compareMode
+                        ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    <Columns2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>{compareMode ? 'Tutup Bandingkan' : 'Bandingkan'}</span>
+                  </button>
+                ) : (
+                  processedImageUrl && (
+                    <div className="inline-flex rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-[11px]">
+                      <button
+                        type="button"
+                        data-testid="view-original-btn"
+                        onClick={() => setShowOriginalPhoto(true)}
+                        className={`rounded-lg px-2 py-1 font-medium transition-colors ${
+                          showOriginalPhoto
+                            ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                            : 'text-[var(--text-secondary)]'
+                        }`}
+                      >
+                        Asli
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="view-result-btn"
+                        onClick={() => setShowOriginalPhoto(false)}
+                        className={`rounded-lg px-2 py-1 font-medium transition-colors ${
+                          !showOriginalPhoto
+                            ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                            : 'text-[var(--text-secondary)]'
+                        }`}
+                      >
+                        Hasil
+                      </button>
+                    </div>
+                  )
+                )}
+
+                <span className="h-4 w-px bg-[var(--border-hairline)]" aria-hidden="true" />
+
+                <button
+                  type="button"
+                  data-testid="dock-rotate-btn"
+                  onClick={onRotatePhoto90}
+                  title="Putar 90°"
+                  className="inline-flex h-8 items-center gap-1 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
+                >
+                  <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="hidden sm:inline">Putar 90°</span>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="dock-flip-h-btn"
+                  aria-pressed={imageEdit.flipH}
+                  onClick={onFlipH}
+                  title="Balik Horizontal"
+                  className={`inline-flex h-8 items-center gap-1 rounded-xl px-2.5 text-xs font-medium transition-all active:scale-[0.97] ${
+                    imageEdit.flipH
+                      ? 'bg-[var(--bg-subtle)] text-[var(--accent-primary)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  <FlipHorizontal2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="hidden sm:inline">Balik H</span>
+                </button>
+
+                <span className="h-4 w-px bg-[var(--border-hairline)]" aria-hidden="true" />
+
+                <button
+                  type="button"
+                  data-testid="dock-undo-btn"
+                  disabled={!canUndoPhoto}
+                  onClick={onUndoPhoto}
+                  title="Urungkan (Ctrl+Z)"
+                  className="inline-flex h-8 items-center gap-1 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <Undo2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="hidden md:inline">Urungkan</span>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="dock-redo-btn"
+                  disabled={!canRedoPhoto}
+                  onClick={onRedoPhoto}
+                  title="Ulangi (Ctrl+Shift+Z)"
+                  className="inline-flex h-8 items-center gap-1 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <Redo2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="hidden md:inline">Ulangi</span>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="dock-reset-btn"
+                  onClick={onResetPhoto}
+                  title="Atur ulang editan foto"
+                  className="inline-flex h-8 items-center gap-1 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="hidden md:inline">Atur Ulang</span>
+                </button>
+              </>
+            ) : (
+              <>
+                {processedVideoUrl && (
+                  <>
+                    <div className="inline-flex rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-xs">
+                      <button
+                        type="button"
+                        data-testid="video-view-original-btn"
+                        onClick={() => setVideoViewMode('original')}
+                        className={`rounded-lg px-2.5 py-1 font-medium transition-colors ${
+                          videoViewMode === 'original'
+                            ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                            : 'text-[var(--text-secondary)]'
+                        }`}
+                      >
+                        Asli
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="video-view-result-btn"
+                        onClick={() => setVideoViewMode('result')}
+                        className={`rounded-lg px-2.5 py-1 font-medium transition-colors ${
+                          videoViewMode === 'result'
+                            ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                            : 'text-[var(--text-secondary)]'
+                        }`}
+                      >
+                        Hasil
+                      </button>
+                    </div>
+                    <span className="h-4 w-px bg-[var(--border-hairline)]" aria-hidden="true" />
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  data-testid="dock-capture-frame-btn"
+                  onClick={handleCaptureFrame}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
+                >
+                  <Camera className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Ambil Frame</span>
+                </button>
+              </>
+            )}
+
+            <span className="h-4 w-px bg-[var(--border-hairline)]" aria-hidden="true" />
+
+            {/* 3-Way Canvas Backdrop Switcher */}
+            <div
+              role="group"
+              aria-label="Latar Kanvas"
+              className="inline-flex items-center gap-0.5 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-[11px]"
+            >
+              {(
+                [
+                  { id: 'light', label: 'Terang' },
+                  { id: 'dark', label: 'Gelap' },
+                  { id: 'checker', label: 'Transparan' },
+                ] as const
+              ).map((bg) => (
+                <button
+                  key={bg.id}
+                  type="button"
+                  data-testid={`backdrop-${bg.id}-btn`}
+                  aria-pressed={backdrop === bg.id}
+                  onClick={() => setBackdrop(bg.id)}
+                  className={`rounded-lg px-2 py-1 font-medium transition-colors ${
+                    backdrop === bg.id
+                      ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  {bg.label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </section>
 
-      {/* Right Control Panel */}
-      <aside className="flex w-full shrink-0 flex-col gap-5 border-t border-[var(--border-hairline)] bg-[var(--bg-surface)] p-4 sm:p-5 lg:w-[350px] lg:border-l lg:border-t-0">
-        {/* Step 1: Pilih Tujuan */}
-        <div>
-          <h2 className="text-xs font-semibold text-[var(--text-primary)]">Pilih Tujuan</h2>
-          <div
-            className="mt-2.5 grid grid-cols-2 gap-2"
-            role="radiogroup"
-            aria-label="Pilih tujuan penggunaan"
-          >
-            {MEDIA_PRESETS.map((preset) => {
-              const selected = preset.id === selectedPresetId;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  data-testid={`preset-${preset.id}`}
-                  onClick={() => onSelectPreset(preset.id)}
-                  className={`flex min-h-[56px] flex-col items-start justify-center rounded-xl border px-3 py-2 text-left transition-colors ${
-                    selected
-                      ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] text-[var(--text-primary)]'
-                      : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--bg-app)]'
-                  }`}
-                >
-                  <span className="text-xs font-semibold text-[var(--text-primary)]">
-                    {preset.label}
-                  </span>
-                  <span className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">
-                    {preset.targetLimitLabel}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      {/* Right Studio Control Panel */}
+      <aside className="flex w-full shrink-0 flex-col gap-5 border-t border-[var(--border-hairline)] bg-[var(--bg-surface)] p-4 sm:p-5 lg:w-[376px] lg:border-l lg:border-t-0">
+        {isImage ? (
+          <>
+            <PhotoControlPanel
+              selectedPresetId={selectedPresetId}
+              imageEdit={imageEdit}
+              imageProcessResult={imageProcessResult}
+              filterThumbnails={filterThumbnails}
+              isCropping={isCropping}
+              onSelectPreset={onSelectPreset}
+              onUpdateImageEdit={onUpdateImageEdit}
+              onCommitSnapshot={onCommitPhotoSnapshot}
+              onToggleCrop={() => setIsCropping((v) => !v)}
+              onRotate90={onRotatePhoto90}
+              onFlipH={onFlipH}
+              onFlipV={onFlipV}
+              onSelectFilter={onSelectFilter}
+            />
 
-        {/* Step 2: Pengaturan (Foto) */}
-        {isImage && (
-          <div className="border-t border-[var(--border-hairline)] pt-4">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-xs font-semibold text-[var(--text-primary)]">Pengaturan</h2>
-              {selectedPresetId !== 'custom' && (
-                <button
-                  type="button"
-                  data-testid="toggle-manual-settings"
-                  aria-expanded={showPresetManualControls}
-                  onClick={() => setShowPresetManualControls((v) => !v)}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-[var(--accent-primary)] hover:underline"
-                >
-                  <SlidersHorizontal className="h-3 w-3" aria-hidden="true" />
-                  <span>{showPresetManualControls ? 'Sembunyikan' : 'Ubah pengaturan'}</span>
-                </button>
-              )}
-            </div>
-
-            <div className="mt-2.5 flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="md"
-                data-testid="rotate-90-btn"
-                onClick={onRotatePhoto90}
-                className="min-h-[44px] w-full justify-center text-xs"
+            {imageProcessError && (
+              <p
+                role="alert"
+                className="rounded-xl border border-[var(--status-err-border)] bg-[var(--status-err-bg)] px-3 py-2 text-xs text-[var(--status-err-ink)]"
               >
-                <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>
-                  Putar 90°
-                  {imageEdit.rotationDeg > 0 ? ` (${imageEdit.rotationDeg}°)` : ''}
-                </span>
-              </Button>
-            </div>
-
-            {showManualControls && (
-              <div className="mt-3.5 flex flex-col gap-3.5 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-app)] p-3.5">
-                <div>
-                  <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
-                    Format
-                  </span>
-                  <div className="mt-1.5 grid grid-cols-3 gap-1.5">
-                    {FORMAT_OPTIONS.map((opt) => {
-                      const active = imageEdit.outputFormat === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          data-testid={`format-${opt.label.toLowerCase()}`}
-                          aria-pressed={active}
-                          onClick={() => onUpdateImageEdit({ outputFormat: opt.value })}
-                          className={`min-h-[38px] rounded-lg border text-xs font-medium transition-colors ${
-                            active
-                              ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-white'
-                              : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
-                    Ukuran Maksimal
-                  </span>
-                  <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-                    {MAX_EDGE_OPTIONS.map((opt) => {
-                      const active = imageEdit.maxEdgePx === opt.value;
-                      return (
-                        <button
-                          key={opt.label}
-                          type="button"
-                          data-testid={`max-edge-${opt.value ?? 'original'}`}
-                          aria-pressed={active}
-                          onClick={() => onUpdateImageEdit({ maxEdgePx: opt.value })}
-                          className={`min-h-[38px] rounded-lg border text-xs font-medium tabular-nums transition-colors ${
-                            active
-                              ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-white'
-                              : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="font-medium text-[var(--text-secondary)]">Kualitas</span>
-                    <span className="font-semibold text-[var(--text-primary)] tabular-nums">
-                      {imageEdit.outputFormat === 'image/png'
-                        ? 'Tanpa kompresi'
-                        : `${Math.round(imageEdit.quality * 100)}%`}
-                    </span>
-                  </div>
-                  {imageEdit.outputFormat === 'image/png' ? (
-                    <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-                      Format PNG menjaga piksel asli tanpa pengurangan kualitas.
-                    </p>
-                  ) : (
-                    <input
-                      data-testid="quality-slider"
-                      type="range"
-                      min={20}
-                      max={100}
-                      step={1}
-                      value={Math.round(imageEdit.quality * 100)}
-                      onChange={(e) =>
-                        onUpdateImageEdit({ quality: Number(e.target.value) / 100 })
-                      }
-                      aria-label="Atur kualitas foto"
-                      className="mt-2 h-1.5 w-full accent-[var(--accent-primary)]"
-                    />
-                  )}
-                </div>
-              </div>
+                {imageProcessError}
+              </p>
             )}
-          </div>
+
+            <div className="border-t border-[var(--border-hairline)] pt-4">
+              <ExportSharePanel
+                mediaKind="image"
+                readyBlob={imageProcessResult?.outputBlob ?? null}
+                readyUrl={processedImageUrl}
+                outputFileName={imageProcessResult?.outputFileName ?? null}
+                outputMime={imageProcessResult?.outputMime ?? null}
+                isProcessing={imageProcessStatus === 'processing'}
+              />
+            </div>
+          </>
+        ) : (
+          <VideoControlPanel
+            metadata={metadata}
+            selectedPresetId={selectedPresetId}
+            videoEdit={videoEdit}
+            videoProcessStatus={videoProcessStatus}
+            videoProgress={videoProgress}
+            videoProcessResult={videoProcessResult}
+            processedVideoUrl={processedVideoUrl}
+            videoProcessError={videoProcessError}
+            capturedFrame={capturedFrame}
+            onSelectPreset={onSelectPreset}
+            onUpdateVideoEdit={onUpdateVideoEdit}
+            onStartProcess={() => onStartVideoProcess('auto')}
+            onCancelProcess={onCancelVideoProcess}
+            onSeekPreview={handleSeekVideoPreview}
+            onCaptureFrame={handleCaptureFrame}
+            onEditCapturedFrameAsPhoto={handleEditCapturedFrameAsPhoto}
+          />
         )}
 
-        {/* Step 3: Simpan & Bagikan */}
-        <div className="border-t border-[var(--border-hairline)] pt-4">
-          <h2 className="text-xs font-semibold text-[var(--text-primary)]">Simpan &amp; Bagikan</h2>
-
-          {isImage ? (
-            <div className="mt-2.5 flex flex-col gap-2">
-              {imageProcessError && (
-                <p
-                  role="alert"
-                  className="rounded-xl border border-[var(--status-err-border)] bg-[var(--status-err-bg)] px-3 py-2 text-xs text-[var(--status-err-ink)]"
-                >
-                  {imageProcessError}
-                </p>
-              )}
-
-              <Button
-                variant="primary"
-                size="lg"
-                data-testid="download-photo-btn"
-                disabled={!processedImageUrl || imageProcessStatus === 'processing'}
-                onClick={handleDownloadPhoto}
-                className="min-h-[44px] w-full"
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                <span>
-                  {imageProcessStatus === 'processing' ? 'Memproses Foto…' : 'Unduh Foto'}
-                </span>
-              </Button>
-
-              {canShare && (
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  data-testid="share-photo-btn"
-                  disabled={!imageProcessResult || imageProcessStatus === 'processing'}
-                  onClick={() => void handleSharePhoto()}
-                  className="min-h-[44px] w-full"
-                >
-                  <Share2 className="h-4 w-4" aria-hidden="true" />
-                  <span>Bagikan</span>
-                </Button>
-              )}
-
-              {downloadConfirmed && (
-                <p
-                  data-testid="download-confirmed-msg"
-                  className="flex items-center justify-center gap-1.5 pt-1 text-xs font-medium text-[var(--status-ok-ink)]"
-                >
-                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Foto berhasil diunduh</span>
-                </p>
-              )}
-
-              {shareFeedback && (
-                <p className="text-center text-xs text-[var(--status-err-ink)]">{shareFeedback}</p>
-              )}
-            </div>
-          ) : (
-            <div
-              data-testid="video-phase5-notice"
-              className="mt-2.5 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-app)] p-3.5 text-xs leading-relaxed text-[var(--text-secondary)]"
-            >
-              Kompresi &amp; potong video akan hadir di pembaruan berikutnya. Saat ini Anda sudah
-              dapat memutar dan memeriksa detail video.
-            </div>
-          )}
-        </div>
-
-        {/* Step 4: Collapsed Detail file Disclosure */}
+        {/* Collapsed Detail file Disclosure */}
         <details
           data-testid="file-details-accordion"
           className="group mt-auto border-t border-[var(--border-hairline)] pt-3.5"
@@ -475,12 +699,17 @@ export function WorkspaceStage({
           </summary>
 
           <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs tabular-nums">
+            <dt className="text-[var(--text-muted)]">Nama file</dt>
+            <dd className="truncate text-right font-medium text-[var(--text-primary)]" title={metadata.fileName}>
+              {metadata.fileName}
+            </dd>
+
             <dt className="text-[var(--text-muted)]">Jenis</dt>
             <dd className="text-right font-medium text-[var(--text-primary)]">
               {isImage ? 'Foto' : 'Video'}
             </dd>
 
-            <dt className="text-[var(--text-muted)]">Format</dt>
+            <dt className="text-[var(--text-muted)]">Format asli</dt>
             <dd className="text-right font-medium text-[var(--text-primary)]">
               {validation.signatureLabel}
             </dd>

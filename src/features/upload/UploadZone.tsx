@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
-import { AlertCircle, Loader2, Upload } from 'lucide-react';
+import { AlertCircle, Film, Image as ImageIcon, Loader2, Upload } from 'lucide-react';
 import { Button } from '../../design-system/components/Button';
 import type { MediaLoadStatus } from '../../store/useMediaStore';
 
@@ -59,22 +59,22 @@ export function UploadZone({ status, errorMessage, onFileSelected }: UploadZoneP
     <div
       className="flex min-h-[calc(100vh-56px)] w-full flex-col items-center justify-center px-4 py-8"
       style={{
-        background: 'radial-gradient(circle at 50% 30%, #E6F3F6 0%, #F4F9FA 65%)',
+        background: 'radial-gradient(circle at 50% 30%, var(--bg-stage-glow) 0%, var(--bg-app) 65%)',
       }}
     >
-      <div className="flex w-full max-w-[500px] flex-col gap-4">
+      <div className="flex w-full max-w-[520px] flex-col gap-4">
         <div
           data-testid="upload-dropzone"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`flex w-full flex-col items-center rounded-[24px] border px-6 py-10 text-center transition-colors sm:px-10 sm:py-12 ${
+          className={`flex w-full flex-col items-center rounded-[24px] border px-6 py-10 text-center transition-all sm:px-10 sm:py-12 ${
             isDragging
-              ? 'border-[var(--accent-primary)] bg-[var(--bg-subtle)]'
+              ? 'scale-[1.01] border-[var(--border-active)] bg-[var(--bg-subtle)]'
               : 'border-[var(--border-hairline)] bg-[var(--bg-surface)]'
           }`}
           style={{
-            boxShadow: '0 16px 40px -24px rgba(27, 55, 66, 0.14)',
+            boxShadow: 'var(--stage-shadow)',
           }}
         >
           <input
@@ -102,7 +102,7 @@ export function UploadZone({ status, errorMessage, onFileSelected }: UploadZoneP
           <p className="mt-2 max-w-sm text-sm leading-relaxed text-[var(--text-secondary)]">
             {isAnalyzing
               ? 'Membaca ukuran dan kesiapan file langsung di perangkat Anda.'
-              : 'Tarik file ke sini atau pilih langsung dari perangkat.'}
+              : 'Tarik file ke sini atau pilih langsung dari perangkat untuk dikompres, dipotong, dan diedit.'}
           </p>
 
           <div className="mt-6">
@@ -118,8 +118,19 @@ export function UploadZone({ status, errorMessage, onFileSelected }: UploadZoneP
             </Button>
           </div>
 
-          <p className="mt-7 text-xs text-[var(--text-muted)]">
-            Mendukung JPG, PNG, WebP, MP4, MOV, WebM · File tetap di perangkat Anda
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-2 text-xs text-[var(--text-secondary)]">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-1">
+              <ImageIcon className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden="true" />
+              <span>Foto · JPG, PNG, WebP</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-1">
+              <Film className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden="true" />
+              <span>Video · MP4, MOV, WebM</span>
+            </span>
+          </div>
+
+          <p className="mt-3 text-[11px] text-[var(--text-muted)]">
+            100% diproses di perangkat Anda — file tidak pernah diunggah ke server.
           </p>
         </div>
 

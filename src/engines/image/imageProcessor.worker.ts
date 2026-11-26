@@ -1,31 +1,37 @@
-import type { ImageOutputFormat, ImageRotation } from '../contracts';
+import type { ImageEditState, ImageFilterId, ImageOutputFormat } from '../contracts';
 import {
-  applySharpen,
-  computeProgressiveSteps,
-  computeRotatedDimensions,
-  computeTargetDimensions,
-} from './pixelOps';
+  runImagePipeline,
+  runThumbnailPipeline,
+  type CanvasAdapter,
+  type Canvas2DContextLike,
+} from './pipelineRunner';
 
-export interface ImageWorkerRequest {
-  seq: number;
-  requestId: string;
-  buffer: ArrayBuffer;
-  mimeType: string;
-  maxEdgePx: number | null;
-  outputFormat: ImageOutputFormat;
-  quality: number;
-  sharpenAmount: number;
-  rotationDeg: ImageRotation;
-}
+export type ImageWorkerRequest =
+  | {
+      type: 'process';
+      seq: number;
+      requestId: string;
+      buffer: ArrayBuffer;
+      mimeType: string;
+      edit: ImageEditState;
+    }
+  | {
+      type: 'thumbnails';
+      seq: number;
+      buffer: ArrayBuffer;
+      mimeType: string;
+    };
 
 export type ImageWorkerResponse =
   | {
+      type: 'process';
       seq: number;
       requestId: string;
       ok: true;
       fallbackRequired: true;
     }
   | {
+      type: 'process';
       seq: number;
       requestId: string;
       ok: true;
@@ -35,10 +41,26 @@ export type ImageWorkerResponse =
       outputWidth: number;
       outputHeight: number;
       durationMs: number;
+      solvedQuality?: number;
+      targetSizeMet?: boolean;
     }
   | {
+      type: 'thumbnails';
       seq: number;
-      requestId: string;
+      ok: true;
+      fallbackRequired: true;
+    }
+  | {
+      type: 'thumbnails';
+      seq: number;
+      ok: true;
+      fallbackRequired: false;
+      items: Array<{ filterId: ImageFilterId; buffer: ArrayBuffer }>;
+    }
+  | {
+      type: 'process' | 'thumbnails';
+      seq: number;
+      requestId?: string;
       ok: false;
       error: string;
     };
@@ -50,6 +72,18 @@ interface DedicatedWorkerScopeLike {
 
 const workerScope = self as unknown as DedicatedWorkerScopeLike;
 
+const offscreenAdapter: CanvasAdapter<OffscreenCanvas> = {
+  createCanvas(width, height) {
+    return new OffscreenCanvas(width, height);
+  },
+  async encodeBlob(canvas, format, quality) {
+    return canvas.convertToBlob({
+      type: format,
+      ...(quality === undefined ? {} : { quality }),
+    });
+  },
+};
+
 async function decodeOrientedBitmap(blob: Blob): Promise<ImageBitmap> {
   try {
     return await createImageBitmap(blob, { imageOrientation: 'from-image' });
@@ -58,128 +92,91 @@ async function decodeOrientedBitmap(blob: Blob): Promise<ImageBitmap> {
   }
 }
 
-function drawRotatedToOffscreen(
-  bitmap: ImageBitmap,
-  rotationDeg: ImageRotation
-): OffscreenCanvas {
-  const rotDims = computeRotatedDimensions(bitmap.width, bitmap.height, rotationDeg);
-  const canvas = new OffscreenCanvas(rotDims.width, rotDims.height);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('Gagal menyiapkan kanvas worker untuk memproses foto.');
-  }
-
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-
-  if (rotationDeg === 0) {
-    ctx.drawImage(bitmap, 0, 0);
-    return canvas;
-  }
-
-  ctx.save();
-  if (rotationDeg === 90) {
-    ctx.translate(rotDims.width, 0);
-    ctx.rotate(Math.PI / 2);
-  } else if (rotationDeg === 180) {
-    ctx.translate(rotDims.width, rotDims.height);
-    ctx.rotate(Math.PI);
-  } else if (rotationDeg === 270) {
-    ctx.translate(0, rotDims.height);
-    ctx.rotate((3 * Math.PI) / 2);
-  }
-  ctx.drawImage(bitmap, 0, 0);
-  ctx.restore();
-  return canvas;
-}
-
 workerScope.onmessage = async (event: MessageEvent<ImageWorkerRequest>) => {
-  const {
-    seq,
-    requestId,
-    buffer,
-    mimeType,
-    maxEdgePx,
-    outputFormat,
-    quality,
-    sharpenAmount,
-    rotationDeg,
-  } = event.data;
+  const payload = event.data;
 
   if (typeof OffscreenCanvas === 'undefined') {
-    workerScope.postMessage({
-      seq,
-      requestId,
-      ok: true,
-      fallbackRequired: true,
-    });
+    if (payload.type === 'process') {
+      workerScope.postMessage({
+        type: 'process',
+        seq: payload.seq,
+        requestId: payload.requestId,
+        ok: true,
+        fallbackRequired: true,
+      });
+    } else {
+      workerScope.postMessage({
+        type: 'thumbnails',
+        seq: payload.seq,
+        ok: true,
+        fallbackRequired: true,
+      });
+    }
     return;
   }
 
   let bitmap: ImageBitmap | null = null;
   try {
-    const t0 = performance.now();
-    const inputBlob = new Blob([buffer], { type: mimeType });
+    const inputBlob = new Blob([payload.buffer], { type: payload.mimeType });
     bitmap = await decodeOrientedBitmap(inputBlob);
 
-    let currentCanvas = drawRotatedToOffscreen(bitmap, rotationDeg);
-    const targetDims = computeTargetDimensions(
-      currentCanvas.width,
-      currentCanvas.height,
-      maxEdgePx
-    );
-
-    const steps = computeProgressiveSteps(
-      currentCanvas.width,
-      currentCanvas.height,
-      targetDims.width,
-      targetDims.height
-    );
-
-    for (const step of steps) {
-      if (step.width === currentCanvas.width && step.height === currentCanvas.height) {
-        continue;
-      }
-      const nextCanvas = new OffscreenCanvas(step.width, step.height);
-      const nextCtx = nextCanvas.getContext('2d');
-      if (!nextCtx) {
-        throw new Error('Gagal mengubah ukuran foto di worker.');
-      }
-      nextCtx.imageSmoothingEnabled = true;
-      nextCtx.imageSmoothingQuality = 'high';
-      nextCtx.drawImage(currentCanvas, 0, 0, step.width, step.height);
-      currentCanvas = nextCanvas;
+    if (payload.type === 'thumbnails') {
+      const thumbItems = await runThumbnailPipeline(
+        bitmap,
+        offscreenAdapter as unknown as CanvasAdapter<{
+          width: number;
+          height: number;
+          getContext(type: '2d'): Canvas2DContextLike | null;
+        }>
+      );
+      const transfers: Transferable[] = [];
+      const encodedItems = await Promise.all(
+        thumbItems.map(async (item) => {
+          const buffer = await item.blob.arrayBuffer();
+          transfers.push(buffer);
+          return { filterId: item.filterId, buffer };
+        })
+      );
+      workerScope.postMessage(
+        {
+          type: 'thumbnails',
+          seq: payload.seq,
+          ok: true,
+          fallbackRequired: false,
+          items: encodedItems,
+        },
+        transfers
+      );
+      return;
     }
 
-    if (sharpenAmount > 0) {
-      const ctx = currentCanvas.getContext('2d');
-      if (ctx) {
-        const imgData = ctx.getImageData(0, 0, currentCanvas.width, currentCanvas.height);
-        applySharpen(imgData, sharpenAmount);
-        ctx.putImageData(imgData, 0, 0);
-      }
-    }
-
-    const clampedQuality = Math.min(1, Math.max(0.1, quality));
-    const encodedBlob = await currentCanvas.convertToBlob({
-      type: outputFormat,
-      ...(outputFormat === 'image/png' ? {} : { quality: clampedQuality }),
-    });
-
-    const outputBuffer = await encodedBlob.arrayBuffer();
+    const t0 = performance.now();
+    const out = await runImagePipeline(
+      bitmap,
+      payload.edit,
+      offscreenAdapter as unknown as CanvasAdapter<{
+        width: number;
+        height: number;
+        getContext(type: '2d'): Canvas2DContextLike | null;
+      }>
+    );
+    const outputBuffer = await out.blob.arrayBuffer();
     const durationMs = performance.now() - t0;
 
     workerScope.postMessage(
       {
-        seq,
-        requestId,
+        type: 'process',
+        seq: payload.seq,
+        requestId: payload.requestId,
         ok: true,
         fallbackRequired: false,
         outputBuffer,
-        outputMime: outputFormat,
-        outputWidth: currentCanvas.width,
-        outputHeight: currentCanvas.height,
+        outputMime: payload.edit.outputFormat,
+        outputWidth: out.width,
+        outputHeight: out.height,
         durationMs,
+        solvedQuality: out.solvedQuality,
+        targetSizeMet: out.targetSizeMet,
       },
       [outputBuffer]
     );
@@ -187,8 +184,9 @@ workerScope.onmessage = async (event: MessageEvent<ImageWorkerRequest>) => {
     const message =
       err instanceof Error ? err.message : 'Gagal memproses foto di worker latar belakang.';
     workerScope.postMessage({
-      seq,
-      requestId,
+      type: payload.type,
+      seq: payload.seq,
+      ...(payload.type === 'process' ? { requestId: payload.requestId } : {}),
       ok: false,
       error: message,
     });

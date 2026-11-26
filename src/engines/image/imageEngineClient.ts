@@ -1,5 +1,5 @@
-import type { ImageProcessRequest, ImageProcessResult } from '../contracts';
-import { runMainThreadImageFallback } from './imageFallback';
+import type { ImageFilterId, ImageProcessRequest, ImageProcessResult } from '../contracts';
+import { runMainThreadImageFallback, runMainThreadThumbnailsFallback } from './imageFallback';
 import type { ImageWorkerRequest, ImageWorkerResponse } from './imageProcessor.worker';
 import { buildExportFileName } from './pixelOps';
 
@@ -63,21 +63,20 @@ export async function processImage(
     const worker = getOrCreateWorker();
     const inputBuffer = await request.file.arrayBuffer();
     const response = await sendWorkerMessage(worker, {
+      type: 'process',
       seq,
       requestId: request.requestId,
       buffer: inputBuffer,
       mimeType: request.sourceMetadata.mimeType,
-      maxEdgePx: request.edit.maxEdgePx,
-      outputFormat: request.edit.outputFormat,
-      quality: request.edit.quality,
-      sharpenAmount: request.edit.sharpenAmount,
-      rotationDeg: request.edit.rotationDeg,
+      edit: request.edit,
     });
 
+    if (response.type !== 'process') {
+      throw new Error('Respons worker tidak sesuai.');
+    }
     if (!response.ok) {
       throw new Error(response.error);
     }
-
     if (response.fallbackRequired) {
       return await runMainThreadImageFallback(request);
     }
@@ -94,9 +93,47 @@ export async function processImage(
       inputBytes: request.file.size,
       outputBytes: outputBlob.size,
       durationMs: performance.now() - tStart,
+      solvedQuality: response.solvedQuality,
+      targetSizeMet: response.targetSizeMet,
     };
   } catch {
     disposeImageEngine();
     return runMainThreadImageFallback(request);
+  }
+}
+
+export async function generateFilterThumbnails(
+  file: File,
+  mimeType: string
+): Promise<Array<{ filterId: ImageFilterId; blob: Blob }>> {
+  const seq = ++sequenceCounter;
+
+  try {
+    if (typeof Worker === 'undefined') {
+      return await runMainThreadThumbnailsFallback(file);
+    }
+
+    const worker = getOrCreateWorker();
+    const inputBuffer = await file.arrayBuffer();
+    const response = await sendWorkerMessage(worker, {
+      type: 'thumbnails',
+      seq,
+      buffer: inputBuffer,
+      mimeType,
+    });
+
+    if (response.type !== 'thumbnails' || !response.ok) {
+      return await runMainThreadThumbnailsFallback(file);
+    }
+    if (response.fallbackRequired) {
+      return await runMainThreadThumbnailsFallback(file);
+    }
+
+    return response.items.map((item) => ({
+      filterId: item.filterId,
+      blob: new Blob([item.buffer], { type: 'image/jpeg' }),
+    }));
+  } catch {
+    return runMainThreadThumbnailsFallback(file);
   }
 }

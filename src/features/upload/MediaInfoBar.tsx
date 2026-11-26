@@ -1,7 +1,14 @@
 import { AlertTriangle } from 'lucide-react';
-import type { ImageProcessResult, MediaMetadata, ValidationResult } from '../../engines/contracts';
+import type {
+  ImageMetadata,
+  ImageProcessResult,
+  MediaMetadata,
+  ValidationResult,
+  VideoMetadata,
+  VideoProcessResult,
+} from '../../engines/contracts';
 import { computeReductionPct } from '../../engines/image/pixelOps';
-import type { ImageProcessStatus } from '../../store/useMediaStore';
+import type { ImageProcessStatus, VideoProcessStatus } from '../../store/useMediaStore';
 import { formatBytes } from '../../shared/utils/formatBytes';
 import { formatDuration } from '../../shared/utils/formatDuration';
 
@@ -10,6 +17,32 @@ export interface MediaInfoBarProps {
   validation: Extract<ValidationResult, { valid: true }>;
   imageProcessStatus: ImageProcessStatus;
   imageProcessResult: ImageProcessResult | null;
+  videoProcessStatus?: VideoProcessStatus;
+  videoProcessResult?: VideoProcessResult | null;
+}
+
+function renderDeltaBadge(inputBytes: number, outputBytes: number) {
+  const reduction = computeReductionPct(inputBytes, outputBytes);
+  const roundedPct = Math.round(Math.abs(reduction));
+  const deltaLabel =
+    reduction >= 1
+      ? `Hemat ${roundedPct}%`
+      : reduction <= -1
+        ? `Naik ${roundedPct}%`
+        : 'Ukuran tetap';
+
+  return (
+    <span
+      data-testid="media-savings"
+      className={
+        reduction >= 1
+          ? 'font-semibold text-[var(--accent-primary)]'
+          : 'text-[var(--text-secondary)]'
+      }
+    >
+      {deltaLabel}
+    </span>
+  );
 }
 
 export function MediaInfoBar({
@@ -17,23 +50,11 @@ export function MediaInfoBar({
   validation,
   imageProcessStatus,
   imageProcessResult,
+  videoProcessStatus = 'idle',
+  videoProcessResult = null,
 }: MediaInfoBarProps) {
-  const isImage = metadata.kind === 'image';
-
-  const renderPhotoSummary = () => {
+  const renderPhotoSummary = (imageMeta: ImageMetadata) => {
     if (imageProcessResult) {
-      const reduction = computeReductionPct(
-        imageProcessResult.inputBytes,
-        imageProcessResult.outputBytes
-      );
-      const roundedPct = Math.round(Math.abs(reduction));
-      const deltaLabel =
-        reduction >= 1
-          ? `Hemat ${roundedPct}%`
-          : reduction <= -1
-            ? `Naik ${roundedPct}%`
-            : 'Ukuran tetap';
-
       return (
         <div
           data-testid="media-summary-strip"
@@ -52,16 +73,7 @@ export function MediaInfoBar({
           <span aria-hidden="true" className="text-[var(--text-muted)]">
             ·
           </span>
-          <span
-            data-testid="media-savings"
-            className={
-              reduction >= 1
-                ? 'font-semibold text-[var(--accent-primary)]'
-                : 'text-[var(--text-secondary)]'
-            }
-          >
-            {deltaLabel}
-          </span>
+          {renderDeltaBadge(imageProcessResult.inputBytes, imageProcessResult.outputBytes)}
           {imageProcessStatus === 'processing' && (
             <>
               <span aria-hidden="true" className="text-[var(--text-muted)]">
@@ -80,12 +92,12 @@ export function MediaInfoBar({
         className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs font-medium text-[var(--text-primary)] tabular-nums"
       >
         <span data-testid="media-dimensions">
-          {metadata.width} × {metadata.height}
+          {imageMeta.width} × {imageMeta.height}
         </span>
         <span aria-hidden="true" className="text-[var(--text-muted)]">
           ·
         </span>
-        <span>{formatBytes(metadata.sizeBytes)}</span>
+        <span>{formatBytes(imageMeta.sizeBytes)}</span>
         <span aria-hidden="true" className="text-[var(--text-muted)]">
           ·
         </span>
@@ -94,35 +106,75 @@ export function MediaInfoBar({
     );
   };
 
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="max-w-full rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-4 py-1.5">
-        {isImage ? (
-          renderPhotoSummary()
-        ) : (
-          <div
-            data-testid="media-summary-strip"
-            className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs font-medium text-[var(--text-primary)] tabular-nums"
-          >
-            <span className="max-w-[200px] truncate" title={metadata.fileName}>
-              {metadata.fileName}
-            </span>
+  const renderVideoSummary = (videoMeta: VideoMetadata) => {
+    if (videoProcessResult) {
+      return (
+        <div
+          data-testid="media-summary-strip"
+          className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs font-medium text-[var(--text-primary)] tabular-nums"
+        >
+          <span data-testid="media-dimensions">
+            {videoProcessResult.outputWidth} × {videoProcessResult.outputHeight}
+          </span>
+          <span aria-hidden="true" className="text-[var(--text-muted)]">
+            ·
+          </span>
+          <span data-testid="media-duration">
+            {formatDuration(videoProcessResult.durationSec)}
+          </span>
+          <span aria-hidden="true" className="text-[var(--text-muted)]">
+            ·
+          </span>
+          <span data-testid="media-size-comparison">
+            {formatBytes(videoProcessResult.inputBytes)} →{' '}
+            {formatBytes(videoProcessResult.outputBytes)}
+          </span>
+          <span aria-hidden="true" className="text-[var(--text-muted)]">
+            ·
+          </span>
+          {renderDeltaBadge(videoProcessResult.inputBytes, videoProcessResult.outputBytes)}
+        </div>
+      );
+    }
+
+    return (
+      <div
+        data-testid="media-summary-strip"
+        className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs font-medium text-[var(--text-primary)] tabular-nums"
+      >
+        <span className="max-w-[180px] truncate" title={videoMeta.fileName}>
+          {videoMeta.fileName}
+        </span>
+        <span aria-hidden="true" className="text-[var(--text-muted)]">
+          ·
+        </span>
+        <span data-testid="media-dimensions">
+          {videoMeta.width} × {videoMeta.height}
+        </span>
+        <span aria-hidden="true" className="text-[var(--text-muted)]">
+          ·
+        </span>
+        <span data-testid="media-duration">{formatDuration(videoMeta.durationSec)}</span>
+        <span aria-hidden="true" className="text-[var(--text-muted)]">
+          ·
+        </span>
+        <span data-testid="media-size">{formatBytes(videoMeta.sizeBytes)}</span>
+        {videoProcessStatus === 'processing' && (
+          <>
             <span aria-hidden="true" className="text-[var(--text-muted)]">
               ·
             </span>
-            <span data-testid="media-dimensions">
-              {metadata.width} × {metadata.height}
-            </span>
-            <span aria-hidden="true" className="text-[var(--text-muted)]">
-              ·
-            </span>
-            <span data-testid="media-duration">{formatDuration(metadata.durationSec)}</span>
-            <span aria-hidden="true" className="text-[var(--text-muted)]">
-              ·
-            </span>
-            <span data-testid="media-size">{formatBytes(metadata.sizeBytes)}</span>
-          </div>
+            <span className="text-[var(--accent-primary)]">Memproses…</span>
+          </>
         )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex max-w-full flex-col items-center gap-2">
+      <div className="max-w-full rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-4 py-1.5 shadow-xs">
+        {metadata.kind === 'image' ? renderPhotoSummary(metadata) : renderVideoSummary(metadata)}
       </div>
 
       {validation.warnings.length > 0 && (
