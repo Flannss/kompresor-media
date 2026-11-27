@@ -17,7 +17,10 @@ export type VideoOutputMime =
   | 'video/webm'
   | 'video/x-matroska';
 
-export type VideoExecutionBackend = 'webcodecs-mediabunny' | 'ffmpeg-wasm-st';
+export type VideoExecutionBackend =
+  | 'webcodecs-mediabunny'
+  | 'mediarecorder-native'
+  | 'ffmpeg-wasm-st';
 
 export type VideoQualityTier = 'light' | 'balanced' | 'high';
 

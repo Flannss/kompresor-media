@@ -291,7 +291,48 @@ export async function readImageMetadata(
   };
 }
 
-function scanVideoCodecs(chunk: Uint8Array): { codecHint: string | null; hasAudioHint: boolean | null } {
+function scanMp4VideoFpsHint(ascii: string, bytes: Uint8Array): number | null {
+  try {
+    let searchFrom = 0;
+    while (searchFrom < ascii.length) {
+      const hdlrIdx = ascii.indexOf('hdlrvide', searchFrom);
+      const videIdx = hdlrIdx !== -1 ? hdlrIdx : ascii.indexOf('vide', searchFrom);
+      if (videIdx === -1) break;
+
+      const mdiaIdx = ascii.lastIndexOf('mdia', videIdx);
+      if (mdiaIdx !== -1 && videIdx - mdiaIdx < 4096) {
+        const mdhdIdx = ascii.indexOf('mdhd', mdiaIdx);
+        const sttsIdx = ascii.indexOf('stts', mdiaIdx);
+        if (mdhdIdx !== -1 && sttsIdx !== -1 && sttsIdx - mdiaIdx < 65536) {
+          const mdhdVersion = bytes[mdhdIdx + 4] ?? 0;
+          const timescaleOffset = mdhdIdx + 4 + 4 + (mdhdVersion === 1 ? 16 : 8);
+          if (timescaleOffset + 4 <= bytes.length && sttsIdx + 20 <= bytes.length) {
+            const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            const timescale = view.getUint32(timescaleOffset, false);
+            const entryCount = view.getUint32(sttsIdx + 8, false);
+            const sampleDelta = entryCount >= 1 ? view.getUint32(sttsIdx + 16, false) : 0;
+            if (timescale > 0 && sampleDelta > 0) {
+              const fps = Math.round(timescale / sampleDelta);
+              if (fps >= 10 && fps <= 240) {
+                return fps;
+              }
+            }
+          }
+        }
+      }
+      searchFrom = videIdx + 4;
+    }
+  } catch {
+    // Non-fatal FPS header inspection failure
+  }
+  return null;
+}
+
+function scanVideoCodecs(chunk: Uint8Array): {
+  codecHint: string | null;
+  hasAudioHint: boolean | null;
+  fpsHint: number | null;
+} {
   const ascii = new TextDecoder('latin1').decode(chunk);
   const videoParts: string[] = [];
   const audioParts: string[] = [];
@@ -311,12 +352,13 @@ function scanVideoCodecs(chunk: Uint8Array): { codecHint: string | null; hasAudi
   return {
     codecHint: combined.length > 0 ? combined.join(' + ') : null,
     hasAudioHint: audioParts.length > 0 ? true : null,
+    fpsHint: scanMp4VideoFpsHint(ascii, chunk),
   };
 }
 
 async function readVideoHeaderHints(
   file: File
-): Promise<{ codecHint: string | null; hasAudioHint: boolean | null }> {
+): Promise<{ codecHint: string | null; hasAudioHint: boolean | null; fpsHint: number | null }> {
   const headSize = Math.min(file.size, 262144);
   const headBytes = new Uint8Array(await file.slice(0, headSize).arrayBuffer());
   let merged = headBytes;
@@ -383,6 +425,7 @@ export async function readVideoMetadata(
       orientation: computeOrientation(dimsAndDuration.width, dimsAndDuration.height),
       aspectRatio: computeAspectRatioLabel(dimsAndDuration.width, dimsAndDuration.height),
       durationSec: dimsAndDuration.durationSec,
+      fpsHint: hints.fpsHint,
       codecHint: hints.codecHint,
       hasAudioHint: hints.hasAudioHint,
     };

@@ -512,7 +512,7 @@ export function WorkspaceStage({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`bg-warm-stage relative flex min-h-[44vh] w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 px-4 py-5 transition-colors sm:min-h-[50vh] md:min-h-[46vh] sm:px-7 sm:py-6 lg:min-h-[calc(100vh-60px)] lg:px-8 lg:py-7 ${
+        className={`bg-warm-stage relative flex min-h-0 w-full min-w-0 flex-1 flex-col items-center justify-center gap-2.5 px-3 py-3 transition-colors sm:min-h-[50vh] sm:gap-4 sm:px-7 sm:py-6 md:min-h-[46vh] lg:min-h-[calc(100vh-60px)] lg:px-8 lg:py-7 ${
           isDraggingOverStage ? 'ring-2 ring-inset ring-[var(--border-active)]' : ''
         }`}
       >
@@ -603,7 +603,7 @@ export function WorkspaceStage({
         {!isCropping && (
           <div
             data-testid="studio-stage-dock"
-            className="km-glass-lite flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-[22px] border px-2 py-1.5 sm:rounded-full"
+            className="km-glass-lite my-0.5 flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-[22px] border px-2 py-1.5 sm:my-0 sm:rounded-full"
           >
             {isImage ? (
               <>
@@ -864,8 +864,8 @@ export function WorkspaceStage({
         )}
       </section>
 
-      {/* Right Inspector Panel (2-column balanced grid on Tablet md..lg-1, single rail on Mobile & Desktop) */}
-      <aside className="km-glass flex w-full shrink-0 flex-col gap-5 border-t p-5 pb-24 sm:p-6 md:grid md:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.9fr)] md:items-start md:gap-6 md:px-7 md:pb-8 lg:flex lg:w-[404px] xl:w-[424px] lg:flex-col lg:items-stretch lg:gap-5 lg:border-l lg:border-t-0 lg:p-6">
+      {/* Right Inspector Panel (flattened airy stack on Mobile, 2-column balanced grid on Tablet md..lg-1, single rail on Desktop) */}
+      <aside className="km-glass flex w-full shrink-0 flex-col gap-5 border-t px-3.5 py-5 pb-28 sm:p-6 md:grid md:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.9fr)] md:items-start md:gap-6 md:px-7 md:pb-8 lg:flex lg:w-[404px] xl:w-[424px] lg:flex-col lg:items-stretch lg:gap-5 lg:border-l lg:border-t-0 lg:p-6">
         <div className="min-w-0">
           {isImage ? (
             <PhotoControlPanel

@@ -1,6 +1,7 @@
 export interface SegmentedTabItem<T extends string> {
   id: T;
   label: string;
+  mobileLabel?: string;
 }
 
 export interface SegmentedTabsProps<T extends string> {
@@ -47,13 +48,20 @@ export function SegmentedTabs<T extends string>({
             aria-selected={active}
             data-testid={`tab-${item.id}`}
             onClick={() => onChange(item.id)}
-            className={`relative z-10 min-h-[40px] rounded-full px-3 py-1.5 text-[12px] font-semibold leading-tight transition-colors duration-200 active:scale-[0.985] ${
+            className={`relative z-10 min-h-[44px] sm:min-h-[40px] whitespace-nowrap rounded-full px-2 sm:px-3 py-1.5 text-[12px] font-semibold leading-tight transition-colors duration-200 active:scale-[0.985] ${
               active
                 ? 'text-[var(--text-primary)]'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
-            {item.label}
+            {item.mobileLabel ? (
+              <>
+                <span className="sm:hidden">{item.mobileLabel}</span>
+                <span className="hidden sm:inline">{item.label}</span>
+              </>
+            ) : (
+              item.label
+            )}
           </button>
         );
       })}

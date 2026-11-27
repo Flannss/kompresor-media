@@ -95,8 +95,8 @@ export interface VideoControlPanelProps {
 
 const VIDEO_TABS = [
   { id: 'utama' as const, label: '1. Tujuan' },
-  { id: 'tampilan' as const, label: '2. Jernihkan & Warna' },
-  { id: 'lanjutan' as const, label: '3. Potong & Audio' },
+  { id: 'tampilan' as const, label: '2. Jernihkan & Warna', mobileLabel: '2. Jernihkan' },
+  { id: 'lanjutan' as const, label: '3. Potong & Audio', mobileLabel: '3. Potong' },
 ];
 
 const VIDEO_FORMAT_OPTIONS: ReadonlyArray<{ value: VideoOutputFormat; label: string }> = [
@@ -184,7 +184,11 @@ function getStageLabel(progress: VideoProcessProgress | null): string {
 
 function formatVideoEngineStatus(progress: VideoProcessProgress | null, pct: number): string {
   const modeLabel =
-    progress?.backend === 'ffmpeg-wasm-st' ? 'Mode CPU' : 'Mode Cepat Hardware';
+    progress?.backend === 'ffmpeg-wasm-st'
+      ? 'Mode CPU'
+      : progress?.backend === 'mediarecorder-native'
+        ? 'Mode Cepat Hardware HP'
+        : 'Mode Cepat Hardware';
   if (
     progress &&
     progress.ratio >= 0.08 &&
@@ -259,6 +263,10 @@ export function VideoControlPanel({
         videoEdit.enhanceSuite.noise.enabled ||
         videoEdit.enhanceSuite.upscale1080.enabled) &&
         (metadata.durationSec > 25 || metadata.sizeBytes > 40 * 1024 * 1024)));
+
+  const isMobile4kOrHighFps =
+    (deviceProfile.isMobile || deviceProfile.isMobileViewport) &&
+    (Math.max(metadata.width, metadata.height) >= 2560 || (metadata.fpsHint ?? 0) >= 50);
 
   const handleApplyMobileLightSettings = () => {
     const balancedParams = resolveCustomVideoParams('balanced');
@@ -459,6 +467,16 @@ export function VideoControlPanel({
         ariaLabel="Menu studio video"
       />
 
+      {isMobile4kOrHighFps && (
+        <p
+          data-testid="mobile-4k60-hint"
+          className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3.5 py-2.5 text-[12px] leading-relaxed text-[var(--text-secondary)]"
+        >
+          Sumber 4K/60fps · otomatis diringkas ke 1080p 30fps agar cepat &amp; HP tetap adem.
+          Potong durasi dulu bila perlu.
+        </p>
+      )}
+
       {isLargeVideo && (
         <div className="flex items-start gap-2 rounded-xl border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-3 py-2 text-xs text-[var(--status-warn-ink)]">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -495,8 +513,8 @@ export function VideoControlPanel({
 
       {/* TAB 1: UTAMA */}
       {activeTab === 'utama' && (
-        <div className="space-y-3.5">
-          <div className="space-y-2">
+        <div className="space-y-5 sm:space-y-4">
+          <div className="space-y-2.5 sm:space-y-2">
             <div>
               <h2 className="text-xs font-semibold text-[var(--text-primary)]">Pilih Tujuan</h2>
               <p className="mt-0.5 text-[12px] leading-snug text-[var(--text-muted)]">
@@ -504,7 +522,7 @@ export function VideoControlPanel({
               </p>
             </div>
             <div
-              className="grid grid-cols-2 gap-2"
+              className="no-scrollbar -mx-1 flex snap-x gap-2.5 overflow-x-auto px-1 pb-1 md:mx-0 md:grid md:grid-cols-2 md:gap-2 md:overflow-visible md:px-0 md:pb-0"
               role="radiogroup"
               aria-label="Pilih tujuan video"
             >
@@ -519,7 +537,7 @@ export function VideoControlPanel({
                     disabled={isProcessing}
                     data-testid={`preset-${preset.id}`}
                     onClick={() => onSelectPreset(preset.id)}
-                    className={`flex min-h-[52px] flex-col items-start justify-center rounded-xl border px-3 py-2 text-left transition-all active:scale-[0.985] disabled:opacity-60 ${
+                    className={`flex min-h-[48px] shrink-0 snap-start flex-col items-start justify-center whitespace-nowrap rounded-xl border px-3.5 py-2 text-left transition-all active:scale-[0.985] disabled:opacity-60 md:min-h-[52px] md:whitespace-normal md:px-3 ${
                       selected
                         ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] text-[var(--text-primary)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
@@ -537,12 +555,12 @@ export function VideoControlPanel({
             </div>
           </div>
 
-          <div className="space-y-3 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5">
+          <div className="space-y-4 rounded-2xl bg-[var(--bg-surface)]/80 p-3 sm:space-y-3 sm:border sm:border-[var(--border-hairline)] sm:bg-[var(--bg-elevated)] sm:p-3.5">
             <div>
               <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                 Format Output
               </span>
-              <div className="mt-1.5 grid grid-cols-4 gap-1.5">
+              <div className="no-scrollbar -mx-1 mt-1.5 flex snap-x gap-2 overflow-x-auto px-1 pb-1 md:mx-0 md:grid md:grid-cols-4 md:gap-1.5 md:overflow-visible md:px-0 md:pb-0">
                 {VIDEO_FORMAT_OPTIONS.map((opt) => {
                   const active = videoEdit.outputFormat === opt.value;
                   return (
@@ -553,7 +571,7 @@ export function VideoControlPanel({
                       data-testid={`video-fmt-${opt.value}`}
                       aria-pressed={active}
                       onClick={() => onUpdateVideoEdit({ outputFormat: opt.value })}
-                      className={`min-h-[36px] rounded-lg border text-xs font-semibold transition-all disabled:opacity-50 ${
+                      className={`min-h-[42px] min-w-[70px] shrink-0 snap-start whitespace-nowrap rounded-xl border px-3 text-xs font-semibold transition-all disabled:opacity-50 md:min-h-[36px] md:min-w-0 md:rounded-lg md:px-0 ${
                         active
                           ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
@@ -570,7 +588,7 @@ export function VideoControlPanel({
               <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                 Resolusi Output
               </span>
-              <div className="mt-1.5 grid grid-cols-4 gap-1.5">
+              <div className="no-scrollbar -mx-1 mt-1.5 flex snap-x gap-2 overflow-x-auto px-1 pb-1 md:mx-0 md:grid md:grid-cols-4 md:gap-1.5 md:overflow-visible md:px-0 md:pb-0">
                 {RESOLUTION_OPTIONS.map((opt) => {
                   const isLocked2k = opt.value === '2k' && !deviceProfile.allow2KVideoExport;
                   const active = videoEdit.targetResolution === opt.value;
@@ -592,7 +610,7 @@ export function VideoControlPanel({
                           maxHeightPx: opt.maxHeightPx,
                         })
                       }
-                      className={`inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg border px-1.5 text-[11px] font-medium tabular-nums transition-all disabled:cursor-not-allowed disabled:opacity-45 ${
+                      className={`inline-flex min-h-[44px] shrink-0 snap-start items-center justify-center gap-1 whitespace-nowrap rounded-xl border px-3.5 text-[11.5px] font-medium tabular-nums transition-all disabled:cursor-not-allowed disabled:opacity-45 md:min-h-[38px] md:rounded-lg md:px-1.5 md:text-[11px] ${
                         active
                           ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
@@ -618,7 +636,7 @@ export function VideoControlPanel({
               <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                 Kualitas Video
               </span>
-              <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+              <div className="no-scrollbar -mx-1 mt-1.5 flex snap-x gap-2 overflow-x-auto px-1 pb-1 md:mx-0 md:grid md:grid-cols-3 md:gap-1.5 md:overflow-visible md:px-0 md:pb-0">
                 {QUALITY_TIER_OPTIONS.map((opt) => {
                   const active = videoEdit.qualityTier === opt.value;
                   return (
@@ -629,7 +647,7 @@ export function VideoControlPanel({
                       data-testid={`video-tier-${opt.value}`}
                       aria-pressed={active}
                       onClick={() => onUpdateVideoEdit({ qualityTier: opt.value })}
-                      className={`min-h-[36px] rounded-lg border text-xs font-medium transition-all disabled:opacity-50 ${
+                      className={`min-h-[42px] min-w-[96px] shrink-0 snap-start whitespace-nowrap rounded-xl border px-3.5 text-xs font-medium transition-all disabled:opacity-50 md:min-h-[36px] md:min-w-0 md:rounded-lg md:px-0 ${
                         active
                           ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
@@ -828,7 +846,7 @@ export function VideoControlPanel({
                   'Natural HD'}
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="no-scrollbar -mx-1 flex snap-x gap-2.5 overflow-x-auto px-1 pb-1 md:mx-0 md:grid md:grid-cols-2 md:gap-2 md:overflow-visible md:px-0 md:pb-0">
               {VIDEO_CLARITY_MODELS.map((model) => {
                 const active = videoEdit.clarityModel === model.id;
                 return (
@@ -839,20 +857,20 @@ export function VideoControlPanel({
                     data-testid={`video-clarity-model-${model.id}`}
                     aria-pressed={active}
                     onClick={() => onUpdateVideoEdit({ clarityModel: model.id })}
-                    className={`flex flex-col items-start rounded-2xl border px-3 py-2 text-left transition-all ${
+                    className={`flex min-h-[52px] min-w-[162px] shrink-0 snap-start flex-col items-start justify-center rounded-2xl border px-3.5 py-2 text-left transition-all md:min-w-0 md:px-3 ${
                       active
                         ? 'border-[var(--border-active)] bg-[var(--accent-gold-soft)] text-[var(--text-primary)] ring-1 ring-[var(--border-active)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
                     }`}
                   >
                     <span
-                      className={`text-xs font-semibold ${
+                      className={`whitespace-nowrap text-xs font-semibold ${
                         active ? 'text-[var(--accent-highlight)]' : 'text-[var(--text-primary)]'
                       }`}
                     >
                       {model.title}
                     </span>
-                    <span className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">
+                    <span className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-[var(--text-muted)]">
                       {model.desc}
                     </span>
                   </button>

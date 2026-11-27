@@ -595,10 +595,10 @@ export function VideoCompareStage({
         disabled={deviceProfile.useLightweightCssPreview}
       />
 
-      {/* Top Mode Switcher Toolbar (clean wrapping, never clips on right edge) */}
+      {/* Compare Mode Toolbar (docked cleanly below video stage on mobile, top on sm+) */}
       <div
         data-testid="video-stage-toolbar"
-        className="flex w-full max-w-[820px] min-w-0 flex-wrap items-center justify-between gap-2"
+        className="order-2 my-0.5 flex w-full max-w-[820px] min-w-0 flex-wrap items-center justify-between gap-2 sm:order-1 sm:my-0"
       >
         <div
           role="group"
@@ -712,11 +712,11 @@ export function VideoCompareStage({
       {/* Main Stage Surface (clean studio matte, never checkerboard) */}
       <div
         data-testid="video-stage-surface"
-        className={`relative flex w-full max-w-[820px] min-w-0 items-center justify-center overflow-hidden rounded-[22px] border border-[var(--border-hairline)] p-2 transition-colors ${getBackdropClasses(safeBackdrop)}`}
+        className={`order-1 relative flex w-full max-w-[820px] min-w-0 items-center justify-center overflow-hidden rounded-[22px] border border-[var(--border-hairline)] p-1.5 transition-colors sm:order-2 sm:p-2 ${getBackdropClasses(safeBackdrop)}`}
         style={{ boxShadow: 'var(--stage-shadow)' }}
       >
         {effectiveViewMode === 'single' && (
-          <div className="relative flex min-h-[210px] w-full items-center justify-center overflow-hidden rounded-xl sm:min-h-[300px]">
+          <div className="relative flex min-h-[180px] w-full items-center justify-center overflow-hidden rounded-xl sm:min-h-[300px]">
             {processedPreviewUnsupported && singleSourceChoice === 'result' ? (
               renderFallbackBox()
             ) : (
@@ -748,7 +748,7 @@ export function VideoCompareStage({
                     setProcessedPreviewUnsupported(true);
                   }
                 }}
-                className="block max-h-[56vh] min-h-[200px] w-full rounded-xl object-contain sm:min-h-[280px]"
+                className="block max-h-[235px] min-h-[175px] w-full rounded-xl object-contain sm:max-h-[56vh] sm:min-h-[280px]"
               />
             )}
 
@@ -769,9 +769,9 @@ export function VideoCompareStage({
         {effectiveViewMode === 'side-by-side' && (
           <div
             data-testid="video-side-by-side-stage"
-            className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2"
+            className="grid w-full grid-cols-2 gap-2 sm:gap-3"
           >
-            <div className="relative aspect-video min-h-[190px] w-full overflow-hidden rounded-xl bg-[var(--bg-stage-media)] sm:min-h-[240px]">
+            <div className="relative aspect-video min-h-[140px] max-h-[220px] w-full overflow-hidden rounded-xl bg-[var(--bg-stage-media)] sm:min-h-[240px] sm:max-h-none">
               <video
                 ref={bindSecondaryRef}
                 key={`sbs-orig-${objectUrl}`}
@@ -788,7 +788,7 @@ export function VideoCompareStage({
               </span>
             </div>
 
-            <div className="relative aspect-video min-h-[190px] w-full overflow-hidden rounded-xl bg-[var(--bg-stage-media)] sm:min-h-[240px]">
+            <div className="relative aspect-video min-h-[140px] max-h-[220px] w-full overflow-hidden rounded-xl bg-[var(--bg-stage-media)] sm:min-h-[240px] sm:max-h-none">
               {processedPreviewUnsupported && processedVideoUrl ? (
                 renderFallbackBox()
               ) : (
@@ -857,7 +857,7 @@ export function VideoCompareStage({
               }
             }}
             style={{ aspectRatio: String(clampedAspect) }}
-            className="relative mx-auto max-h-[56vh] min-h-[220px] w-full cursor-ew-resize touch-none select-none overflow-hidden rounded-xl bg-[var(--bg-stage-media)] sm:min-h-[300px]"
+            className="relative mx-auto max-h-[235px] min-h-[180px] w-full cursor-ew-resize touch-none select-none overflow-hidden rounded-xl bg-[var(--bg-stage-media)] sm:max-h-[56vh] sm:min-h-[300px]"
           >
             {processedPreviewUnsupported && processedVideoUrl ? (
               renderFallbackBox()
@@ -940,19 +940,21 @@ export function VideoCompareStage({
       </div>
 
       {effectiveViewMode !== 'single' && (
-        <VideoSyncTransportBar
-          primaryVideoEl={primaryElState}
-          isPlaying={isPlaying}
-          playbackRate={playbackRate}
-          previewMuted={previewMuted}
-          compareViewMode={effectiveViewMode}
-          splitPct={splitPct}
-          onTogglePlay={togglePlayPause}
-          onSeekChange={handleSeekBarChange}
-          onToggleRate={handleToggleRate}
-          onToggleMute={() => setPreviewMuted((v) => !v)}
-          onSplitPctChange={setSplitPct}
-        />
+        <div className="order-3 w-full max-w-[820px]">
+          <VideoSyncTransportBar
+            primaryVideoEl={primaryElState}
+            isPlaying={isPlaying}
+            playbackRate={playbackRate}
+            previewMuted={previewMuted}
+            compareViewMode={effectiveViewMode}
+            splitPct={splitPct}
+            onTogglePlay={togglePlayPause}
+            onSeekChange={handleSeekBarChange}
+            onToggleRate={handleToggleRate}
+            onToggleMute={() => setPreviewMuted((v) => !v)}
+            onSplitPctChange={setSplitPct}
+          />
+        </div>
       )}
     </div>
   );

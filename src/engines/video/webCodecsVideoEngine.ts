@@ -117,7 +117,7 @@ export async function probeHardwareH264Codec(params: {
   return null;
 }
 
-interface ResolvedGpuVisualParams {
+export interface ResolvedGpuVisualParams {
   contrastMul: number;
   brightnessAdd: number;
   saturationMul: number;
@@ -131,7 +131,7 @@ interface ResolvedGpuVisualParams {
   cssFilter: string;
 }
 
-function resolveGpuVisualParams(edit: VideoEditState): ResolvedGpuVisualParams {
+export function resolveGpuVisualParams(edit: VideoEditState): ResolvedGpuVisualParams {
   const c = resolveGradeAndEnhanceCoefficients(
     edit.colorGrade,
     edit.enhanceSuite.colorContrast.enabled ? edit.enhanceSuite.colorContrast : undefined
@@ -193,8 +193,12 @@ function resolveGpuVisualParams(edit: VideoEditState): ResolvedGpuVisualParams {
   };
 }
 
-function createCanvasSurface(width: number, height: number): OffscreenCanvas | HTMLCanvasElement {
-  if (typeof OffscreenCanvas !== 'undefined') {
+function createCanvasSurface(
+  width: number,
+  height: number,
+  preferDomCanvas = false
+): OffscreenCanvas | HTMLCanvasElement {
+  if (!preferDomCanvas && typeof OffscreenCanvas !== 'undefined') {
     return new OffscreenCanvas(width, height);
   }
   const canvas = document.createElement('canvas');
@@ -203,7 +207,7 @@ function createCanvasSurface(width: number, height: number): OffscreenCanvas | H
   return canvas;
 }
 
-function computeDrawRect(
+export function computeDrawRect(
   srcW: number,
   srcH: number,
   dstW: number,
@@ -334,7 +338,6 @@ function createWebGlVideoPipeline(
   height: number,
   params: ResolvedGpuVisualParams
 ): WebGlPipelineHandle | null {
-  const canvas = createCanvasSurface(width, height);
   const attrs: WebGLContextAttributes = {
     alpha: false,
     antialias: false,
@@ -343,9 +346,20 @@ function createWebGlVideoPipeline(
     powerPreference: 'high-performance',
     preserveDrawingBuffer: true,
   };
-  const gl =
+  let canvas = createCanvasSurface(width, height);
+  let gl =
     (canvas.getContext('webgl2', attrs) as WebGLRenderingContext | null) ??
     (canvas.getContext('webgl', attrs) as WebGLRenderingContext | null);
+
+  // Safari iOS 16 exposes OffscreenCanvas without WebGL; retry with DOM <canvas> before 2D fallback
+  if (!gl && typeof document !== 'undefined' && typeof OffscreenCanvas !== 'undefined' && canvas instanceof OffscreenCanvas) {
+    releaseCanvasSurface(canvas);
+    canvas = createCanvasSurface(width, height, true);
+    gl =
+      (canvas.getContext('webgl2', attrs) as WebGLRenderingContext | null) ??
+      (canvas.getContext('webgl', attrs) as WebGLRenderingContext | null);
+  }
+
   if (!gl) {
     releaseCanvasSurface(canvas);
     return null;
@@ -444,6 +458,7 @@ function createGpuVideoFrameProcessor(params: {
   edit: VideoEditState;
   width: number;
   height: number;
+  targetFps?: number | null;
   cues: SubtitleCue[];
   useHardsub: boolean;
 }): {
@@ -451,7 +466,7 @@ function createGpuVideoFrameProcessor(params: {
   getEngineModeLabel: () => string;
   dispose: () => void;
 } {
-  const { VideoSampleCtor, edit, width, height, cues, useHardsub } = params;
+  const { VideoSampleCtor, edit, width, height, targetFps = null, cues, useHardsub } = params;
   const visual = resolveGpuVisualParams(edit);
   const coverFit = edit.enhanceSuite.upscale1080.enabled && !edit.enhanceSuite.upscale1080.keepAspect;
 
@@ -462,16 +477,26 @@ function createGpuVideoFrameProcessor(params: {
   let fallbackCtx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null = null;
   let usedWebGl = false;
   let used2dCanvas = false;
+  let lastEmittedFpsSlot: number | null = null;
 
   const ensure2dContext = () => {
     if (!fallbackCanvas) {
-      fallbackCanvas = createCanvasSurface(width, height);
-      fallbackCtx = fallbackCanvas.getContext('2d');
-      if (!fallbackCtx) {
-        releaseCanvasSurface(fallbackCanvas);
-        fallbackCanvas = null;
+      let surface = createCanvasSurface(width, height);
+      let ctx = surface.getContext('2d') as
+        | OffscreenCanvasRenderingContext2D
+        | CanvasRenderingContext2D
+        | null;
+      if (!ctx && typeof document !== 'undefined') {
+        releaseCanvasSurface(surface);
+        surface = createCanvasSurface(width, height, true);
+        ctx = surface.getContext('2d');
+      }
+      if (!ctx) {
+        releaseCanvasSurface(surface);
         throw new VideoFallbackRequiredError('Kanvas GPU 2D tidak tersedia untuk memproses frame video.');
       }
+      fallbackCanvas = surface;
+      fallbackCtx = ctx;
       fallbackCtx.imageSmoothingEnabled = true;
       fallbackCtx.imageSmoothingQuality = 'high';
     }
@@ -483,6 +508,15 @@ function createGpuVideoFrameProcessor(params: {
       usedWebGl && !used2dCanvas ? 'WebGL GPU' : glHandle ? 'WebGL GPU' : 'Canvas GPU',
 
     process: (sample) => {
+      // Early 60fps -> 30fps skip BEFORE GPU/canvas drawing or VideoFrame allocation
+      if (targetFps && targetFps > 0) {
+        const slot = Math.floor(sample.timestamp * targetFps + 1e-4);
+        if (lastEmittedFpsSlot !== null && slot <= lastEmittedFpsSlot) {
+          return null;
+        }
+        lastEmittedFpsSlot = slot;
+      }
+
       if (!useHardsub && glHandle && sample.rotation === 0 && !sample.flip) {
         const vf = sample.toVideoFrame();
         try {
@@ -753,6 +787,7 @@ export async function runWebCodecsVideoTranscode(
       edit,
       width: targetDims.width,
       height: targetDims.height,
+      targetFps: effectiveFps ?? null,
       cues: shiftedCues,
       useHardsub,
     });

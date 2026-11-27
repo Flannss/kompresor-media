@@ -130,12 +130,12 @@ export interface BuiltFfmpegFilterGraph {
 
 /**
  * Optimal LUT-free single-pass FFmpeg signal pipeline:
+ * 0. fps cap FIRST (drops redundant 60fps frames before 4K scaling/denoise)
  * 1. hqdn3d noise reduction (BEFORE scaling)
- * 2. scale (lanczos/bicubic + even 1080p/2K/720p dimensions + setsar=1)
+ * 2. scale (fast_bilinear/bicubic for 4K downscale, lanczos for upscaling/1080p + setsar=1)
  * 3. deshake stabilizer (if active)
  * 4. eq + colorchannelmixer + colorbalance + curves (100% LUT-free grade & clarity tone)
  * 5. unsharp luminance detail sharpen (AFTER scaling, chroma untouched)
- * 6. fps cap (when selected)
  */
 export function buildFfmpegFilterGraph(
   sourceMetadata: Pick<VideoMetadata, 'width' | 'height' | 'durationSec'>,
@@ -163,10 +163,19 @@ export function buildFfmpegFilterGraph(
       edit.maxHeightPx
     );
 
+  const sourceLongEdge = Math.max(sourceMetadata.width, sourceMetadata.height);
+  const targetLongEdge = Math.max(dims.width, dims.height);
+  const is4kDownscale = sourceLongEdge >= 2560 && targetLongEdge <= 1920;
+
   const vFilters: string[] = [];
 
+  // Step 0: Place fps cap at VERY START of -vf so excess 60fps frames drop before 4K scaling
+  if (edit.fpsCap && edit.fpsCap > 0) {
+    vFilters.push(`fps=${edit.fpsCap}`);
+  }
+
   // Step 1: Temporal denoise BEFORE scaling. On mobile CPU fallback, omit heavy 3D hqdn3d for
-  // Natural HD & Tajam 1080p (3x-4x cooler/faster while retaining lanczos + unsharp sharpness),
+  // Natural HD & Tajam 1080p (3x-4x cooler/faster while retaining sharpness),
   // reserving hqdn3d for Malam & Minim Cahaya, explicit noise toggle, or Desktop fallback.
   if (noise.enabled) {
     const lumaSpatial = noise.grainStrength.toFixed(1);
@@ -190,8 +199,14 @@ export function buildFfmpegFilterGraph(
     }
   }
 
-  // Step 2: Scaling with lanczos + even dimensions + setsar=1
-  const scaleFlags = upscale1080.enabled ? upscale1080.method : 'lanczos';
+  // Step 2: Scaling — use fast_bilinear/bicubic when downscaling >=4K to <=1080p for 3x speed & low RAM
+  const scaleFlags = upscale1080.enabled
+    ? upscale1080.method
+    : is4kDownscale
+      ? performanceTier === 'low-memory-mobile'
+        ? 'fast_bilinear'
+        : 'bicubic'
+      : 'lanczos';
   const wantsExplicitResize =
     upscale1080.enabled ||
     targetRes === '1080p' ||
@@ -243,18 +258,20 @@ export function buildFfmpegFilterGraph(
     const chromaAmount = sharpen.antiArtifact ? '0.0' : '0.15';
     vFilters.push(`unsharp=${k}:${k}:${strength}:3:3:${chromaAmount}`);
   } else if (clarityScale > 0.01) {
-    if (clarityModel === 'natural-hd') {
+    if (is4kDownscale && isMobileTier) {
+      // 4K -> 1080p supersampling on mobile is already crisp; skip heavy unsharp on natural-hd
+      if (clarityModel === 'sharp-1080p') {
+        vFilters.push(`unsharp=5:5:${(0.25 * clarityScale).toFixed(2)}:5:5:0.0`);
+      } else if (clarityModel === 'low-light') {
+        vFilters.push(`unsharp=5:5:${(0.25 * clarityScale).toFixed(2)}:5:5:0.0`);
+      }
+    } else if (clarityModel === 'natural-hd') {
       vFilters.push(`unsharp=5:5:${(0.45 * clarityScale).toFixed(2)}:5:5:0.0`);
     } else if (clarityModel === 'sharp-1080p') {
       vFilters.push(`unsharp=5:5:${(0.78 * clarityScale).toFixed(2)}:5:5:0.0`);
     } else if (clarityModel === 'low-light') {
       vFilters.push(`unsharp=5:5:${(0.35 * clarityScale).toFixed(2)}:5:5:0.0`);
     }
-  }
-
-  // Step 6: FPS cap
-  if (edit.fpsCap && edit.fpsCap > 0) {
-    vFilters.push(`fps=${edit.fpsCap}`);
   }
 
   // Audio DSP filtergraph

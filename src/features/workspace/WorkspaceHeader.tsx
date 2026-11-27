@@ -46,12 +46,12 @@ export function WorkspaceHeader({
 
   return (
     <>
-      <header className="km-glass-strong sticky top-0 z-30 h-[60px] border-b transition-colors">
-        <div className="mx-auto flex h-full max-w-[1720px] items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
-          <div className="flex min-w-0 items-center gap-2.5">
+      <header className="km-glass-strong sticky top-0 z-30 h-[54px] border-b transition-colors sm:h-[60px]">
+        <div className="mx-auto flex h-full max-w-[1720px] items-center justify-between gap-2 px-3 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2.5">
             <svg
-              width="20"
-              height="20"
+              width="18"
+              height="18"
               viewBox="0 0 24 24"
               fill="none"
               stroke="var(--accent-gold)"
@@ -59,7 +59,7 @@ export function WorkspaceHeader({
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden="true"
-              className="shrink-0"
+              className="shrink-0 sm:h-5 sm:w-5"
             >
               <path d="M4 8V6a2 2 0 0 1 2-2h2" />
               <path d="M16 4h2a2 2 0 0 1 2 2v2" />
@@ -68,13 +68,13 @@ export function WorkspaceHeader({
               <circle cx="12" cy="12" r="3" />
             </svg>
 
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-[15px] font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
+            <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+              <span className="truncate text-[13.5px] font-semibold tracking-[-0.02em] text-[var(--text-primary)] sm:text-[15px]">
                 Kompresor Media
               </span>
               <span
                 data-testid="brand-by-amdz"
-                className="shrink-0 rounded-full border border-[var(--border-hairline)] bg-[var(--accent-gold-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent-gold)]"
+                className="shrink-0 rounded-full border border-[var(--border-hairline)] bg-[var(--accent-gold-soft)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--accent-gold)] sm:px-2 sm:text-[10px] sm:tracking-[0.16em]"
               >
                 BY AMDZ
               </span>
@@ -100,7 +100,7 @@ export function WorkspaceHeader({
             )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             {!hasMedia && (
               <span className="hidden text-xs text-[var(--text-muted)] md:inline">
                 100% lokal di perangkat Anda
@@ -116,6 +116,7 @@ export function WorkspaceHeader({
                     data-testid="header-add-btn"
                     onClick={onAddMoreClick}
                     aria-label="Tambah file ke antrean"
+                    className="h-9 w-9 px-0 sm:h-9 sm:w-auto sm:px-3"
                   >
                     <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                     <span className="hidden sm:inline">Tambah file</span>
@@ -127,6 +128,7 @@ export function WorkspaceHeader({
                   data-testid="header-replace-btn"
                   onClick={onReplaceClick}
                   aria-label="Ganti file aktif"
+                  className="h-9 w-9 px-0 sm:h-9 sm:w-auto sm:px-3"
                 >
                   <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
                   <span className="hidden sm:inline">Ganti</span>
@@ -137,6 +139,7 @@ export function WorkspaceHeader({
                   data-testid="header-clear-btn"
                   onClick={handleHomeClick}
                   aria-label="Kembali ke Beranda"
+                  className="h-9 w-9 px-0 sm:h-9 sm:w-auto sm:px-3"
                 >
                   <Home className="h-3.5 w-3.5" aria-hidden="true" />
                   <span className="hidden md:inline">Beranda</span>
@@ -150,7 +153,7 @@ export function WorkspaceHeader({
               onClick={() => setGuideOpen(true)}
               aria-label="Buka panduan penggunaan"
               title="Panduan"
-              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 text-xs font-medium text-[var(--text-secondary)] shadow-[var(--glass-highlight)] transition-all duration-200 hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] active:scale-[0.97] sm:px-3"
+              className="inline-flex h-9 w-9 items-center justify-center gap-1.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-xs font-medium text-[var(--text-secondary)] shadow-[var(--glass-highlight)] transition-all duration-200 hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] active:scale-[0.97] sm:w-auto sm:px-3"
             >
               <HelpCircle className="h-3.5 w-3.5 text-[var(--accent-gold)]" aria-hidden="true" />
               <span className="hidden sm:inline">Panduan</span>
@@ -162,7 +165,7 @@ export function WorkspaceHeader({
               onClick={onToggleTheme}
               aria-label={isDark ? 'Ganti ke tema Ivory Hangat' : 'Ganti ke tema Espresso Malam'}
               title={isDark ? 'Ivory Hangat' : 'Espresso Malam'}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 text-xs font-medium text-[var(--text-secondary)] shadow-[var(--glass-highlight)] transition-all duration-200 hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] active:scale-[0.97] sm:px-3"
+              className="inline-flex h-9 w-9 items-center justify-center gap-1.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-xs font-medium text-[var(--text-secondary)] shadow-[var(--glass-highlight)] transition-all duration-200 hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] active:scale-[0.97] sm:w-auto sm:px-3"
             >
               {isDark ? (
                 <>

@@ -67,8 +67,8 @@ export interface PhotoControlPanelProps {
 
 const PHOTO_TABS = [
   { id: 'utama' as const, label: '1. Tujuan' },
-  { id: 'tampilan' as const, label: '2. Jernihkan & Filter' },
-  { id: 'edit' as const, label: '3. Edit & Potong' },
+  { id: 'tampilan' as const, label: '2. Jernihkan & Filter', mobileLabel: '2. Jernihkan' },
+  { id: 'edit' as const, label: '3. Edit & Potong', mobileLabel: '3. Edit' },
 ];
 
 const QUALITY_MODELS: ReadonlyArray<{
@@ -158,6 +158,7 @@ export function PhotoControlPanel({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [lightDrawerOpen, setLightDrawerOpen] = useState(true);
   const [colorDrawerOpen, setColorDrawerOpen] = useState(false);
+  const [focusedToolId, setFocusedToolId] = useState<ProPhotoToolId>('sharpen');
 
   useEffect(() => {
     if (activeTab === 'tampilan' && !baseThumbnailUrl) {
@@ -177,6 +178,7 @@ export function PhotoControlPanel({
     imageEdit.targetResolution === '8k';
 
   const toggleProTool = (toolId: ProPhotoToolId) => {
+    setFocusedToolId(toolId);
     const exists = activeTools.includes(toolId);
     const nextTools = exists
       ? activeTools.filter((id) => id !== toolId)
@@ -186,6 +188,15 @@ export function PhotoControlPanel({
       { commitHistory: true, preservePreset: true }
     );
   };
+
+  const hintToolId: ProPhotoToolId =
+    activeTools.length > 0 && activeTools.includes(focusedToolId)
+      ? focusedToolId
+      : activeTools.length > 0
+        ? activeTools[activeTools.length - 1]
+        : focusedToolId;
+  const activeHintToolMeta =
+    PRO_PHOTO_TOOL_META.find((t) => t.id === hintToolId) ?? PRO_PHOTO_TOOL_META[0];
 
   const formatOptions: ReadonlyArray<{ value: ImageOutputFormat; label: string }> = avifSupported
     ? [
@@ -284,8 +295,8 @@ export function PhotoControlPanel({
 
       {/* TAB 1: TUJUAN & FORMAT */}
       {activeTab === 'utama' && (
-        <div className="space-y-4">
-          <div className="space-y-2">
+        <div className="space-y-5 sm:space-y-4">
+          <div className="space-y-2.5 sm:space-y-2">
             <div>
               <h2 className="text-xs font-semibold text-[var(--text-primary)]">Pilih Tujuan</h2>
               <p className="mt-0.5 text-[12px] leading-snug text-[var(--text-muted)]">
@@ -293,7 +304,7 @@ export function PhotoControlPanel({
               </p>
             </div>
             <div
-              className="grid grid-cols-2 gap-2"
+              className="no-scrollbar -mx-1 flex snap-x gap-2.5 overflow-x-auto px-1 pb-1 md:mx-0 md:grid md:grid-cols-2 md:gap-2 md:overflow-visible md:px-0 md:pb-0"
               role="radiogroup"
               aria-label="Pilih tujuan penggunaan foto"
             >
@@ -307,7 +318,7 @@ export function PhotoControlPanel({
                     aria-checked={selected}
                     data-testid={`preset-${preset.id}`}
                     onClick={() => onSelectPreset(preset.id)}
-                    className={`flex min-h-[52px] flex-col items-start justify-center rounded-xl border px-3 py-2 text-left transition-all duration-150 active:scale-[0.985] ${
+                    className={`flex min-h-[48px] shrink-0 snap-start flex-col items-start justify-center whitespace-nowrap rounded-xl border px-3.5 py-2 text-left transition-all duration-150 active:scale-[0.985] md:min-h-[52px] md:whitespace-normal md:px-3 ${
                       selected
                         ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] text-[var(--text-primary)] shadow-[var(--glass-highlight)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
@@ -486,15 +497,15 @@ export function PhotoControlPanel({
 
       {/* TAB 2: KUALITAS & ALAT */}
       {activeTab === 'tampilan' && (
-        <div className="space-y-4">
+        <div className="space-y-5 sm:space-y-4">
           {/* 9 Real Pixel-Level Pro Photo Tools */}
-          <section className="space-y-2.5 rounded-[22px] border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5 shadow-[var(--glass-highlight)]">
+          <section className="space-y-3 rounded-[22px] bg-[var(--bg-surface)]/80 p-3 sm:border sm:border-[var(--border-hairline)] sm:bg-[var(--bg-elevated)] sm:p-3.5 sm:shadow-[var(--glass-highlight)]">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <h3 className="font-editorial text-[14px] font-semibold text-[var(--text-primary)]">
                   Alat Sempurnakan Foto
                 </h3>
-                <span className="text-[12px] leading-snug text-[var(--text-muted)]">
+                <span className="hidden text-[12px] leading-snug text-[var(--text-muted)] md:inline">
                   Perbaiki masalah foto tertentu (blur, kabut, foto lama, atau wajah).
                 </span>
               </div>
@@ -509,7 +520,7 @@ export function PhotoControlPanel({
                         { commitHistory: true, preservePreset: true }
                       )
                     }
-                    className="inline-flex min-h-[30px] items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 text-[10.5px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+                    className="inline-flex min-h-[32px] items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 text-[10.5px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
                   >
                     <RotateCcw className="h-3 w-3" aria-hidden="true" />
                     <span>Reset</span>
@@ -522,7 +533,7 @@ export function PhotoControlPanel({
             </div>
 
             <div
-              className="grid grid-cols-2 gap-2"
+              className="grid grid-cols-2 gap-2.5 sm:gap-2"
               role="group"
               aria-label="Alat sempurnakan foto"
             >
@@ -536,7 +547,7 @@ export function PhotoControlPanel({
                     aria-pressed={active}
                     title={tool.desc}
                     onClick={() => toggleProTool(tool.id)}
-                    className={`flex min-h-[50px] flex-col items-start justify-center rounded-2xl border px-3 py-2 text-left transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.985] ${
+                    className={`flex min-h-[44px] flex-col items-start justify-center rounded-2xl border px-3 py-2 text-left transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.985] md:min-h-[50px] ${
                       idx === 8 ? 'col-span-2' : ''
                     } ${
                       active
@@ -545,19 +556,29 @@ export function PhotoControlPanel({
                     }`}
                   >
                     <span
-                      className={`text-[11.5px] font-semibold ${
+                      className={`w-full truncate whitespace-nowrap text-[11.5px] font-semibold leading-tight ${
                         active ? 'text-[var(--accent-highlight)]' : 'text-[var(--text-primary)]'
                       }`}
                     >
                       {tool.title}
                     </span>
-                    <span className="mt-0.5 line-clamp-1 text-[10px] leading-snug text-[var(--text-muted)]">
+                    <span className="mt-0.5 hidden line-clamp-1 text-[10px] leading-snug text-[var(--text-muted)] md:block">
                       {tool.desc}
                     </span>
                   </button>
                 );
               })}
             </div>
+
+            <p
+              data-testid="mobile-active-pro-tool-hint"
+              className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-2 text-[11.5px] leading-snug text-[var(--text-secondary)] md:hidden"
+            >
+              <span className="font-semibold text-[var(--text-primary)]">
+                {activeHintToolMeta.title}:{' '}
+              </span>
+              {activeHintToolMeta.desc}
+            </p>
 
             {colouriseActive && (
               <div className="space-y-1.5 border-t border-[var(--border-hairline)] pt-2.5">
@@ -618,7 +639,7 @@ export function PhotoControlPanel({
           </section>
 
           {/* Quality Model Selector */}
-          <section className="space-y-2">
+          <section className="space-y-2.5">
             <div>
               <h3 className="text-xs font-semibold text-[var(--text-primary)]">
                 Model Kualitas Foto
@@ -628,7 +649,7 @@ export function PhotoControlPanel({
               </p>
             </div>
             <div
-              className="grid grid-cols-2 gap-2"
+              className="no-scrollbar -mx-1 flex snap-x gap-2.5 overflow-x-auto px-1 pb-1 md:mx-0 md:grid md:grid-cols-2 md:gap-2 md:overflow-visible md:px-0 md:pb-0"
               role="radiogroup"
               aria-label="Model kualitas foto"
             >
@@ -647,18 +668,18 @@ export function PhotoControlPanel({
                         { commitHistory: true, preservePreset: true }
                       )
                     }
-                    className={`flex min-h-[56px] flex-col items-start justify-center rounded-xl border px-3 py-2 text-left transition-all ${
-                      idx === 4 ? 'col-span-2' : ''
+                    className={`flex min-h-[52px] min-w-[152px] shrink-0 snap-start flex-col items-start justify-center rounded-xl border px-3.5 py-2 text-left transition-all md:min-h-[56px] md:min-w-0 md:px-3 ${
+                      idx === 4 ? 'md:col-span-2' : ''
                     } ${
                       selected
                         ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] ring-1 ring-[var(--border-active)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] hover:border-[var(--border-active)]'
                     }`}
                   >
-                    <span className="text-xs font-semibold text-[var(--text-primary)]">
+                    <span className="whitespace-nowrap text-xs font-semibold text-[var(--text-primary)]">
                       {model.title}
                     </span>
-                    <span className="mt-0.5 text-[10.5px] leading-snug text-[var(--text-muted)]">
+                    <span className="mt-0.5 line-clamp-1 text-[10.5px] leading-snug text-[var(--text-muted)]">
                       {model.desc}
                     </span>
                   </button>
@@ -687,13 +708,13 @@ export function PhotoControlPanel({
           </section>
 
           {/* Target Resolution */}
-          <section className="space-y-2 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3">
+          <section className="space-y-2.5 rounded-2xl bg-[var(--bg-surface)]/80 p-3 sm:border sm:border-[var(--border-hairline)] sm:bg-[var(--bg-elevated)]">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-xs font-semibold text-[var(--text-primary)]">Target Resolusi</h3>
               <span className="text-[10px] text-[var(--text-muted)]">Perjelas bertahap</span>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="no-scrollbar -mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 md:mx-0 md:grid md:grid-cols-3 md:gap-1.5 md:overflow-visible md:px-0 md:pb-0">
               {TARGET_RESOLUTION_OPTIONS.map((opt) => {
                 const isLocked8k = opt.id === '8k' && !deviceProfile.allow8KPhotoExport;
                 const active = imageEdit.targetResolution === opt.id;
@@ -718,7 +739,7 @@ export function PhotoControlPanel({
                         { commitHistory: true, preservePreset: true }
                       )
                     }
-                    className={`flex min-h-[46px] flex-col items-center justify-center rounded-lg border px-1.5 py-1 text-center transition-all tabular-nums disabled:cursor-not-allowed disabled:opacity-45 ${
+                    className={`flex min-h-[44px] min-w-[78px] shrink-0 snap-start flex-col items-center justify-center whitespace-nowrap rounded-xl border px-3 py-1.5 text-center transition-all tabular-nums disabled:cursor-not-allowed disabled:opacity-45 md:min-h-[46px] md:min-w-0 md:rounded-lg md:px-1.5 md:py-1 ${
                       active
                         ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'

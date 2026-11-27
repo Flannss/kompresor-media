@@ -226,14 +226,14 @@ export function ExportSharePanel({
   const helperSpec = activeHelperPlatform ? PLATFORM_SHARE_META[activeHelperPlatform] : null;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2.5 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:gap-2 sm:pb-0">
       <Button
         variant="primary"
         size="lg"
         data-testid={mediaKind === 'image' ? 'download-photo-btn' : 'download-video-btn'}
         disabled={!canExport}
         onClick={() => void handleDownload()}
-        className="min-h-[46px] w-full rounded-full font-semibold"
+        className="min-h-[48px] sm:min-h-[46px] w-full rounded-full font-semibold"
       >
         <Download className="h-4 w-4" aria-hidden="true" />
         <span>{downloadLabel}</span>

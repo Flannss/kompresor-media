@@ -77,7 +77,7 @@ export function UploadZone({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`bg-warm-stage relative flex min-h-[calc(100vh-60px)] w-full flex-col items-center justify-between px-4 py-10 transition-colors sm:px-6 lg:px-10 lg:py-14 ${
+      className={`bg-warm-stage relative flex min-h-[calc(100vh-54px)] sm:min-h-[calc(100vh-60px)] w-full flex-col items-center justify-between px-4 py-6 transition-colors sm:px-6 sm:py-10 lg:px-10 lg:py-14 ${
         isDragging ? 'ring-2 ring-inset ring-[var(--border-strong)]' : ''
       }`}
     >
@@ -122,7 +122,7 @@ export function UploadZone({
         </div>
       )}
 
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-center gap-8 sm:gap-10">
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-center gap-6 sm:gap-10">
         {/* Editorial Hero Header */}
         <header className="flex max-w-2xl flex-col items-center text-center">
           <div className="mb-4 flex items-center gap-3">
@@ -187,12 +187,12 @@ export function UploadZone({
         )}
 
         {/* Dual Elevated Interactive Studio Entry Cards */}
-        <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="grid w-full grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
           {/* Card 1: Studio Foto (Muted Olive accent harmony) */}
           <section
             data-testid="entry-photo-card"
             aria-label="Studio Foto"
-            className="km-glass-strong group relative flex flex-col justify-between gap-6 overflow-hidden rounded-[26px] border p-7 transition-all duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-[var(--border-strong)] md:p-8"
+            className="km-glass-strong group relative flex flex-col justify-between gap-4 overflow-hidden rounded-[26px] border p-5 transition-all duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-[var(--border-strong)] sm:gap-6 sm:p-7 md:p-8"
             style={{ boxShadow: 'var(--shadow-soft)' }}
           >
             <svg
@@ -267,7 +267,7 @@ export function UploadZone({
           <section
             data-testid="entry-video-card"
             aria-label="Studio Video"
-            className="km-glass-strong group relative flex flex-col justify-between gap-6 overflow-hidden rounded-[26px] border p-7 transition-all duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-[var(--border-strong)] md:p-8"
+            className="km-glass-strong group relative flex flex-col justify-between gap-4 overflow-hidden rounded-[26px] border p-5 transition-all duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-[var(--border-strong)] sm:gap-6 sm:p-7 md:p-8"
             style={{ boxShadow: 'var(--shadow-soft)' }}
           >
             <svg

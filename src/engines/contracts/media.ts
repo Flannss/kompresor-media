@@ -78,6 +78,7 @@ export interface VideoMetadata {
   orientation: Orientation;
   aspectRatio: string;
   durationSec: number;
+  fpsHint?: number | null;
   codecHint: string | null;
   hasAudioHint: boolean | null;
 }

@@ -271,7 +271,8 @@ describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
       });
 
       expect(built.filterGraph.vfChain).toContain('hqdn3d=');
-      expect(built.filterGraph.vfChain).toContain('scale=1920:1080:flags=lanczos,setsar=1');
+      expect(built.filterGraph.vfChain.startsWith('fps=30,')).toBe(true);
+      expect(built.filterGraph.vfChain).toContain('scale=1920:1080:flags=bicubic,setsar=1');
       expect(built.filterGraph.vfChain).toContain('unsharp=5:5:0.36:5:5:0.0');
       expect(built.filterGraph.vfChain).toContain('fps=30');
 

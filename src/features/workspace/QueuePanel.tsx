@@ -88,14 +88,17 @@ export function QueuePanel({
 
   return (
     <>
-      {/* Tablet / Mobile Horizontal Scrollable Queue Strip */}
+      {/* Tablet / Mobile Slim Horizontal Scroll-Snap Queue Strip */}
       <div
         data-testid="queue-strip-mobile"
-        className="flex flex-col gap-2 border-b border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3 py-2.5 lg:hidden"
+        className="flex flex-col gap-2 border-b border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3.5 py-2 sm:px-5 lg:hidden"
       >
         <div className="flex items-center justify-between gap-2 text-xs">
-          <span className="font-semibold text-[var(--text-primary)] tabular-nums">
-            {batchRunning && batchStatusLabel ? batchStatusLabel : `Antrean (${items.length}/${maxTotal})`}
+          <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--text-primary)] tabular-nums">
+            <span>{batchRunning && batchStatusLabel ? batchStatusLabel : 'Antrean'}</span>
+            <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--accent-gold)]">
+              {items.length}/{maxTotal}
+            </span>
           </span>
           <div className="flex items-center gap-1.5">
             {sameKindCount >= 2 && (
@@ -121,7 +124,7 @@ export function QueuePanel({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <div className="no-scrollbar flex snap-x items-center gap-2 overflow-x-auto pb-0.5">
           {items.map((item) => {
             const active = item.id === activeItemId;
             const badge = getStatusBadge(item.status);
@@ -130,7 +133,7 @@ export function QueuePanel({
             return (
               <div
                 key={item.id}
-                className={`flex shrink-0 items-center gap-2 rounded-2xl border p-1.5 transition-colors ${
+                className={`flex shrink-0 snap-start items-center gap-2 rounded-2xl border p-1.5 transition-colors ${
                   active
                     ? 'border-[var(--border-active)] bg-[var(--bg-subtle)]'
                     : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)]'
@@ -142,7 +145,7 @@ export function QueuePanel({
                   onClick={() => onSelectItem(item.id)}
                   className="flex min-h-[36px] items-center gap-2 text-left"
                 >
-                  <div className="h-9 w-9 shrink-0 overflow-hidden rounded-xl bg-[var(--bg-app)]">
+                  <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl bg-[var(--bg-app)]">
                     {isImg && thumbSrc ? (
                       <img
                         src={thumbSrc}
@@ -154,14 +157,20 @@ export function QueuePanel({
                         <Film className="h-4 w-4" aria-hidden="true" />
                       </div>
                     )}
+                    <span
+                      aria-hidden="true"
+                      className={`absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full ring-1 ring-white/80 ${
+                        isImg ? 'bg-[var(--accent-olive)]' : 'bg-[var(--accent-terracotta)]'
+                      }`}
+                    />
                   </div>
-                  <div className="max-w-[118px]">
+                  <div className="max-w-[112px]">
                     <div className="truncate text-[11px] font-medium text-[var(--text-primary)]">
                       {item.file.name}
                     </div>
                     <div className="mt-0.5 flex items-center gap-1">
                       <span
-                        className={`inline-block rounded-full border px-1.5 py-0.2 text-[9px] font-semibold ${
+                        className={`inline-block rounded-full border px-1.5 text-[9px] font-semibold ${
                           isImg
                             ? 'border-[var(--status-ok-border)] bg-[var(--accent-olive-soft)] text-[var(--accent-olive)]'
                             : 'border-[var(--status-err-border)] bg-[var(--accent-terracotta-soft)] text-[var(--accent-terracotta)]'
@@ -170,7 +179,7 @@ export function QueuePanel({
                         {isImg ? 'Foto' : 'Video'}
                       </span>
                       <span
-                        className={`inline-block rounded border px-1 py-0.2 text-[9px] font-semibold ${badge.cls}`}
+                        className={`inline-block rounded border px-1 text-[9px] font-semibold ${badge.cls}`}
                       >
                         {item.status === 'processing' ? `${item.progress}%` : badge.label}
                       </span>
@@ -194,7 +203,7 @@ export function QueuePanel({
               type="button"
               onClick={onAddMoreClick}
               aria-label="Tambah file ke antrean"
-              className="flex h-12 shrink-0 items-center gap-1 rounded-2xl border border-dashed border-[var(--border-hairline)] px-3 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--border-active)] hover:text-[var(--text-primary)]"
+              className="flex h-12 shrink-0 snap-start items-center gap-1 rounded-2xl border border-dashed border-[var(--border-hairline)] px-3 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--border-active)] hover:text-[var(--text-primary)]"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Tambah</span>

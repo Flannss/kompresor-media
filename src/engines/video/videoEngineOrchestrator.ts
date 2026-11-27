@@ -6,6 +6,10 @@ import type {
   VideoProcessResult,
 } from '../contracts';
 import { runFfmpegVideoTranscode } from './ffmpegVideoEngine';
+import {
+  canUseMediaRecorderMp4,
+  runMediaRecorderVideoTranscode,
+} from './mediaRecorderVideoEngine';
 import { VideoCancelledError } from './videoErrors';
 import {
   getActiveVideoModuleLabels,
@@ -108,12 +112,17 @@ export async function processVideo(
   const formatMeta = getVideoFormatMeta(request.edit.outputFormat);
   const useFfmpeg =
     request.preferredBackend === 'ffmpeg-wasm-st' ||
-    (request.preferredBackend !== 'webcodecs-mediabunny' &&
+    ((!request.preferredBackend || request.preferredBackend === 'auto') &&
       shouldUseFfmpegBackend(request.edit));
+
+  const supportsMediaRecorderContainer =
+    request.edit.outputFormat === 'mp4' || request.edit.outputFormat === 'mov';
 
   let backendUsed: VideoExecutionBackend = useFfmpeg
     ? 'ffmpeg-wasm-st'
-    : 'webcodecs-mediabunny';
+    : request.preferredBackend === 'mediarecorder-native'
+      ? 'mediarecorder-native'
+      : 'webcodecs-mediabunny';
 
   let output: {
     outputBlob: Blob;
@@ -127,6 +136,8 @@ export async function processVideo(
 
   if (useFfmpeg) {
     output = await runFfmpegVideoTranscode(request, onProgress, signal);
+  } else if (request.preferredBackend === 'mediarecorder-native') {
+    output = await runMediaRecorderVideoTranscode(request, onProgress, signal);
   } else {
     try {
       output = await runWebCodecsVideoTranscode(request, onProgress, signal);
@@ -139,8 +150,31 @@ export async function processVideo(
         request.preferredBackend === 'auto' ||
         !request.preferredBackend
       ) {
-        backendUsed = 'ffmpeg-wasm-st';
-        output = await runFfmpegVideoTranscode(request, onProgress, signal);
+        // Tier-2 Native Hardware MediaRecorder MP4 (e.g., Safari iOS 16 4K HEVC .MOV)
+        if (supportsMediaRecorderContainer && canUseMediaRecorderMp4()) {
+          try {
+            backendUsed = 'mediarecorder-native';
+            output = await runMediaRecorderVideoTranscode(request, onProgress, signal);
+          } catch (mrErr) {
+            if (mrErr instanceof VideoCancelledError || signal?.aborted) {
+              throw new VideoCancelledError();
+            }
+            if (
+              mrErr instanceof VideoFallbackRequiredError ||
+              request.preferredBackend === 'auto' ||
+              !request.preferredBackend
+            ) {
+              backendUsed = 'ffmpeg-wasm-st';
+              output = await runFfmpegVideoTranscode(request, onProgress, signal);
+            } else {
+              throw mrErr;
+            }
+          }
+        } else {
+          // Tier-3 CPU FFmpeg.wasm fallback
+          backendUsed = 'ffmpeg-wasm-st';
+          output = await runFfmpegVideoTranscode(request, onProgress, signal);
+        }
       } else {
         throw err;
       }
