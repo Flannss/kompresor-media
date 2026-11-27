@@ -55,9 +55,13 @@ export function LiveGradeSvgFilter({
   return (
     <svg
       aria-hidden="true"
-      width="0"
-      height="0"
-      className="pointer-events-none absolute h-0 w-0 overflow-hidden"
+      style={{
+        position: 'fixed',
+        width: 0,
+        height: 0,
+        pointerEvents: 'none',
+        overflow: 'hidden',
+      }}
     >
       <defs>
         <filter id={filterId} colorInterpolationFilters="sRGB">

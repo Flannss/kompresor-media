@@ -126,8 +126,12 @@ export function WorkspaceHeader({
             type="button"
             data-testid="theme-toggle-btn"
             onClick={onToggleTheme}
-            aria-label={isDark ? 'Ganti ke tema Liquid Glass Terang' : 'Ganti ke tema Liquid Glass Gelap'}
-            title={isDark ? 'Liquid Glass Terang' : 'Liquid Glass Gelap'}
+            aria-label={
+              isDark
+                ? 'Ganti ke tema Liquid Glass Biru Cerah'
+                : 'Ganti ke tema Liquid Glass Biru Malam'
+            }
+            title={isDark ? 'Liquid Glass Biru Cerah' : 'Liquid Glass Biru Malam'}
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 text-xs font-medium text-[var(--text-secondary)] shadow-[var(--glass-highlight)] transition-all hover:border-[var(--border-active)] hover:text-[var(--text-primary)] active:scale-[0.97]"
           >
             {isDark ? (

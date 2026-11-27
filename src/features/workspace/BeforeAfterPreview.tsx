@@ -1,6 +1,6 @@
 import { useRef, type PointerEvent } from 'react';
 
-export type StageBackdrop = 'light' | 'dark' | 'checker';
+export type StageBackdrop = 'studio' | 'light' | 'dark' | 'checker';
 export type PhotoCompareViewMode = 'single' | 'split' | 'side-by-side';
 
 export interface BeforeAfterPreviewProps {
@@ -20,9 +20,12 @@ export function getBackdropClasses(backdrop: StageBackdrop): string {
     return 'bg-checkerboard';
   }
   if (backdrop === 'dark') {
-    return 'bg-[#030A1C]';
+    return 'bg-[#0E234B]';
   }
-  return 'bg-[#FFFFFF]';
+  if (backdrop === 'light') {
+    return 'bg-[#FFFFFF]';
+  }
+  return 'bg-[var(--bg-stage-media)]';
 }
 
 export function BeforeAfterPreview({
@@ -73,19 +76,19 @@ export function BeforeAfterPreview({
   };
 
   return (
-    <div className="flex w-full flex-col items-center gap-2.5">
+    <div className="flex w-full min-w-0 flex-col items-center gap-2.5">
       <div
         className={`relative flex max-h-[58vh] w-full max-w-[820px] items-center justify-center overflow-hidden rounded-2xl border border-[var(--glass-border)] transition-colors ${getBackdropClasses(backdrop)} ${
-          isSideBySideActive ? 'p-2' : ''
+          isSideBySideActive ? 'p-2.5' : ''
         }`}
         style={{ boxShadow: 'var(--stage-shadow)' }}
       >
         {isSideBySideActive ? (
           <div
             data-testid="photo-side-by-side-stage"
-            className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2"
+            className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2"
           >
-            <div className="relative flex items-center justify-center overflow-hidden rounded-xl bg-black/15">
+            <div className="relative flex items-center justify-center overflow-hidden rounded-xl bg-black/5">
               <img
                 data-testid="photo-sbs-original"
                 src={originalUrl}
@@ -98,7 +101,7 @@ export function BeforeAfterPreview({
               </span>
             </div>
 
-            <div className="relative flex items-center justify-center overflow-hidden rounded-xl bg-black/15">
+            <div className="relative flex items-center justify-center overflow-hidden rounded-xl bg-black/5">
               <img
                 data-testid="preview-image"
                 src={showOriginalOnly ? originalUrl : processedUrl}
@@ -179,6 +182,9 @@ export function BeforeAfterPreview({
             onChange={(e) => onSplitPctChange(Number(e.target.value))}
             aria-label="Geser pembanding foto asli dan hasil"
             className="km-range-input w-28"
+            style={{
+              background: `linear-gradient(to right, var(--accent-primary) ${((splitPct - 5) / 90) * 100}%, var(--border-hairline) ${((splitPct - 5) / 90) * 100}%)`,
+            }}
           />
           <span className="w-8 text-right font-semibold text-[var(--text-primary)]">{splitPct}%</span>
         </label>

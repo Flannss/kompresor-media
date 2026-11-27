@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useRef, useState, type PointerEvent } from 'react';
+import { memo, useCallback, useEffect, useId, useRef, useState, type PointerEvent } from 'react';
 import { Columns2, Eye, Pause, Play, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
 import type { SubtitleCue, VideoEditState, VideoProcessResult } from '../../engines/contracts';
 import { hasActiveColorGrade } from '../../engines/shared/colorGrades';
@@ -16,6 +16,8 @@ export type VideoCompareViewMode = 'single' | 'side-by-side' | 'split';
 export interface VideoCompareStageProps {
   itemId: string | null;
   sourceSizeBytes: number;
+  videoWidth?: number;
+  videoHeight?: number;
   deviceProfile: DeviceProfile;
   objectUrl: string;
   processedVideoUrl: string | null;
@@ -78,7 +80,7 @@ const LiveSubtitleOverlay = memo(function LiveSubtitleOverlay({
   return (
     <div
       data-testid="live-subtitle-overlay"
-      className={`pointer-events-none absolute left-1/2 -translate-x-1/2 rounded-lg bg-[var(--surface-badge)] px-3 py-1.5 text-center text-xs font-semibold text-white shadow sm:text-sm ${
+      className={`pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 rounded-lg bg-[var(--surface-badge)] px-3 py-1.5 text-center text-xs font-semibold text-white shadow sm:text-sm ${
         position === 'top'
           ? 'top-4'
           : position === 'center'
@@ -149,17 +151,21 @@ const VideoSyncTransportBar = memo(function VideoSyncTransportBar({
     };
   }, [primaryVideoEl]);
 
+  const maxSeek = Math.max(0.1, durationSec);
+  const clampedTime = Math.min(Math.max(0, timeSec), maxSeek);
+  const seekPct = Math.min(100, Math.max(0, (clampedTime / maxSeek) * 100));
+
   return (
     <div
       data-testid="video-sync-transport"
-      className="km-glass-lite flex w-full max-w-[820px] flex-wrap items-center gap-2 rounded-2xl border px-3 py-2 text-xs tabular-nums"
+      className="km-glass-lite flex w-full max-w-[820px] min-w-0 flex-wrap items-center gap-2 rounded-2xl border px-3 py-2 text-xs tabular-nums"
     >
       <button
         type="button"
         data-testid="video-sync-play-btn"
         onClick={onTogglePlay}
         aria-label={isPlaying ? 'Jeda video' : 'Putar video'}
-        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-primary)] text-[var(--ink-on-accent)] transition-colors hover:bg-[var(--accent-hover)]"
+        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-primary)] text-[var(--ink-on-accent)] transition-colors hover:bg-[var(--accent-primary-hover)]"
       >
         {isPlaying ? (
           <Pause className="h-4 w-4" aria-hidden="true" />
@@ -172,12 +178,15 @@ const VideoSyncTransportBar = memo(function VideoSyncTransportBar({
         type="range"
         data-testid="video-sync-seek"
         min={0}
-        max={Math.max(0.1, durationSec)}
+        max={maxSeek}
         step={0.05}
-        value={Math.min(Math.max(0, timeSec), Math.max(0.1, durationSec))}
+        value={clampedTime}
         onChange={(e) => onSeekChange(Number(e.target.value))}
         aria-label="Posisi pemutaran video"
         className="km-range-input min-w-[110px] flex-1"
+        style={{
+          background: `linear-gradient(to right, var(--accent-primary) ${seekPct}%, var(--border-hairline) ${seekPct}%)`,
+        }}
       />
 
       <span className="text-[11px] font-medium text-[var(--text-secondary)]">
@@ -219,6 +228,9 @@ const VideoSyncTransportBar = memo(function VideoSyncTransportBar({
             onChange={(e) => onSplitPctChange(Number(e.target.value))}
             aria-label="Geser pembanding video Asli dan Sesudah"
             className="km-range-input w-24"
+            style={{
+              background: `linear-gradient(to right, var(--accent-primary) ${((splitPct - 5) / 90) * 100}%, var(--border-hairline) ${((splitPct - 5) / 90) * 100}%)`,
+            }}
           />
           <span className="w-8 text-right font-semibold text-[var(--text-primary)]">
             {splitPct}%
@@ -229,9 +241,21 @@ const VideoSyncTransportBar = memo(function VideoSyncTransportBar({
   );
 });
 
+function releaseDetachedVideoElement(vid: HTMLVideoElement): void {
+  try {
+    vid.pause();
+    vid.removeAttribute('src');
+    vid.load();
+  } catch {
+    // Ignore detached DOM cleanup errors
+  }
+}
+
 export function VideoCompareStage({
   itemId,
   sourceSizeBytes,
+  videoWidth,
+  videoHeight,
   deviceProfile,
   objectUrl,
   processedVideoUrl,
@@ -253,9 +277,13 @@ export function VideoCompareStage({
 
   const primaryVideoRef = useRef<HTMLVideoElement | null>(null);
   const secondaryVideoRef = useRef<HTMLVideoElement | null>(null);
+  const videoElementRefLatest = useRef(videoElementRef);
+  videoElementRefLatest.current = videoElementRef;
+
   const splitBoxRef = useRef<HTMLDivElement | null>(null);
   const draggingSplitRef = useRef(false);
   const extractedKeyRef = useRef<string | null>(null);
+  const lastTimeRef = useRef(0.05);
 
   const [primaryElState, setPrimaryElState] = useState<HTMLVideoElement | null>(null);
   const [singleSourceChoice, setSingleSourceChoice] = useState<'original' | 'result'>('original');
@@ -276,6 +304,13 @@ export function VideoCompareStage({
   const canPlayProcessedResult = Boolean(processedVideoUrl) && !processedPreviewUnsupported;
   const trimOffsetSec = canPlayProcessedResult ? Math.max(0, videoEdit.trimStartSec) : 0;
 
+  const rawAspect =
+    videoWidth && videoHeight && videoWidth > 0 && videoHeight > 0
+      ? videoWidth / videoHeight
+      : 16 / 9;
+  const clampedAspect = Math.min(2.35, Math.max(0.45, rawAspect));
+  const safeBackdrop: StageBackdrop = backdrop === 'checker' ? 'studio' : backdrop;
+
   useEffect(() => {
     if (dualBlockedByMemory && compareViewMode !== 'single') {
       setDualBlockedNotice(true);
@@ -295,24 +330,35 @@ export function VideoCompareStage({
     setProcessedPreviewUnsupported(false);
     setSingleSourceChoice(processedVideoUrl ? 'result' : 'original');
     extractedKeyRef.current = null;
+    lastTimeRef.current = 0.05;
   }, [objectUrl]);
 
-  // Cleanly release video decoder handles on unmount
-  useEffect(() => {
-    return () => {
-      for (const vid of [primaryVideoRef.current, secondaryVideoRef.current]) {
-        if (vid) {
-          vid.pause();
-          vid.removeAttribute('src');
-          vid.load();
-        }
-      }
-    };
-  }, [objectUrl, effectiveViewMode]);
+  // Ref callbacks cleanly detach ONLY previously unmounted video elements (never newly mounted nodes)
+  const bindPrimaryRef = useCallback((el: HTMLVideoElement | null) => {
+    const prev = primaryVideoRef.current;
+    if (prev && prev !== el) {
+      releaseDetachedVideoElement(prev);
+    }
+    primaryVideoRef.current = el;
+    setPrimaryElState(el);
+    videoElementRefLatest.current?.(el);
+  }, []);
+
+  const bindSecondaryRef = useCallback((el: HTMLVideoElement | null) => {
+    const prev = secondaryVideoRef.current;
+    if (prev && prev !== el) {
+      releaseDetachedVideoElement(prev);
+    }
+    if (el) {
+      el.muted = true;
+    }
+    secondaryVideoRef.current = el;
+  }, []);
 
   useEffect(() => {
     if (!seekRequestSec) return;
     const target = Math.max(0, seekRequestSec.sec);
+    lastTimeRef.current = target;
     if (primaryVideoRef.current) {
       primaryVideoRef.current.currentTime = target;
     }
@@ -352,7 +398,7 @@ export function VideoCompareStage({
     return () => clearInterval(timer);
   }, [effectiveViewMode, isPlaying, canPlayProcessedResult, trimOffsetSec]);
 
-  // Lazy single 96px thumbnail extraction ONLY when user opens the Tampilan tab
+  // Lazy single 96px thumbnail extraction ONLY when user opens the Jernihkan & Warna tab
   const tryExtractSingleThumbnail = (videoEl: HTMLVideoElement | null) => {
     if (!thumbnailRequested || !itemId || baseThumbnailUrl || !videoEl) return;
     const key = `${itemId}:${objectUrl}`;
@@ -413,17 +459,35 @@ export function VideoCompareStage({
   const singleFilterStyle =
     !isShowingProcessedInSingle && !holdOriginalActive ? livePreviewCssOrSvg : undefined;
 
+  // Guard newly mounted video elements so source loads and paints immediately
+  useEffect(() => {
+    for (const vid of [primaryVideoRef.current, secondaryVideoRef.current]) {
+      if (!vid) continue;
+      if (vid.readyState === 0 && vid.getAttribute('src')) {
+        vid.load();
+      }
+    }
+  }, [effectiveViewMode, singleSrc, afterVideoSrc, objectUrl]);
+
+  const handleVideoLoadedMetadata = (vid: HTMLVideoElement, extraOffsetSec = 0) => {
+    try {
+      vid.playbackRate = playbackRate;
+      const dur = Number.isFinite(vid.duration) && vid.duration > 0 ? vid.duration : 0;
+      const desired = Math.max(lastTimeRef.current, 0.05) + extraOffsetSec;
+      const clamped = dur > 0 ? Math.min(Math.max(0.01, dur - 0.04), desired) : desired;
+      if (Math.abs(vid.currentTime - clamped) > 0.02) {
+        vid.currentTime = clamped;
+      }
+    } catch {
+      // Ignore metadata seek errors
+    }
+  };
+
   const showSubOverlay =
     videoEdit.subtitle.enabled &&
     videoEdit.subtitle.cues.length > 0 &&
     !holdOriginalActive &&
     (!isShowingProcessedInSingle || videoEdit.subtitle.mode === 'softsub');
-
-  const bindPrimaryRef = (el: HTMLVideoElement | null) => {
-    primaryVideoRef.current = el;
-    setPrimaryElState(el);
-    videoElementRef?.(el);
-  };
 
   const togglePlayPause = () => {
     const pri = primaryVideoRef.current;
@@ -444,6 +508,7 @@ export function VideoCompareStage({
   };
 
   const handleSeekBarChange = (secValue: number) => {
+    lastTimeRef.current = secValue;
     const pri = primaryVideoRef.current;
     const sec = secondaryVideoRef.current;
     if (pri) pri.currentTime = secValue;
@@ -511,7 +576,7 @@ export function VideoCompareStage({
         : 'Sesudah';
 
   return (
-    <div className="flex w-full flex-col items-center gap-2.5">
+    <div className="flex w-full min-w-0 flex-col items-center gap-3">
       <LiveGradeSvgFilter
         filterId={filterDomId}
         colorGrade={videoEdit.colorGrade}
@@ -519,12 +584,15 @@ export function VideoCompareStage({
         disabled={deviceProfile.useLightweightCssPreview}
       />
 
-      {/* Mode Switcher Bar Above Stage */}
-      <div className="flex w-full max-w-[820px] flex-wrap items-center justify-between gap-2">
+      {/* Top Mode Switcher Toolbar (clean wrapping, never clips on right edge) */}
+      <div
+        data-testid="video-stage-toolbar"
+        className="flex w-full max-w-[820px] min-w-0 flex-wrap items-center justify-between gap-2"
+      >
         <div
           role="group"
           aria-label="Mode Tampilan Video"
-          className="km-glass-lite inline-flex rounded-xl border p-0.5 text-xs"
+          className="km-glass-lite inline-flex max-w-full flex-wrap rounded-xl border p-0.5 text-xs"
         >
           {(
             [
@@ -547,6 +615,7 @@ export function VideoCompareStage({
                     setDualBlockedNotice(true);
                     return;
                   }
+                  setIsPlaying(false);
                   onChangeCompareViewMode(id);
                 }}
                 className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-colors disabled:opacity-45 ${
@@ -562,9 +631,9 @@ export function VideoCompareStage({
           })}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {effectiveViewMode === 'single' && canPlayProcessedResult && (
-            <div className="inline-flex rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-0.5 text-xs">
+            <div className="km-glass-lite inline-flex rounded-xl border p-0.5 text-xs">
               <button
                 type="button"
                 data-testid="video-view-original-btn"
@@ -592,33 +661,35 @@ export function VideoCompareStage({
             </div>
           )}
 
-          <button
-            type="button"
-            data-testid="video-hold-original-btn"
-            aria-pressed={holdOriginalActive}
-            onPointerDown={() => onHoldOriginalChange(true)}
-            onPointerUp={() => onHoldOriginalChange(false)}
-            onPointerLeave={() => onHoldOriginalChange(false)}
-            onPointerCancel={() => onHoldOriginalChange(false)}
-            onKeyDown={(e) => {
-              if (e.key === ' ' || e.key === 'Enter') {
-                onHoldOriginalChange(true);
-              }
-            }}
-            onKeyUp={(e) => {
-              if (e.key === ' ' || e.key === 'Enter') {
-                onHoldOriginalChange(false);
-              }
-            }}
-            className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-medium transition-all select-none ${
-              holdOriginalActive
-                ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Tahan: Lihat Asli</span>
-          </button>
+          {effectiveViewMode !== 'side-by-side' && (
+            <button
+              type="button"
+              data-testid="video-hold-original-btn"
+              aria-pressed={holdOriginalActive}
+              onPointerDown={() => onHoldOriginalChange(true)}
+              onPointerUp={() => onHoldOriginalChange(false)}
+              onPointerLeave={() => onHoldOriginalChange(false)}
+              onPointerCancel={() => onHoldOriginalChange(false)}
+              onKeyDown={(e) => {
+                if (e.key === ' ' || e.key === 'Enter') {
+                  onHoldOriginalChange(true);
+                }
+              }}
+              onKeyUp={(e) => {
+                if (e.key === ' ' || e.key === 'Enter') {
+                  onHoldOriginalChange(false);
+                }
+              }}
+              className={`km-glass-lite inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all select-none ${
+                holdOriginalActive
+                  ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Tahan: Lihat Asli</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -631,13 +702,14 @@ export function VideoCompareStage({
         </p>
       )}
 
-      {/* Main Stage Surface */}
+      {/* Main Stage Surface (clean studio matte, never checkerboard) */}
       <div
-        className={`relative flex w-full max-w-[820px] items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-hairline)] p-1.5 transition-colors ${getBackdropClasses(backdrop)}`}
+        data-testid="video-stage-surface"
+        className={`relative flex w-full max-w-[820px] min-w-0 items-center justify-center overflow-hidden rounded-2xl border border-[var(--glass-border)] p-2 transition-colors ${getBackdropClasses(safeBackdrop)}`}
         style={{ boxShadow: 'var(--stage-shadow)' }}
       >
         {effectiveViewMode === 'single' && (
-          <div className="relative flex w-full items-center justify-center">
+          <div className="relative flex min-h-[210px] w-full items-center justify-center overflow-hidden rounded-xl sm:min-h-[300px]">
             {processedPreviewUnsupported && singleSourceChoice === 'result' ? (
               renderFallbackBox()
             ) : (
@@ -648,10 +720,19 @@ export function VideoCompareStage({
                 src={singleSrc}
                 controls
                 playsInline
-                preload="metadata"
+                preload="auto"
                 muted={previewMuted}
-                style={{ filter: singleFilterStyle }}
+                style={{
+                  filter: singleFilterStyle,
+                  aspectRatio: String(clampedAspect),
+                }}
+                onLoadedMetadata={(e) => handleVideoLoadedMetadata(e.currentTarget)}
                 onLoadedData={(e) => tryExtractSingleThumbnail(e.currentTarget)}
+                onTimeUpdate={(e) => {
+                  if (e.currentTarget.readyState >= 2) {
+                    lastTimeRef.current = e.currentTarget.currentTime;
+                  }
+                }}
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
                 onEnded={() => setIsPlaying(false)}
@@ -660,7 +741,7 @@ export function VideoCompareStage({
                     setProcessedPreviewUnsupported(true);
                   }
                 }}
-                className="max-h-[52vh] w-full rounded-xl object-contain"
+                className="block max-h-[56vh] min-h-[200px] w-full rounded-xl object-contain sm:min-h-[280px]"
               />
             )}
 
@@ -681,25 +762,26 @@ export function VideoCompareStage({
         {effectiveViewMode === 'side-by-side' && (
           <div
             data-testid="video-side-by-side-stage"
-            className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2"
+            className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2"
           >
-            <div className="relative flex items-center justify-center overflow-hidden rounded-xl bg-black/40">
+            <div className="relative aspect-video min-h-[190px] w-full overflow-hidden rounded-xl bg-[var(--bg-stage-media)] sm:min-h-[240px]">
               <video
-                ref={secondaryVideoRef}
+                ref={bindSecondaryRef}
                 key={`sbs-orig-${objectUrl}`}
                 data-testid="compare-secondary-video"
                 src={objectUrl}
                 muted
                 playsInline
-                preload="metadata"
-                className="max-h-[42vh] w-full object-contain sm:max-h-[50vh]"
+                preload="auto"
+                onLoadedMetadata={(e) => handleVideoLoadedMetadata(e.currentTarget)}
+                className="block h-full w-full object-contain"
               />
               <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-[var(--surface-badge)] px-2 py-0.5 text-[11px] font-medium text-white">
                 Asli
               </span>
             </div>
 
-            <div className="relative flex items-center justify-center overflow-hidden rounded-xl bg-black/40">
+            <div className="relative aspect-video min-h-[190px] w-full overflow-hidden rounded-xl bg-[var(--bg-stage-media)] sm:min-h-[240px]">
               {processedPreviewUnsupported && processedVideoUrl ? (
                 renderFallbackBox()
               ) : (
@@ -709,10 +791,18 @@ export function VideoCompareStage({
                   data-testid="preview-video"
                   src={afterVideoSrc}
                   playsInline
-                  preload="metadata"
+                  preload="auto"
                   muted={previewMuted}
                   style={{ filter: afterFilterStyle }}
+                  onLoadedMetadata={(e) =>
+                    handleVideoLoadedMetadata(e.currentTarget, canPlayProcessedResult ? trimOffsetSec : 0)
+                  }
                   onLoadedData={(e) => tryExtractSingleThumbnail(e.currentTarget)}
+                  onTimeUpdate={(e) => {
+                    if (e.currentTarget.readyState >= 2) {
+                      lastTimeRef.current = e.currentTarget.currentTime;
+                    }
+                  }}
                   onPlay={() => {
                     setIsPlaying(true);
                     void secondaryVideoRef.current?.play().catch(() => {});
@@ -727,7 +817,7 @@ export function VideoCompareStage({
                       setProcessedPreviewUnsupported(true);
                     }
                   }}
-                  className="max-h-[42vh] w-full object-contain sm:max-h-[50vh]"
+                  className="block h-full w-full object-contain"
                 />
               )}
               <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-medium text-white">
@@ -759,7 +849,8 @@ export function VideoCompareStage({
                 setSplitPct((v) => Math.min(95, v + 5));
               }
             }}
-            className="relative flex w-full cursor-ew-resize touch-none select-none items-center justify-center overflow-hidden rounded-xl"
+            style={{ aspectRatio: String(clampedAspect) }}
+            className="relative mx-auto max-h-[56vh] min-h-[220px] w-full cursor-ew-resize touch-none select-none overflow-hidden rounded-xl bg-[var(--bg-stage-media)] sm:min-h-[300px]"
           >
             {processedPreviewUnsupported && processedVideoUrl ? (
               renderFallbackBox()
@@ -770,10 +861,18 @@ export function VideoCompareStage({
                 data-testid="preview-video"
                 src={afterVideoSrc}
                 playsInline
-                preload="metadata"
+                preload="auto"
                 muted={previewMuted}
                 style={{ filter: afterFilterStyle }}
+                onLoadedMetadata={(e) =>
+                  handleVideoLoadedMetadata(e.currentTarget, canPlayProcessedResult ? trimOffsetSec : 0)
+                }
                 onLoadedData={(e) => tryExtractSingleThumbnail(e.currentTarget)}
+                onTimeUpdate={(e) => {
+                  if (e.currentTarget.readyState >= 2) {
+                    lastTimeRef.current = e.currentTarget.currentTime;
+                  }
+                }}
                 onPlay={() => {
                   setIsPlaying(true);
                   void secondaryVideoRef.current?.play().catch(() => {});
@@ -788,36 +887,37 @@ export function VideoCompareStage({
                     setProcessedPreviewUnsupported(true);
                   }
                 }}
-                className="max-h-[52vh] w-full object-contain"
+                className="absolute inset-0 block h-full w-full object-contain"
               />
             )}
 
             <video
-              ref={secondaryVideoRef}
+              ref={bindSecondaryRef}
               key={`split-orig-${objectUrl}`}
               data-testid="compare-secondary-video"
               src={objectUrl}
               muted
               playsInline
-              preload="metadata"
-              className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+              preload="auto"
+              onLoadedMetadata={(e) => handleVideoLoadedMetadata(e.currentTarget)}
+              className="pointer-events-none absolute inset-0 block h-full w-full object-contain"
               style={{ clipPath: `inset(0 ${100 - splitPct}% 0 0)` }}
             />
 
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 w-0.5 bg-white shadow"
+              className="pointer-events-none absolute inset-y-0 z-10 w-0.5 bg-white shadow"
               style={{ left: `${splitPct}%` }}
             >
-              <div className="absolute left-1/2 top-1/2 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[10px] font-bold text-[var(--text-primary)] shadow">
+              <div className="absolute left-1/2 top-1/2 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-[var(--border-hairline)] bg-[var(--surface-dock)] text-[10px] font-bold text-[var(--text-primary)] shadow">
                 ↔
               </div>
             </div>
 
-            <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-[var(--surface-badge)] px-2 py-0.5 text-[11px] font-medium text-white">
+            <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-[var(--surface-badge)] px-2 py-0.5 text-[11px] font-medium text-white">
               Asli
             </span>
-            <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-medium text-white">
+            <span className="pointer-events-none absolute right-2.5 top-2.5 z-10 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-medium text-white">
               {afterBadgeLabel}
             </span>
           </div>

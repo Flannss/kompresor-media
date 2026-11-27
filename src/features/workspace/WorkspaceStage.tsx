@@ -197,7 +197,7 @@ export function WorkspaceStage({
 }: WorkspaceStageProps) {
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const [isDraggingOverStage, setIsDraggingOverStage] = useState(false);
-  const [backdrop, setBackdrop] = useState<StageBackdrop>('dark');
+  const [backdrop, setBackdrop] = useState<StageBackdrop>('studio');
 
   const [isCropping, setIsCropping] = useState(false);
   const [photoViewMode, setPhotoViewMode] = useState<PhotoCompareViewMode>('single');
@@ -258,6 +258,12 @@ export function WorkspaceStage({
       return null;
     });
   }, [objectUrl]);
+
+  useEffect(() => {
+    if (!isImage && backdrop === 'checker') {
+      setBackdrop('studio');
+    }
+  }, [isImage, backdrop]);
 
   useEffect(() => {
     return () => {
@@ -482,7 +488,7 @@ export function WorkspaceStage({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`bg-liquid-stage relative flex min-h-[42vh] flex-1 flex-col items-center justify-center gap-3 px-3 py-4 transition-colors sm:min-h-[50vh] sm:px-7 sm:py-6 lg:min-h-[calc(100vh-56px)] ${
+        className={`bg-liquid-stage relative flex min-h-[42vh] w-full min-w-0 flex-1 flex-col items-center justify-center gap-3 px-3 py-4 transition-colors sm:min-h-[50vh] sm:px-6 sm:py-6 lg:min-h-[calc(100vh-56px)] ${
           isDraggingOverStage ? 'ring-2 ring-inset ring-[var(--border-active)]' : ''
         }`}
       >
@@ -534,6 +540,8 @@ export function WorkspaceStage({
           <VideoCompareStage
             itemId={activeItemId}
             sourceSizeBytes={metadata.sizeBytes}
+            videoWidth={metadata.width}
+            videoHeight={metadata.height}
             deviceProfile={deviceProfile}
             objectUrl={objectUrl}
             processedVideoUrl={processedVideoUrl}
@@ -761,18 +769,24 @@ export function WorkspaceStage({
 
             <span className="h-4 w-px bg-[var(--border-hairline)]" aria-hidden="true" />
 
-            {/* 3-Way Canvas Backdrop Switcher */}
+            {/* Canvas Backdrop Switcher (Video never uses Transparan checkerboard) */}
             <div
               role="group"
               aria-label="Latar Kanvas"
-              className="inline-flex items-center gap-0.5 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-[11px]"
+              className="inline-flex flex-wrap items-center gap-0.5 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-[11px]"
             >
-              {(
-                [
-                  { id: 'light', label: 'Terang' },
-                  { id: 'dark', label: 'Gelap' },
-                  { id: 'checker', label: 'Transparan' },
-                ] as const
+              {(isImage
+                ? ([
+                    { id: 'studio', label: 'Studio' },
+                    { id: 'light', label: 'Terang' },
+                    { id: 'dark', label: 'Gelap' },
+                    { id: 'checker', label: 'Transparan' },
+                  ] as const)
+                : ([
+                    { id: 'studio', label: 'Studio' },
+                    { id: 'light', label: 'Terang' },
+                    { id: 'dark', label: 'Gelap' },
+                  ] as const)
               ).map((bg) => (
                 <button
                   key={bg.id}

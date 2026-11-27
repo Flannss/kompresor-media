@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 export type AppTheme = 'light' | 'dark';
 
-export const THEME_STORAGE_KEY = 'km-theme';
+export const THEME_STORAGE_KEY = 'km-theme-v2';
 
 function readStoredTheme(): AppTheme {
   try {
@@ -13,7 +13,7 @@ function readStoredTheme(): AppTheme {
   } catch {
     // Ignore storage access errors in restricted environments
   }
-  return 'dark';
+  return 'light';
 }
 
 export function applyThemeToDocument(theme: AppTheme): void {

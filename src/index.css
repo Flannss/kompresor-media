@@ -36,9 +36,7 @@
 
 .bg-liquid-stage,
 .bg-cobalt-stage {
-  background:
-    radial-gradient(ellipse 80% 56% at 50% 18%, var(--bg-stage-glow) 0%, transparent 68%),
-    radial-gradient(circle at 50% 44%, var(--bg-stage) 0%, var(--bg-app) 100%);
+  background: var(--bg-app-gradient);
 }
 
 .km-glass {

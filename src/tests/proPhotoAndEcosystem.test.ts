@@ -22,6 +22,8 @@ import {
   PHOTO_PRESET_IDS,
   VIDEO_PRESET_IDS,
 } from '../presets/mediaPresets';
+import { getBackdropClasses } from '../features/workspace/BeforeAfterPreview';
+import { initTheme, THEME_STORAGE_KEY } from '../shared/hooks/useTheme';
 import { getDeviceProfile } from '../shared/utils/deviceCapability';
 
 function makePatternImageData(w = 6, h = 6): ImageData {
@@ -230,5 +232,15 @@ describe('KM-T008 Pro Photo Studio (2K-8K RealPhoto, 12 Filters, Adjustments, Ec
     });
     expect(outcomeTk).toBe('desktop-helper');
     expect(clickSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('defaults theme to bright Liquid Glass Biru Cerah (km-theme-v2) and clean studio backdrop', () => {
+    localStorage.removeItem(THEME_STORAGE_KEY);
+    expect(THEME_STORAGE_KEY).toBe('km-theme-v2');
+    expect(initTheme()).toBe('light');
+    expect(document.documentElement.dataset.theme).toBe('light');
+
+    expect(getBackdropClasses('studio')).toBe('bg-[var(--bg-stage-media)]');
+    expect(getBackdropClasses('checker')).toBe('bg-checkerboard');
   });
 });
