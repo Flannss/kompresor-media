@@ -8,15 +8,35 @@ import {
 import { getMediaPreset } from '../presets/mediaPresets';
 
 describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
-  it('routes simple custom/light MP4 & WebM compress without filtergraphs via fast WebCodecs path, and Social-HD presets deterministically via FFmpeg', () => {
+  it('routes MP4/MOV presets, 1080p/2K, color grade, and clarity models via Hardware WebCodecs first, and exclusive filters via FFmpeg', () => {
     const simpleCustom = structuredClone(getMediaPreset('custom').video);
     expect(shouldUseFfmpegBackend(simpleCustom)).toBe(false);
 
     const lightPreset = structuredClone(getMediaPreset('web-light').video);
     expect(shouldUseFfmpegBackend(lightPreset)).toBe(false);
 
-    simpleCustom.outputFormat = 'webm';
-    simpleCustom.subtitle = {
+    for (const socialId of ['whatsapp-hd', 'whatsapp-status', 'instagram-story', 'tiktok-hd'] as const) {
+      expect(shouldUseFfmpegBackend(getMediaPreset(socialId).video)).toBe(false);
+    }
+
+    const movGraded = structuredClone(getMediaPreset('whatsapp-hd').video);
+    movGraded.outputFormat = 'mov';
+    movGraded.colorGrade.gradeId = 'teal-orange';
+    movGraded.clarityModel = 'sharp-1080p';
+    movGraded.targetResolution = '2k';
+    expect(shouldUseFfmpegBackend(movGraded)).toBe(false);
+
+    // FFmpeg-exclusive features MUST route via FFmpeg
+    const webm = structuredClone(simpleCustom);
+    webm.outputFormat = 'webm';
+    expect(shouldUseFfmpegBackend(webm)).toBe(true);
+
+    const mkv = structuredClone(simpleCustom);
+    mkv.outputFormat = 'mkv';
+    expect(shouldUseFfmpegBackend(mkv)).toBe(true);
+
+    const hardsub = structuredClone(simpleCustom);
+    hardsub.subtitle = {
       enabled: true,
       mode: 'hardsub',
       size: 'medium',
@@ -24,30 +44,13 @@ describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
       sourceFileName: null,
       cues: [{ id: '1', startSec: 0, endSec: 2, text: 'Tes' }],
     };
-    expect(shouldUseFfmpegBackend(simpleCustom)).toBe(false);
-
-    for (const socialId of ['whatsapp-hd', 'whatsapp-status', 'instagram-story', 'tiktok-hd'] as const) {
-      expect(shouldUseFfmpegBackend(getMediaPreset(socialId).video)).toBe(true);
-    }
-
-    const sharp1080 = structuredClone(getMediaPreset('custom').video);
-    sharp1080.clarityModel = 'sharp-1080p';
-    sharp1080.targetResolution = '1080p';
-    expect(shouldUseFfmpegBackend(sharp1080)).toBe(true);
+    expect(shouldUseFfmpegBackend(hardsub)).toBe(true);
   });
 
-  it('routes MOV/MKV, enhanceSuite, colorGrade, stabilizer, audio filters, and softsub via single-pass FFmpeg', () => {
-    const mov = structuredClone(getMediaPreset('custom').video);
-    mov.outputFormat = 'mov';
-    expect(shouldUseFfmpegBackend(mov)).toBe(true);
-
-    const enhanced = structuredClone(getMediaPreset('custom').video);
-    enhanced.enhanceSuite.noise.enabled = true;
-    expect(shouldUseFfmpegBackend(enhanced)).toBe(true);
-
-    const graded = structuredClone(getMediaPreset('custom').video);
-    graded.colorGrade.gradeId = 'teal-orange';
-    expect(shouldUseFfmpegBackend(graded)).toBe(true);
+  it('routes manual noise denoise, stabilizer, audio DSP, and softsub via single-pass FFmpeg', () => {
+    const manualNoise = structuredClone(getMediaPreset('custom').video);
+    manualNoise.enhanceSuite.noise.enabled = true;
+    expect(shouldUseFfmpegBackend(manualNoise)).toBe(true);
 
     const stabilized = structuredClone(getMediaPreset('custom').video);
     stabilized.stabilize.enabled = true;
@@ -56,6 +59,17 @@ describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
     const eq = structuredClone(getMediaPreset('custom').video);
     eq.audio = { ...eq.audio, enabled: true, vocalClarity: true };
     expect(shouldUseFfmpegBackend(eq)).toBe(true);
+
+    const softsub = structuredClone(getMediaPreset('custom').video);
+    softsub.subtitle = {
+      enabled: true,
+      mode: 'softsub',
+      size: 'medium',
+      position: 'bottom',
+      sourceFileName: 'sub.srt',
+      cues: [{ id: '1', startSec: 0, endSec: 2, text: 'Halo' }],
+    };
+    expect(shouldUseFfmpegBackend(softsub)).toBe(true);
   });
 
   it('builds single-pass -vf in strict hqdn3d -> scale -> deshake -> color -> unsharp order with anti-deadlock flags', () => {
@@ -242,11 +256,11 @@ describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
       string,
       string,
     ]> = [
-      ['whatsapp-hd', '7500k', '15000k', '128k'],
-      ['whatsapp-status', '4800k', '9600k', '128k'],
-      ['instagram-story', '8000k', '16000k', '160k'],
-      ['tiktok-hd', '8500k', '17000k', '160k'],
-    ];
+        ['whatsapp-hd', '7500k', '15000k', '128k'],
+        ['whatsapp-status', '4800k', '9600k', '128k'],
+        ['instagram-story', '8000k', '16000k', '160k'],
+        ['tiktok-hd', '8500k', '17000k', '160k'],
+      ];
 
     for (const [presetId, maxrate, bufsize, audioBr] of specs) {
       const edit = structuredClone(getMediaPreset(presetId).video);

@@ -159,10 +159,13 @@ export async function processImage(
   const profile = getDeviceProfile();
   const maxCanvasPixels = request.maxCanvasPixels ?? profile.maxPhotoCanvasPixels;
   const allow8K = request.allow8K ?? profile.allow8KPhotoExport;
+  const isMobileThermalGuard =
+    request.isMobileThermalGuard ?? profile.performanceTier !== 'desktop';
   const normalizedRequest: ImageProcessRequest = {
     ...request,
     maxCanvasPixels,
     allow8K,
+    isMobileThermalGuard,
   };
 
   if (typeof Worker === 'undefined') {
@@ -182,6 +185,7 @@ export async function processImage(
       previewMaxEdgePx: normalizedRequest.previewMaxEdgePx,
       maxCanvasPixels,
       allow8K,
+      isMobileThermalGuard,
     });
 
     if (response.type !== 'process') {

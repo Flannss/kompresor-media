@@ -22,7 +22,10 @@ import {
   computeTargetDimensions,
   type PhotoCanvasGuardrails,
 } from './pixelOps';
-import { applyProPhotoToolsPass } from './proTools';
+import {
+  applyPostUpscaleProSharpen,
+  applyPreUpscaleProToolsPass,
+} from './proTools';
 
 export interface Canvas2DContextLike {
   imageSmoothingEnabled: boolean;
@@ -332,9 +335,10 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
     }
 
     const preResizeW = currentCanvas.width;
+    const preResizeH = currentCanvas.height;
     const targetPlan = computePhotoTargetDimensions(
-      currentCanvas.width,
-      currentCanvas.height,
+      preResizeW,
+      preResizeH,
       edit,
       guard
     );
@@ -346,12 +350,111 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
       targetDims = computeTargetDimensions(targetDims.width, targetDims.height, previewMaxEdgePx);
     }
 
-    const resized = resizeCanvas(currentCanvas, targetDims.width, targetDims.height, adapter);
-    if (resized !== currentCanvas) {
-      releaseCanvasSurface(currentCanvas);
-      currentCanvas = resized;
+    const proToolStrength = edit.proToolStrength ?? 80;
+    const activeProTools = edit.proTools ?? [];
+    const preUpscaleTools = activeProTools.filter((t) => t !== 'sharpen');
+    const hasPreUpscaleTools = preUpscaleTools.length > 0 && proToolStrength > 0;
+    const hasPostProSharpen = activeProTools.includes('sharpen') && proToolStrength > 0;
+
+    const modelStrength = edit.qualityModelStrength ?? 80;
+    const wantsQualityModelDenoise =
+      (edit.qualityModel === 'high-quality' || edit.qualityModel === 'ultra-detail') &&
+      modelStrength > 0;
+    const hasManualDenoise = edit.denoiseAmount > 0 || edit.enhanceSuite.noise.enabled;
+    const needsPreUpscalePass = hasManualDenoise || hasPreUpscaleTools || wantsQualityModelDenoise;
+
+    // 1. Optical Pre-Upscale Stage: run heavy O(N) restoration, dehaze, deblur, retouch,
+    //    colourise, face recovery, and noise reduction BEFORE upscaling to 2K/3K/4K/8K.
+    let ranPreDenoise = false;
+    if (needsPreUpscalePass) {
+      const isDownscaleOrSame =
+        targetDims.width <= preResizeW && targetDims.height <= preResizeH;
+      const preCapEdge = guard?.isMobileThermalGuard ? 2048 : 2560;
+      const workingDims = isDownscaleOrSame
+        ? targetDims
+        : computeTargetDimensions(preResizeW, preResizeH, preCapEdge);
+
+      if (workingDims.width !== currentCanvas.width || workingDims.height !== currentCanvas.height) {
+        const preSized = resizeCanvas(currentCanvas, workingDims.width, workingDims.height, adapter);
+        if (preSized !== currentCanvas) {
+          releaseCanvasSurface(currentCanvas);
+          currentCanvas = preSized;
+        }
+      }
+
+      const preCtx = currentCanvas.getContext('2d');
+      if (preCtx) {
+        const preImgData = preCtx.getImageData(0, 0, currentCanvas.width, currentCanvas.height);
+
+        if (edit.denoiseAmount > 0) {
+          const grainStrength = (edit.denoiseAmount / 100) * 8;
+          const colorSmooth = Math.max(2, Math.round((edit.denoiseAmount / 100) * 6));
+          applyEdgePreservingDenoiseParams(preImgData, grainStrength, colorSmooth);
+          ranPreDenoise = true;
+        } else if (edit.enhanceSuite.noise.enabled) {
+          applyEdgePreservingDenoiseParams(
+            preImgData,
+            edit.enhanceSuite.noise.grainStrength,
+            edit.enhanceSuite.noise.colorSmooth
+          );
+          ranPreDenoise = true;
+        } else if (wantsQualityModelDenoise) {
+          const s = Math.min(1, Math.max(0, modelStrength / 100));
+          const tierBonus =
+            targetPlan.appliedTargetResolution === '8k'
+              ? 0.72
+              : targetPlan.appliedTargetResolution === '4k'
+                ? 0.56
+                : targetPlan.appliedTargetResolution === '3k'
+                  ? 0.42
+                  : targetPlan.appliedTargetResolution === '2k'
+                    ? 0.28
+                    : targetPlan.appliedTargetResolution === 'hd'
+                      ? 0.14
+                      : 0;
+          const resBoost =
+            tierBonus + Math.max(0, Math.min(0.6, (intendedUpscaleRatio - 1) * 0.35));
+          if (edit.qualityModel === 'high-quality') {
+            applyEdgePreservingDenoiseParams(
+              preImgData,
+              Math.max(1.2, (2.2 + resBoost * 1.4) * s),
+              Math.max(2, Math.round(3.5 * s))
+            );
+          } else {
+            applyEdgePreservingDenoiseParams(
+              preImgData,
+              Math.min(2.4, (1.4 + resBoost) * s),
+              2
+            );
+          }
+          ranPreDenoise = true;
+        }
+
+        if (hasPreUpscaleTools) {
+          applyPreUpscaleProToolsPass(
+            preImgData,
+            preUpscaleTools,
+            proToolStrength,
+            edit.colouriseProfile ?? 'warm-portrait',
+            Boolean(guard?.isMobileThermalGuard)
+          );
+        }
+
+        preCtx.putImageData(preImgData, 0, 0);
+      }
     }
 
+    // 2. Stepped high-quality scaling (<= 1.5x per pass) to final target resolution (HD/2K/3K/4K/8K)
+    if (currentCanvas.width !== targetDims.width || currentCanvas.height !== targetDims.height) {
+      const resized = resizeCanvas(currentCanvas, targetDims.width, targetDims.height, adapter);
+      if (resized !== currentCanvas) {
+        releaseCanvasSurface(currentCanvas);
+        currentCanvas = resized;
+      }
+    }
+
+    // 3. Single-Pass Fused Post-Upscale Buffer: ONE getImageData -> adjustments, clarity,
+    //    filter/grade, quality-model edge acutance & Pro sharpen -> ONE putImageData
     const effectiveSharpen = getEffectiveSharpenAmount(edit);
     const hasAdjustments =
       edit.adjustments.brightness !== 0 ||
@@ -365,49 +468,24 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
       edit.adjustments.temperature !== 0 ||
       edit.adjustments.tint !== 0;
 
-    const modelStrength = edit.qualityModelStrength ?? 80;
-    const hasProTools = (edit.proTools?.length ?? 0) > 0 && (edit.proToolStrength ?? 80) > 0;
     const needsQualityModelPass =
       modelStrength > 0 ||
       intendedUpscaleRatio > 1.05 ||
       targetPlan.appliedTargetResolution !== 'original';
 
-    const needsPixelPass =
+    const needsPostPixelPass =
       hasAdjustments ||
-      hasProTools ||
+      hasPostProSharpen ||
       (edit.photoFilterId !== 'original' && edit.photoFilterIntensity > 0) ||
       hasActiveColorGrade(edit.colorGrade) ||
-      edit.denoiseAmount > 0 ||
-      effectiveSharpen > 0 ||
+      edit.enhanceSuite.colorContrast.enabled ||
       needsQualityModelPass ||
-      edit.enhanceSuite.noise.enabled ||
-      edit.enhanceSuite.colorContrast.enabled;
+      effectiveSharpen > 0;
 
-    if (needsPixelPass) {
+    if (needsPostPixelPass) {
       const ctx = currentCanvas.getContext('2d');
       if (ctx) {
         const imgData = ctx.getImageData(0, 0, currentCanvas.width, currentCanvas.height);
-
-        if (edit.denoiseAmount > 0) {
-          const grainStrength = (edit.denoiseAmount / 100) * 8;
-          const colorSmooth = Math.max(2, Math.round((edit.denoiseAmount / 100) * 6));
-          applyEdgePreservingDenoiseParams(imgData, grainStrength, colorSmooth);
-        } else if (edit.enhanceSuite.noise.enabled) {
-          applyEdgePreservingDenoiseParams(
-            imgData,
-            edit.enhanceSuite.noise.grainStrength,
-            edit.enhanceSuite.noise.colorSmooth
-          );
-        }
-
-        if (hasProTools) {
-          applyProPhotoToolsPass(
-            imgData,
-            edit.proTools,
-            edit.proToolStrength ?? 80,
-            edit.colouriseProfile ?? 'warm-portrait'
-          );
-        }
 
         applyColorAdjustments(imgData, edit.adjustments);
         if (edit.adjustments.clarity !== 0) {
@@ -436,8 +514,13 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
             edit.qualityModel,
             intendedUpscaleRatio,
             modelStrength,
-            targetPlan.appliedTargetResolution
+            targetPlan.appliedTargetResolution,
+            { skipDenoise: ranPreDenoise }
           );
+        }
+
+        if (hasPostProSharpen) {
+          applyPostUpscaleProSharpen(imgData, activeProTools, proToolStrength);
         }
 
         applySharpen(imgData, effectiveSharpen, edit.enhanceSuite.sharpen.antiArtifact);

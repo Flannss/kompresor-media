@@ -1,3 +1,4 @@
+import type { PerformanceTier } from '../../shared/utils/deviceCapability';
 import type {
   VideoEditState,
   VideoMetadata,
@@ -91,42 +92,27 @@ export function getActiveVideoModuleLabels(edit: VideoEditState): string[] {
 }
 
 /**
- * Deterministic cross-device router:
- * Runs crisp libx264 FFmpeg WASM whenever MOV/MKV, Social-HD presets, 1080p/2K target resolution,
- * clarity models, enhancement suite, color grading, stabilizer, audio DSP, or softsub are active.
- * Reserves WebCodecs strictly for fast simple passthrough/light compression without filtergraphs.
+ * KM-T016 Hardware-First Video Router:
+ * Routes standard MP4/MOV exports (including Social-HD presets, 1080p/2K scaling, clarity
+ * enhancement, and color grading) through Hardware WebCodecs + GPU shader FIRST for
+ * desktop/mobile speed & cool thermals. Reserves CPU FFmpeg.wasm strictly for exclusive
+ * features (WebM/MKV containers, deshake stabilizer, hardsub/softsub burn, custom audio DSP,
+ * or manual temporal hqdn3d noise reduction).
  */
 export function shouldUseFfmpegBackend(edit: VideoEditState): boolean {
-  if (edit.outputFormat === 'mov' || edit.outputFormat === 'mkv') {
-    return true;
-  }
-  if (SOCIAL_HD_PRESET_IDS.has(edit.presetId)) {
-    return true;
-  }
-  if (edit.targetResolution === '1080p' || edit.targetResolution === '2k') {
-    return true;
-  }
-  if (
-    edit.clarityModel &&
-    edit.clarityModel !== 'original' &&
-    (edit.clarityStrength ?? 80) > 0
-  ) {
-    return true;
-  }
-  if (hasActiveEnhancements(edit.enhanceSuite) || hasActiveColorGrade(edit.colorGrade)) {
+  if (edit.outputFormat === 'webm' || edit.outputFormat === 'mkv') {
     return true;
   }
   if (edit.stabilize.enabled) {
     return true;
   }
+  if (edit.subtitle.enabled && edit.subtitle.cues.length > 0) {
+    return true;
+  }
   if (hasNonDefaultAudioProcessing(edit)) {
     return true;
   }
-  if (
-    edit.subtitle.enabled &&
-    edit.subtitle.mode === 'softsub' &&
-    edit.subtitle.cues.length > 0
-  ) {
+  if (edit.enhanceSuite.noise.enabled) {
     return true;
   }
   return false;
@@ -153,8 +139,11 @@ export interface BuiltFfmpegFilterGraph {
  */
 export function buildFfmpegFilterGraph(
   sourceMetadata: Pick<VideoMetadata, 'width' | 'height' | 'durationSec'>,
-  edit: VideoEditState
+  edit: VideoEditState,
+  performanceTier: PerformanceTier = 'desktop'
 ): BuiltFfmpegFilterGraph {
+  const isMobileTier =
+    performanceTier === 'low-memory-mobile' || performanceTier === 'standard-mobile';
   const trim = clampTrimRange(edit.trimStartSec, edit.trimEndSec, sourceMetadata.durationSec);
   const { noise, sharpen, colorContrast, upscale1080 } = edit.enhanceSuite;
   const targetRes = edit.targetResolution ?? 'original';
@@ -163,20 +152,22 @@ export function buildFfmpegFilterGraph(
 
   const dims = upscale1080.enabled
     ? compute1080pTargetDimensions(
-        sourceMetadata.width,
-        sourceMetadata.height,
-        upscale1080.keepAspect
-      )
+      sourceMetadata.width,
+      sourceMetadata.height,
+      upscale1080.keepAspect
+    )
     : computeVideoTargetDimensions(
-        sourceMetadata.width,
-        sourceMetadata.height,
-        targetRes,
-        edit.maxHeightPx
-      );
+      sourceMetadata.width,
+      sourceMetadata.height,
+      targetRes,
+      edit.maxHeightPx
+    );
 
   const vFilters: string[] = [];
 
-  // Step 1: Denoise BEFORE scaling to prevent amplifying grain/blockiness
+  // Step 1: Temporal denoise BEFORE scaling. On mobile CPU fallback, omit heavy 3D hqdn3d for
+  // Natural HD & Tajam 1080p (3x-4x cooler/faster while retaining lanczos + unsharp sharpness),
+  // reserving hqdn3d for Malam & Minim Cahaya, explicit noise toggle, or Desktop fallback.
   if (noise.enabled) {
     const lumaSpatial = noise.grainStrength.toFixed(1);
     const chromaSpatial = noise.colorSmooth.toFixed(1);
@@ -184,11 +175,11 @@ export function buildFfmpegFilterGraph(
     const chromaTemp = Math.max(1, Number((noise.motionStability * 0.72).toFixed(1))).toFixed(1);
     vFilters.push(`hqdn3d=${lumaSpatial}:${chromaSpatial}:${lumaTemp}:${chromaTemp}`);
   } else if (clarityScale > 0.01) {
-    if (clarityModel === 'natural-hd') {
+    if (clarityModel === 'natural-hd' && !isMobileTier) {
       vFilters.push(
         `hqdn3d=${(1.2 * clarityScale).toFixed(2)}:${(1.0 * clarityScale).toFixed(2)}:${(2.5 * clarityScale).toFixed(2)}:${(2.0 * clarityScale).toFixed(2)}`
       );
-    } else if (clarityModel === 'sharp-1080p') {
+    } else if (clarityModel === 'sharp-1080p' && !isMobileTier) {
       vFilters.push(
         `hqdn3d=${(1.4 * clarityScale).toFixed(2)}:${(1.1 * clarityScale).toFixed(2)}:${(3.0 * clarityScale).toFixed(2)}:${(2.4 * clarityScale).toFixed(2)}`
       );
@@ -315,13 +306,22 @@ export function buildFfmpegArgs(params: {
   edit: VideoEditState;
   subtitleInputFileName?: string | null;
   forceSoftsubFallback?: boolean;
+  performanceTier?: PerformanceTier;
 }): BuiltFfmpegArgs {
-  const { inputFileNameOnFs, sourceMetadata, edit, subtitleInputFileName, forceSoftsubFallback } =
-    params;
+  const {
+    inputFileNameOnFs,
+    sourceMetadata,
+    edit,
+    subtitleInputFileName,
+    forceSoftsubFallback,
+    performanceTier = 'desktop',
+  } = params;
 
+  const isMobileTier =
+    performanceTier === 'low-memory-mobile' || performanceTier === 'standard-mobile';
   const formatMeta = getVideoFormatMeta(edit.outputFormat);
   const outputFileNameOnFs = `output.${formatMeta.ext}`;
-  const fg = buildFfmpegFilterGraph(sourceMetadata, edit);
+  const fg = buildFfmpegFilterGraph(sourceMetadata, edit, performanceTier);
 
   const crf = edit.compressEnabled
     ? hasActiveEnhancements(edit.enhanceSuite)
@@ -390,7 +390,8 @@ export function buildFfmpegArgs(params: {
       '-level',
       '4.1',
       '-preset',
-      'veryfast',
+      isMobileTier ? 'superfast' : 'veryfast',
+      ...(isMobileTier ? ['-tune', 'fastdecode'] : []),
       '-crf',
       String(crf),
       '-maxrate',

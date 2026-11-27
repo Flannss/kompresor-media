@@ -85,7 +85,7 @@ export const COLOURISE_PROFILE_OPTIONS: ReadonlyArray<{
   { id: 'classic-natural', label: 'Klasik Natural' },
 ] as const;
 
-const OPTICAL_EXECUTION_ORDER: readonly ProPhotoToolId[] = [
+export const PRE_UPSCALE_PRO_TOOLS: readonly ProPhotoToolId[] = [
   'restore',
   'dehaze',
   'remove-motion-blur',
@@ -94,6 +94,10 @@ const OPTICAL_EXECUTION_ORDER: readonly ProPhotoToolId[] = [
   'colourise',
   'enhance-face',
   'face-restoration',
+] as const;
+
+const OPTICAL_EXECUTION_ORDER: readonly ProPhotoToolId[] = [
+  ...PRE_UPSCALE_PRO_TOOLS,
   'sharpen',
 ];
 
@@ -152,6 +156,7 @@ function separableBoxBlurFloat(
   let temp = new Float32Array(n);
   let next = new Float32Array(n);
 
+  const invWin = 1 / (radius * 2 + 1);
   for (let pass = 0; pass < passes; pass += 1) {
     // Horizontal pass with clamped sliding window
     for (let y = 0; y < height; y += 1) {
@@ -160,26 +165,24 @@ function separableBoxBlurFloat(
       for (let k = 1; k <= radius; k += 1) {
         sum += curr[row + Math.min(width - 1, k)];
       }
-      const win = radius * 2 + 1;
       for (let x = 0; x < width; x += 1) {
-        temp[row + x] = sum / win;
-        const removeX = Math.max(0, x - radius);
-        const addX = Math.min(width - 1, x + radius + 1);
+        temp[row + x] = sum * invWin;
+        const removeX = x > radius ? x - radius : 0;
+        const addX = x + radius + 1 < width ? x + radius + 1 : width - 1;
         sum += curr[row + addX] - curr[row + removeX];
       }
     }
 
     // Vertical pass
-    const win = radius * 2 + 1;
     for (let x = 0; x < width; x += 1) {
       let sum = temp[x] * (radius + 1);
       for (let k = 1; k <= radius; k += 1) {
-        sum += temp[Math.min(height - 1, k) * width + x];
+        sum += temp[(k < height ? k : height - 1) * width + x];
       }
       for (let y = 0; y < height; y += 1) {
-        next[y * width + x] = sum / win;
-        const removeY = Math.max(0, y - radius);
-        const addY = Math.min(height - 1, y + radius + 1);
+        next[y * width + x] = sum * invWin;
+        const removeY = y > radius ? y - radius : 0;
+        const addY = y + radius + 1 < height ? y + radius + 1 : height - 1;
         sum += temp[addY * width + x] - temp[removeY * width + x];
       }
     }
@@ -192,7 +195,42 @@ function separableBoxBlurFloat(
   return curr;
 }
 
-/** O(W*H*r) separable 1D horizontal + vertical min-filter for Dark Channel Prior. */
+function minFilter1D(
+  src: Float32Array,
+  dst: Float32Array,
+  offset: number,
+  stride: number,
+  len: number,
+  radius: number,
+  deque: Int32Array
+): void {
+  let head = 0;
+  let tail = 0;
+  const pushIdx = (idx: number) => {
+    const val = src[offset + idx * stride];
+    while (tail > head && src[offset + deque[tail - 1] * stride] >= val) {
+      tail -= 1;
+    }
+    deque[tail++] = idx;
+  };
+  const preEnd = Math.min(len, radius);
+  for (let i = 0; i < preEnd; i += 1) {
+    pushIdx(i);
+  }
+  for (let i = 0; i < len; i += 1) {
+    const addIdx = i + radius;
+    if (addIdx < len) {
+      pushIdx(addIdx);
+    }
+    const minAllowed = i - radius;
+    while (head < tail && deque[head] < minAllowed) {
+      head += 1;
+    }
+    dst[offset + i * stride] = src[offset + deque[head] * stride];
+  }
+}
+
+/** O(W*H) separable monotonic-deque 2D min-filter for Dark Channel Prior. */
 function separableMinFilterFloat(
   src: Float32Array,
   width: number,
@@ -200,35 +238,16 @@ function separableMinFilterFloat(
   radius: number
 ): Float32Array {
   const n = width * height;
-  if (radius <= 0) return new Float32Array(src);
+  if (radius <= 0 || width < 1 || height < 1) return new Float32Array(src);
   const temp = new Float32Array(n);
   const out = new Float32Array(n);
+  const deque = new Int32Array(Math.max(width, height));
 
   for (let y = 0; y < height; y += 1) {
-    const row = y * width;
-    for (let x = 0; x < width; x += 1) {
-      const x0 = Math.max(0, x - radius);
-      const x1 = Math.min(width - 1, x + radius);
-      let m = 1e9;
-      for (let k = x0; k <= x1; k += 1) {
-        const v = src[row + k];
-        if (v < m) m = v;
-      }
-      temp[row + x] = m;
-    }
+    minFilter1D(src, temp, y * width, 1, width, radius, deque);
   }
-
-  for (let y = 0; y < height; y += 1) {
-    const y0 = Math.max(0, y - radius);
-    const y1 = Math.min(height - 1, y + radius);
-    for (let x = 0; x < width; x += 1) {
-      let m = 1e9;
-      for (let k = y0; k <= y1; k += 1) {
-        const v = temp[k * width + x];
-        if (v < m) m = v;
-      }
-      out[y * width + x] = m;
-    }
+  for (let x = 0; x < width; x += 1) {
+    minFilter1D(temp, out, x, width, height, radius, deque);
   }
 
   return out;
@@ -537,7 +556,7 @@ function runProEnhanceFace(imageData: ImageData, s: number): void {
 }
 
 /** Tool 4: Iterative Richardson-Lucy luminance deconvolution with ringing envelope (Hilangkan Blur). */
-function runProDeblur(imageData: ImageData, s: number): void {
+function runProDeblur(imageData: ImageData, s: number, mobileFast = false): void {
   const { width, height, data } = imageData;
   const n = width * height;
   if (width < 3 || height < 3) return;
@@ -548,49 +567,52 @@ function runProDeblur(imageData: ImageData, s: number): void {
     observed[i] = Math.max(0.008, srcLuma[i] / 255);
   }
 
-  let estimate = new Float32Array(observed);
-  const iterations = n > 2_500_000 ? 3 : 4;
+  const estimate = new Float32Array(observed);
+  const ratio = new Float32Array(n);
+  const iterations = mobileFast ? 3 : n > 2_500_000 ? 3 : 4;
   for (let iter = 0; iter < iterations; iter += 1) {
     const conv = convolvePsf5x5(estimate, width, height);
-    const ratio = new Float32Array(n);
     for (let i = 0; i < n; i += 1) {
       ratio[i] = observed[i] / Math.max(0.008, conv[i]);
     }
     const corr = convolvePsf5x5(ratio, width, height);
     for (let i = 0; i < n; i += 1) {
-      estimate[i] = Math.min(1, Math.max(0.004, estimate[i] * corr[i]));
+      const nextVal = estimate[i] * corr[i];
+      estimate[i] = nextVal < 0.004 ? 0.004 : nextVal > 1 ? 1 : nextVal;
     }
   }
 
-  // Ringing envelope guard against 3x3 neighborhood min/max
+  // Ringing envelope guard against 3x3 neighborhood min/max (zero per-pixel allocations)
   const eps = 38 * s;
   const targetLuma = new Float32Array(n);
   const blend = Math.min(1, s * 1.15);
+  const residualGain = 1.25 + 0.65 * s;
   for (let y = 0; y < height; y += 1) {
-    const ym = Math.max(0, y - 1) * width;
+    const ym = (y > 0 ? y - 1 : 0) * width;
     const yc = y * width;
-    const yp = Math.min(height - 1, y + 1) * width;
+    const yp = (y + 1 < height ? y + 1 : height - 1) * width;
     for (let x = 0; x < width; x += 1) {
-      const xm = Math.max(0, x - 1);
-      const xp = Math.min(width - 1, x + 1);
+      const xm = x > 0 ? x - 1 : 0;
+      const xp = x + 1 < width ? x + 1 : width - 1;
       const idx = yc + x;
 
-      let localMin = 255;
-      let localMax = 0;
-      const rows = [ym, yc, yp];
-      for (let r = 0; r < 3; r += 1) {
-        const ro = rows[r];
-        for (const cx of [xm, x, xp]) {
-          const lv = srcLuma[ro + cx];
-          if (lv < localMin) localMin = lv;
-          if (lv > localMax) localMax = lv;
-        }
-      }
+      const v0 = srcLuma[ym + xm];
+      const v1 = srcLuma[ym + x];
+      const v2 = srcLuma[ym + xp];
+      const v3 = srcLuma[yc + xm];
+      const v4 = srcLuma[idx];
+      const v5 = srcLuma[yc + xp];
+      const v6 = srcLuma[yp + xm];
+      const v7 = srcLuma[yp + x];
+      const v8 = srcLuma[yp + xp];
+
+      const localMin = Math.min(v0, v1, v2, v3, v4, v5, v6, v7, v8);
+      const localMax = Math.max(v0, v1, v2, v3, v4, v5, v6, v7, v8);
 
       const rawDeblurred = estimate[idx] * 255;
       const guarded = Math.min(localMax + eps, Math.max(localMin - eps, rawDeblurred));
-      const residual = guarded - srcLuma[idx];
-      targetLuma[idx] = Math.min(255, Math.max(0, srcLuma[idx] + residual * (1.25 + 0.65 * s)));
+      const nextL = v4 + (guarded - v4) * residualGain;
+      targetLuma[idx] = nextL < 0 ? 0 : nextL > 255 ? 255 : nextL;
     }
   }
 
@@ -676,7 +698,7 @@ function runProDehaze(imageData: ImageData, s: number): void {
 }
 
 /** Tool 6: Structure-tensor motion axis detection + directional deconvolution (Kurangi Blur Gerak). */
-function runProRemoveMotionBlur(imageData: ImageData, s: number): void {
+function runProRemoveMotionBlur(imageData: ImageData, s: number, mobileFast = false): void {
   const { width, height, data } = imageData;
   const n = width * height;
   if (width < 4 || height < 4) return;
@@ -729,17 +751,18 @@ function runProRemoveMotionBlur(imageData: ImageData, s: number): void {
     observed[i] = Math.max(0.008, srcLuma[i] / 255);
   }
 
-  let estimate = new Float32Array(observed);
-  const iterations = n > 2_500_000 ? 3 : 5;
+  const estimate = new Float32Array(observed);
+  const ratio = new Float32Array(n);
+  const iterations = mobileFast ? 3 : n > 2_500_000 ? 3 : 5;
   for (let iter = 0; iter < iterations; iter += 1) {
     const conv = convolveDirectionalPsf(estimate, width, height, ux, uy, 1.45);
-    const ratio = new Float32Array(n);
     for (let i = 0; i < n; i += 1) {
       ratio[i] = observed[i] / Math.max(0.008, conv[i]);
     }
     const corr = convolveDirectionalPsf(ratio, width, height, ux, uy, 1.45);
     for (let i = 0; i < n; i += 1) {
-      estimate[i] = Math.min(1, Math.max(0.004, estimate[i] * corr[i]));
+      const v = estimate[i] * corr[i];
+      estimate[i] = v < 0.004 ? 0.004 : v > 1 ? 1 : v;
     }
   }
 
@@ -791,24 +814,21 @@ function runProRestore(imageData: ImageData, s: number): void {
     const yc = y * width;
     const yp = (y + 1) * width;
     for (let x = 1; x < width - 1; x += 1) {
+      const xm = x - 1;
+      const xp = x + 1;
       const idx = yc + x;
       const lc = srcLuma[idx];
-      let k = 0;
-      let sumR = 0;
-      let sumG = 0;
-      let sumB = 0;
-      for (const ro of [ym, yc, yp]) {
-        for (const cx of [x - 1, x, x + 1]) {
-          const ni = ro + cx;
-          window9[k++] = srcLuma[ni];
-          if (ni !== idx) {
-            const np = ni * 4;
-            sumR += data[np];
-            sumG += data[np + 1];
-            sumB += data[np + 2];
-          }
-        }
-      }
+
+      window9[0] = srcLuma[ym + xm];
+      window9[1] = srcLuma[ym + x];
+      window9[2] = srcLuma[ym + xp];
+      window9[3] = srcLuma[yc + xm];
+      window9[4] = lc;
+      window9[5] = srcLuma[yc + xp];
+      window9[6] = srcLuma[yp + xm];
+      window9[7] = srcLuma[yp + x];
+      window9[8] = srcLuma[yp + xp];
+
       // Partial insertion sort for median (index 4)
       for (let a = 1; a < 9; a += 1) {
         const val = window9[a];
@@ -821,17 +841,46 @@ function runProRestore(imageData: ImageData, s: number): void {
       }
       const medL = window9[4];
       if (Math.abs(lc - medL) > outlierThresh) {
-        // Also ensure it is an isolated speckle (neighbors agree near median)
         let closeNeighbors = 0;
+        const closeThresh = outlierThresh * 0.7;
         for (let m = 0; m < 9; m += 1) {
-          if (Math.abs(window9[m] - medL) < outlierThresh * 0.7) closeNeighbors += 1;
+          if (Math.abs(window9[m] - medL) < closeThresh) closeNeighbors += 1;
         }
         if (closeNeighbors >= 5) {
+          let sumR = 0;
+          let sumG = 0;
+          let sumB = 0;
+          const p0 = (ym + xm) * 4;
+          const p1 = (ym + x) * 4;
+          const p2 = (ym + xp) * 4;
+          const p3 = (yc + xm) * 4;
+          const p5 = (yc + xp) * 4;
+          const p6 = (yp + xm) * 4;
+          const p7 = (yp + x) * 4;
+          const p8 = (yp + xp) * 4;
+          sumR = data[p0] + data[p1] + data[p2] + data[p3] + data[p5] + data[p6] + data[p7] + data[p8];
+          sumG =
+            data[p0 + 1] +
+            data[p1 + 1] +
+            data[p2 + 1] +
+            data[p3 + 1] +
+            data[p5 + 1] +
+            data[p6 + 1] +
+            data[p7 + 1] +
+            data[p8 + 1];
+          sumB =
+            data[p0 + 2] +
+            data[p1 + 2] +
+            data[p2 + 2] +
+            data[p3 + 2] +
+            data[p5 + 2] +
+            data[p6 + 2] +
+            data[p7 + 2] +
+            data[p8 + 2];
           const p = idx * 4;
-          const avgR = sumR / 8;
-          const avgG = sumG / 8;
-          const avgB = sumB / 8;
-          // Impulse dust specks must be replaced strongly before histogram stretching re-amplifies them
+          const avgR = sumR * 0.125;
+          const avgG = sumG * 0.125;
+          const avgB = sumB * 0.125;
           const dustMix = Math.min(1, s * 1.45);
           cleaned[p] = clampByte(data[p] + (avgR - data[p]) * dustMix);
           cleaned[p + 1] = clampByte(data[p + 1] + (avgG - data[p + 1]) * dustMix);
@@ -841,7 +890,7 @@ function runProRestore(imageData: ImageData, s: number): void {
     }
   }
 
-  // Stage B: Per-channel 1%-99% histogram stretch & sepia/yellow cast neutralization
+  // Stage B: Precomputed 256-entry 1%-99% histogram stretch LUTs & cast neutralization
   const histR = new Uint32Array(256);
   const histG = new Uint32Array(256);
   const histB = new Uint32Array(256);
@@ -853,26 +902,29 @@ function runProRestore(imageData: ImageData, s: number): void {
   }
 
   const lowR = findPercentileFromHistogram(histR, n, 0.01);
-  const highR = Math.max(lowR + 12, findPercentileFromHistogram(histR, n, 0.99));
+  const spanR = Math.max(12, findPercentileFromHistogram(histR, n, 0.99) - lowR);
   const lowG = findPercentileFromHistogram(histG, n, 0.01);
-  const highG = Math.max(lowG + 12, findPercentileFromHistogram(histG, n, 0.99));
+  const spanG = Math.max(12, findPercentileFromHistogram(histG, n, 0.99) - lowG);
   const lowB = findPercentileFromHistogram(histB, n, 0.01);
-  const highB = Math.max(lowB + 12, findPercentileFromHistogram(histB, n, 0.99));
+  const spanB = Math.max(12, findPercentileFromHistogram(histB, n, 0.99) - lowB);
 
   const stretchBlend = 0.85 * s;
+  const lutR = new Uint8ClampedArray(256);
+  const lutG = new Uint8ClampedArray(256);
+  const lutB = new Uint8ClampedArray(256);
+  for (let v = 0; v < 256; v += 1) {
+    const sr = clamp01((v - lowR) / spanR) * 246 + 5;
+    const sg = clamp01((v - lowG) / spanG) * 246 + 5;
+    const sb = clamp01((v - lowB) / spanB) * 246 + 5;
+    lutR[v] = clampByte(v + (sr - v) * stretchBlend);
+    lutG[v] = clampByte(v + (sg - v) * stretchBlend);
+    lutB[v] = clampByte(v + (sb - v) * stretchBlend);
+  }
   for (let i = 0; i < n; i += 1) {
     const p = i * 4;
-    const r0 = cleaned[p];
-    const g0 = cleaned[p + 1];
-    const b0 = cleaned[p + 2];
-
-    const sr = clamp01((r0 - lowR) / (highR - lowR)) * 246 + 5;
-    const sg = clamp01((g0 - lowG) / (highG - lowG)) * 246 + 5;
-    const sb = clamp01((b0 - lowB) / (highB - lowB)) * 246 + 5;
-
-    data[p] = clampByte(r0 + (sr - r0) * stretchBlend);
-    data[p + 1] = clampByte(g0 + (sg - g0) * stretchBlend);
-    data[p + 2] = clampByte(b0 + (sb - b0) * stretchBlend);
+    data[p] = lutR[cleaned[p]];
+    data[p + 1] = lutG[cleaned[p + 1]];
+    data[p + 2] = lutB[cleaned[p + 2]];
   }
 
   // Stage C: Structural detail clarity lift
@@ -1027,10 +1079,10 @@ function runProFaceRestoration(imageData: ImageData, s: number): void {
   const luma = extractLuma(skinRestored, n);
   const obs = new Float32Array(n);
   for (let i = 0; i < n; i += 1) obs[i] = Math.max(0.008, luma[i] / 255);
-  let est = new Float32Array(obs);
+  const est = new Float32Array(obs);
+  const ratio = new Float32Array(n);
   for (let iter = 0; iter < 2; iter += 1) {
     const conv = convolvePsf5x5(est, width, height);
-    const ratio = new Float32Array(n);
     for (let i = 0; i < n; i += 1) ratio[i] = obs[i] / Math.max(0.008, conv[i]);
     const corr = convolvePsf5x5(ratio, width, height);
     for (let i = 0; i < n; i += 1) est[i] = Math.min(1, Math.max(0.004, est[i] * corr[i]));
@@ -1064,7 +1116,8 @@ export function applyProPhotoTool(
   imageData: ImageData,
   toolId: ProPhotoToolId,
   strength = 80,
-  colouriseProfile: ColouriseToneProfile = 'warm-portrait'
+  colouriseProfile: ColouriseToneProfile = 'warm-portrait',
+  mobileFast = false
 ): void {
   const s = normalizeStrength(strength);
   if (s <= 0.001) {
@@ -1082,13 +1135,13 @@ export function applyProPhotoTool(
       runProEnhanceFace(imageData, s);
       return;
     case 'deblur':
-      runProDeblur(imageData, s);
+      runProDeblur(imageData, s, mobileFast);
       return;
     case 'dehaze':
       runProDehaze(imageData, s);
       return;
     case 'remove-motion-blur':
-      runProRemoveMotionBlur(imageData, s);
+      runProRemoveMotionBlur(imageData, s, mobileFast);
       return;
     case 'restore':
       runProRestore(imageData, s);
@@ -1101,11 +1154,42 @@ export function applyProPhotoTool(
   }
 }
 
+/** Runs structural, denoising, dehaze, deconvolution, skin, colourise, and restoration passes prior to upscaling. */
+export function applyPreUpscaleProToolsPass(
+  imageData: ImageData,
+  tools: readonly ProPhotoToolId[] | undefined,
+  strength = 80,
+  colouriseProfile: ColouriseToneProfile = 'warm-portrait',
+  mobileFast = false
+): void {
+  if (!tools || tools.length === 0) return;
+  const s = normalizeStrength(strength);
+  if (s <= 0.001) return;
+
+  const activeSet = new Set(tools);
+  for (const orderedTool of PRE_UPSCALE_PRO_TOOLS) {
+    if (activeSet.has(orderedTool)) {
+      applyProPhotoTool(imageData, orderedTool, strength, colouriseProfile, mobileFast);
+    }
+  }
+}
+
+/** Runs lightweight post-upscale multi-scale anti-halo edge sharpening after final target resize. */
+export function applyPostUpscaleProSharpen(
+  imageData: ImageData,
+  tools: readonly ProPhotoToolId[] | undefined,
+  strength = 80
+): void {
+  if (!tools || !tools.includes('sharpen')) return;
+  applyProPhotoTool(imageData, 'sharpen', strength);
+}
+
 export function applyProPhotoToolsPass(
   imageData: ImageData,
   tools: readonly ProPhotoToolId[] | undefined,
   strength = 80,
-  colouriseProfile: ColouriseToneProfile = 'warm-portrait'
+  colouriseProfile: ColouriseToneProfile = 'warm-portrait',
+  mobileFast = false
 ): void {
   if (!tools || tools.length === 0) return;
   const s = normalizeStrength(strength);
@@ -1114,7 +1198,7 @@ export function applyProPhotoToolsPass(
   const activeSet = new Set(tools);
   for (const orderedTool of OPTICAL_EXECUTION_ORDER) {
     if (activeSet.has(orderedTool)) {
-      applyProPhotoTool(imageData, orderedTool, strength, colouriseProfile);
+      applyProPhotoTool(imageData, orderedTool, strength, colouriseProfile, mobileFast);
     }
   }
 }

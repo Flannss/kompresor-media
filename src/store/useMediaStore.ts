@@ -20,6 +20,7 @@ import {
   processImage,
 } from '../engines/image/imageEngineClient';
 import { VideoCancelledError } from '../engines/video/videoErrors';
+import { shouldUseFfmpegBackend } from '../engines/video/videoFilterGraph';
 import { resolveCustomVideoParams } from '../engines/video/videoPresets';
 import { validateMediaFile } from '../features/upload/fileValidator';
 import { readMediaMetadata } from '../features/upload/metadataReader';
@@ -56,6 +57,8 @@ export interface QueueItem {
   errorMessage: string | null;
   baseThumbnailUrl: string | null;
   processSeq: number;
+  editGeneration?: number;
+  renderedFullResGeneration?: number | null;
 }
 
 const MAX_HISTORY_ENTRIES = 30;
@@ -374,6 +377,7 @@ async function processPhotoItem(
   }
 
   const nextSeq = targetItem.processSeq + 1;
+  const startEditGen = targetItem.editGeneration ?? 0;
   updateItemInStore(get, set, itemId, (item) => ({
     ...item,
     status: 'processing',
@@ -396,6 +400,7 @@ async function processPhotoItem(
       ...(previewCapPx ? { previewMaxEdgePx: previewCapPx } : {}),
       maxCanvasPixels: profile.maxPhotoCanvasPixels,
       allow8K: profile.allow8KPhotoExport,
+      isMobileThermalGuard: profile.performanceTier !== 'desktop',
     });
 
     const currentAfter = get().items.find((i) => i.id === itemId);
@@ -417,6 +422,7 @@ async function processPhotoItem(
             outputUrl: nextUrl,
             errorMessage: null,
             needsFullResExport: previewOnly,
+            renderedFullResGeneration: previewOnly ? it.renderedFullResGeneration ?? null : startEditGen,
           }
           : it
       );
@@ -472,6 +478,14 @@ async function processVideoItem(
   const prevUrl = item.outputUrl;
   const revokedDelta = revokeIfPresent(prevUrl);
   const seq = item.processSeq + 1;
+  const initialBackend: VideoExecutionBackend =
+    preferredBackend === 'ffmpeg-wasm-st'
+      ? 'ffmpeg-wasm-st'
+      : preferredBackend === 'webcodecs-mediabunny'
+        ? 'webcodecs-mediabunny'
+        : shouldUseFfmpegBackend(item.videoEdit)
+          ? 'ffmpeg-wasm-st'
+          : 'webcodecs-mediabunny';
 
   set((state) => {
     const items = state.items.map((it) =>
@@ -482,14 +496,14 @@ async function processVideoItem(
           progress: 2,
           videoProgress: {
             requestId: `vid-${itemId}-${seq}`,
-            backend:
-              preferredBackend === 'ffmpeg-wasm-st'
-                ? ('ffmpeg-wasm-st' as const)
-                : ('webcodecs-mediabunny' as const),
+            backend: initialBackend,
             stage: 'probing' as const,
             ratio: 0.02,
             elapsedMs: 0,
-            detail: 'Menyiapkan pemrosesan video…',
+            detail:
+              initialBackend === 'webcodecs-mediabunny'
+                ? 'Menyiapkan akselerasi hardware GPU…'
+                : 'Menyiapkan pemrosesan video…',
           },
           videoResult: null,
           outputUrl: null,
@@ -567,6 +581,10 @@ async function processVideoItem(
       errorMessage: null,
     }));
   } catch (err) {
+    const curAfterErr = get().items.find((i) => i.id === itemId);
+    if (!curAfterErr || curAfterErr.processSeq !== seq) {
+      return;
+    }
     if (err instanceof VideoCancelledError || controller.signal.aborted) {
       updateItemInStore(get, set, itemId, (it) => ({
         ...it,
@@ -770,6 +788,8 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
           errorMessage: null,
           baseThumbnailUrl: null,
           processSeq: 0,
+          editGeneration: 0,
+          renderedFullResGeneration: null,
         });
 
         totalCount += 1;
@@ -1023,6 +1043,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       photoHistoryIndex: pushed.index,
       needsFullResExport: preferPreview,
       processSeq: it.processSeq + 1,
+      editGeneration: (it.editGeneration ?? 0) + 1,
     }));
     void processPhotoItem(active.id, get, set, preferPreview);
   },
@@ -1038,6 +1059,8 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
 
     if (active.metadata.kind === 'image') {
       const template = cloneImageEdit(active.imageEdit);
+      const profile = get().deviceProfile;
+      const preferPreviewMode = shouldUsePreviewMode(template, profile);
       set((state) => {
         const items = state.items.map((it) => {
           if (it.id === active.id || it.metadata.kind !== 'image') {
@@ -1051,6 +1074,9 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
             imageEdit: cloned,
             photoHistory: pushed.history,
             photoHistoryIndex: pushed.index,
+            needsFullResExport: preferPreviewMode,
+            processSeq: it.processSeq + 1,
+            editGeneration: (it.editGeneration ?? 0) + 1,
           };
         });
         return {
@@ -1058,8 +1084,6 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
           queueLimitNotice: `Pengaturan foto (${sameKindTargets.length + 1} file) berhasil disamakan.`,
         };
       });
-      const profile = get().deviceProfile;
-      const preferPreviewMode = shouldUsePreviewMode(template, profile);
       for (const peer of sameKindTargets) {
         void processPhotoItem(peer.id, get, set, preferPreviewMode);
       }
@@ -1155,6 +1179,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
           imageEdit: nextEdit,
           needsFullResExport: true,
           processSeq: it.processSeq + 1,
+          editGeneration: (it.editGeneration ?? 0) + 1,
         };
       }
       const pushed = pushSnapshot(it.photoHistory, it.photoHistoryIndex, nextEdit);
@@ -1166,6 +1191,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
         photoHistoryIndex: pushed.index,
         needsFullResExport: preferPreview,
         processSeq: it.processSeq + 1,
+        editGeneration: (it.editGeneration ?? 0) + 1,
       };
     });
 
@@ -1324,7 +1350,18 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     if (!item || item.metadata.kind !== 'image') return null;
     const hadPendingTimer = previewTimers.has(id);
     clearItemTimers(id);
-    if (!hadPendingTimer && !item.needsFullResExport && item.imageResult && item.outputUrl) {
+    const genMatches =
+      item.renderedFullResGeneration === undefined ||
+      item.renderedFullResGeneration === (item.editGeneration ?? 0);
+    if (
+      !hadPendingTimer &&
+      !item.needsFullResExport &&
+      genMatches &&
+      item.imageResult &&
+      item.outputUrl &&
+      item.imageResult.outputMime === item.imageEdit.outputFormat &&
+      item.imageResult.outputBlob.size > 0
+    ) {
       return { result: item.imageResult, url: item.outputUrl };
     }
     await processPhotoItem(id, get, set, false);
@@ -1383,6 +1420,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       selectedPresetId: snapshot.presetId,
       photoHistoryIndex: nextIndex,
       processSeq: it.processSeq + 1,
+      editGeneration: (it.editGeneration ?? 0) + 1,
     }));
     void processPhotoItem(
       active.id,
@@ -1417,6 +1455,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       selectedPresetId: snapshot.presetId,
       photoHistoryIndex: nextIndex,
       processSeq: it.processSeq + 1,
+      editGeneration: (it.editGeneration ?? 0) + 1,
     }));
     void processPhotoItem(
       active.id,
@@ -1456,6 +1495,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       photoHistory: pushed.history,
       photoHistoryIndex: pushed.index,
       processSeq: it.processSeq + 1,
+      editGeneration: (it.editGeneration ?? 0) + 1,
     }));
     void processPhotoItem(
       active.id,

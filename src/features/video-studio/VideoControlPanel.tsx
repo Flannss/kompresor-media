@@ -182,6 +182,22 @@ function getStageLabel(progress: VideoProcessProgress | null): string {
   }
 }
 
+function formatVideoEngineStatus(progress: VideoProcessProgress | null, pct: number): string {
+  const modeLabel =
+    progress?.backend === 'ffmpeg-wasm-st' ? 'Mode CPU' : 'Mode Cepat Hardware';
+  if (
+    progress &&
+    progress.ratio >= 0.08 &&
+    progress.ratio < 0.99 &&
+    progress.elapsedMs >= 400
+  ) {
+    const remainingMs = (progress.elapsedMs * (1 - progress.ratio)) / progress.ratio;
+    const etaSec = Math.max(1, Math.round(remainingMs / 1000));
+    return `${modeLabel} · ${pct}% · ~${etaSec} dtk`;
+  }
+  return `${modeLabel} · ${pct}%`;
+}
+
 export function VideoControlPanel({
   metadata,
   deviceProfile,
@@ -1503,9 +1519,15 @@ export function VideoControlPanel({
                 style={{ width: `${Math.max(4, progressPct)}%` }}
               />
             </div>
-            <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)] tabular-nums">
+            <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--text-muted)] tabular-nums">
+              <span
+                data-testid="video-engine-status"
+                className="font-medium text-[var(--text-secondary)]"
+              >
+                {formatVideoEngineStatus(videoProgress, progressPct)}
+              </span>
               <span>
-                Waktu berjalan:{' '}
+                Waktu:{' '}
                 {videoProgress ? (videoProgress.elapsedMs / 1000).toFixed(1).replace('.', ',') : '0,0'} dtk
               </span>
             </div>

@@ -134,6 +134,8 @@ export interface ImageProcessRequest {
   maxCanvasPixels?: number;
   /** Whether 8K export is permitted on this device. */
   allow8K?: boolean;
+  /** Enables mobile thermal-safe caps & iteration bounds in worker/DSP pipeline. */
+  isMobileThermalGuard?: boolean;
 }
 
 export type ImageExecutionBackend = 'worker-offscreen-canvas' | 'main-thread-canvas-fallback';

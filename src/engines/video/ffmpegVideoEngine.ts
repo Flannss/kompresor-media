@@ -159,12 +159,14 @@ export async function runFfmpegVideoTranscode(
       }
     : edit;
 
+  const profile = getDeviceProfile();
   const built = buildFfmpegArgs({
     inputFileNameOnFs: inputName,
     sourceMetadata,
     edit: intermediateEdit,
     subtitleInputFileName: subFileName,
     forceSoftsubFallback: wantsHardsub && !canBurnHardsubViaWebCodecs,
+    performanceTier: profile.performanceTier,
   });
 
   try {
@@ -238,6 +240,7 @@ export async function runFfmpegVideoTranscode(
           },
           edit: {
             ...edit,
+            targetResolution: 'original',
             maxHeightPx: built.filterGraph.targetHeight,
             trimStartSec: 0,
             trimEndSec: null,
@@ -289,7 +292,10 @@ export async function runFfmpegVideoTranscode(
       elapsedMs: performance.now() - t0,
     });
 
+    const presetTag =
+      profile.performanceTier === 'desktop' ? 'veryfast' : 'superfast';
     const engineDetailParts = [
+      `ffmpeg-wasm-st (${presetTag})`,
       built.filterGraph.vfChain ? `vf=${built.filterGraph.vfChain}` : '',
       built.filterGraph.afChain ? `af=${built.filterGraph.afChain}` : '',
     ].filter(Boolean);
@@ -305,7 +311,7 @@ export async function runFfmpegVideoTranscode(
       outputHeight: finalHeight,
       durationSec: finalDuration,
       notice,
-      engineDetail: engineDetailParts.length > 0 ? engineDetailParts.join(' · ') : 'ffmpeg-wasm-st (1-pass)',
+      engineDetail: engineDetailParts.join(' · '),
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

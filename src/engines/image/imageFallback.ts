@@ -63,6 +63,7 @@ export async function runMainThreadImageFallback(
       {
         maxCanvasPixels: request.maxCanvasPixels,
         allow8K: request.allow8K,
+        isMobileThermalGuard: request.isMobileThermalGuard,
       }
     );
 

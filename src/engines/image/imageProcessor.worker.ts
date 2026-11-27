@@ -21,6 +21,7 @@ export type ImageWorkerRequest =
       previewMaxEdgePx?: number;
       maxCanvasPixels?: number;
       allow8K?: boolean;
+      isMobileThermalGuard?: boolean;
     }
   | {
       type: 'base-thumbnail';
@@ -169,6 +170,7 @@ workerScope.onmessage = async (event: MessageEvent<ImageWorkerRequest>) => {
       {
         maxCanvasPixels: payload.maxCanvasPixels,
         allow8K: payload.allow8K,
+        isMobileThermalGuard: payload.isMobileThermalGuard,
       }
     );
     const outputBuffer = await out.blob.arrayBuffer();

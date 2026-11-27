@@ -27,6 +27,7 @@ export interface PixelCropRect {
 export interface PhotoCanvasGuardrails {
   maxCanvasPixels?: number;
   allow8K?: boolean;
+  isMobileThermalGuard?: boolean;
 }
 
 export interface PhotoTargetResolutionResult extends Dimensions {
@@ -704,7 +705,8 @@ export function applyQualityModelPass(
   qualityModel: PhotoQualityModel,
   upscaleRatio: number,
   modelStrength = 80,
-  targetResolution: PhotoTargetResolution = 'original'
+  targetResolution: PhotoTargetResolution = 'original',
+  options?: { skipDenoise?: boolean }
 ): void {
   const s = Math.min(1, Math.max(0, modelStrength / 100));
   const tierBonus =
@@ -730,11 +732,13 @@ export function applyQualityModelPass(
 
   switch (qualityModel) {
     case 'high-quality': {
-      applyEdgePreservingDenoiseParams(
-        imageData,
-        Math.max(1.2, (2.2 + resBoost * 1.4) * s),
-        Math.max(2, Math.round(3.5 * s))
-      );
+      if (!options?.skipDenoise) {
+        applyEdgePreservingDenoiseParams(
+          imageData,
+          Math.max(1.2, (2.2 + resBoost * 1.4) * s),
+          Math.max(2, Math.round(3.5 * s))
+        );
+      }
       applyColorAdjustments(imageData, {
         contrast: Math.round(6 * s),
         vibrance: Math.round(5 * s),
@@ -744,15 +748,16 @@ export function applyQualityModelPass(
       return;
     }
     case 'ultra-detail': {
-      applyEdgePreservingDenoiseParams(
-        imageData,
-        Math.min(2.4, (1.4 + resBoost) * s),
-        2
-      );
+      if (!options?.skipDenoise) {
+        applyEdgePreservingDenoiseParams(
+          imageData,
+          Math.min(2.4, (1.4 + resBoost) * s),
+          2
+        );
+      }
       applyColorAdjustments(imageData, { contrast: Math.round(9 * s) });
       applyClarity(imageData, Math.round((34 + resBoost * 18) * s));
-      applySharpen(imageData, Math.round((52 + resBoost * 24) * s), true);
-      applySharpen(imageData, Math.round((18 + resBoost * 10) * s), true);
+      applySharpen(imageData, Math.min(100, Math.round((66 + resBoost * 32) * s)), true);
       return;
     }
     case 'studio-portrait': {
