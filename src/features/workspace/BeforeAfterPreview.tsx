@@ -124,7 +124,7 @@ export function BeforeAfterPreview({
               className="block max-h-[58vh] w-auto max-w-full object-contain"
             />
             {processedUrl && (
-              <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-xs">
+              <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-[var(--surface-badge)] px-2 py-0.5 text-[11px] font-medium text-white">
                 {showOriginalOnly ? 'Asli' : 'Hasil'}
               </span>
             )}

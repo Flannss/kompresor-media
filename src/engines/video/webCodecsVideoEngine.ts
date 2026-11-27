@@ -5,6 +5,7 @@ import type {
 } from 'mediabunny';
 import type { SubtitleCue, VideoProcessProgress, VideoProcessRequest } from '../contracts';
 import { compute1080pTargetDimensions } from '../shared/colorGrades';
+import { releaseCanvasSurface } from '../image/pipelineRunner';
 import { drawHardsubCuesOnCanvas, findActiveCuesAtTime } from './subtitleParser';
 import { VideoCancelledError } from './videoErrors';
 import {
@@ -58,16 +59,21 @@ function buildHardsubProcessor(
   height: number,
   size: 'small' | 'medium' | 'large',
   position: 'bottom' | 'center' | 'top'
-): ConversionVideoOptions['process'] {
+): { process: ConversionVideoOptions['process']; dispose: () => void } {
   const { canvas, ctx } = createHardsubCanvas(width, height);
-  return (sample) => {
-    ctx.clearRect(0, 0, width, height);
-    sample.draw(ctx, 0, 0, width, height);
-    const active = findActiveCuesAtTime(cues, sample.timestamp);
-    if (active.length > 0) {
-      drawHardsubCuesOnCanvas(ctx, width, height, active, size, position);
-    }
-    return canvas;
+  return {
+    process: (sample) => {
+      ctx.clearRect(0, 0, width, height);
+      sample.draw(ctx, 0, 0, width, height);
+      const active = findActiveCuesAtTime(cues, sample.timestamp);
+      if (active.length > 0) {
+        drawHardsubCuesOnCanvas(ctx, width, height, active, size, position);
+      }
+      return canvas;
+    },
+    dispose: () => {
+      releaseCanvasSurface(canvas);
+    },
   };
 }
 
@@ -233,6 +239,17 @@ export async function runWebCodecsVideoTranscode(
       shiftedCues = adjustCuesForTrim(edit.subtitle.cues, trim.startSec, trim.endSec);
     }
 
+    const hardsubHandle =
+      useHardsub && shiftedCues.length > 0
+        ? buildHardsubProcessor(
+            shiftedCues,
+            targetDims.width,
+            targetDims.height,
+            edit.subtitle.size,
+            edit.subtitle.position
+          )
+        : null;
+
     const videoOptions: ConversionVideoOptions = {
       width: targetDims.width,
       height: targetDims.height,
@@ -241,15 +258,9 @@ export async function runWebCodecsVideoTranscode(
       quality: videoQuality,
       forceTranscode: true,
       ...(edit.fpsCap ? { frameRate: edit.fpsCap } : {}),
-      ...(useHardsub && shiftedCues.length > 0
+      ...(hardsubHandle
         ? {
-            process: buildHardsubProcessor(
-              shiftedCues,
-              targetDims.width,
-              targetDims.height,
-              edit.subtitle.size,
-              edit.subtitle.position
-            ),
+            process: hardsubHandle.process,
             processedWidth: targetDims.width,
             processedHeight: targetDims.height,
           }
@@ -315,6 +326,7 @@ export async function runWebCodecsVideoTranscode(
       );
     } finally {
       signal?.removeEventListener('abort', onAbort);
+      hardsubHandle?.dispose();
     }
 
     if (!target.buffer || target.buffer.byteLength === 0) {

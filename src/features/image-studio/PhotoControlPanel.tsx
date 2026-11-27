@@ -25,7 +25,7 @@ export interface PhotoControlPanelProps {
   selectedPresetId: MediaPresetId;
   imageEdit: ImageEditState;
   imageProcessResult: ImageProcessResult | null;
-  filterThumbnails: Partial<Record<ColorGradeId, string>>;
+  baseThumbnailUrl: string | null;
   avifSupported: boolean;
   isCropping: boolean;
   holdOriginalActive: boolean;
@@ -41,6 +41,7 @@ export interface PhotoControlPanelProps {
   onFlipH: () => void;
   onFlipV: () => void;
   onSelectColorGrade: (gradeId: ColorGradeId) => void;
+  onRequestThumbnail: () => void;
 }
 
 const PHOTO_TABS = [
@@ -69,7 +70,7 @@ export function PhotoControlPanel({
   selectedPresetId,
   imageEdit,
   imageProcessResult,
-  filterThumbnails,
+  baseThumbnailUrl,
   avifSupported,
   isCropping,
   holdOriginalActive,
@@ -82,6 +83,7 @@ export function PhotoControlPanel({
   onFlipH,
   onFlipV,
   onSelectColorGrade,
+  onRequestThumbnail,
 }: PhotoControlPanelProps) {
   const [activeTab, setActiveTab] = useState<PhotoTabId>('utama');
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -333,7 +335,8 @@ export function PhotoControlPanel({
           mediaKind="image"
           enhanceSuite={imageEdit.enhanceSuite}
           colorGrade={imageEdit.colorGrade}
-          filterThumbnails={filterThumbnails}
+          baseThumbnailUrl={baseThumbnailUrl}
+          onRequestThumbnail={onRequestThumbnail}
           holdOriginalActive={holdOriginalActive}
           onHoldOriginalChange={onHoldOriginalChange}
           onUpdateEnhanceSuite={(nextSuite) =>

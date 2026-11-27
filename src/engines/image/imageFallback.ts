@@ -1,7 +1,8 @@
-import type { ColorGradeId, ImageProcessRequest, ImageProcessResult } from '../contracts';
+import type { ImageProcessRequest, ImageProcessResult } from '../contracts';
 import {
+  releaseCanvasSurface,
+  runBaseThumbnailPipeline,
   runImagePipeline,
-  runThumbnailPipeline,
   type Canvas2DContextLike,
   type CanvasAdapter,
 } from './pipelineRunner';
@@ -80,15 +81,14 @@ export async function runMainThreadImageFallback(
     };
   } finally {
     bitmap.close();
+    void releaseCanvasSurface;
   }
 }
 
-export async function runMainThreadThumbnailsFallback(
-  file: File
-): Promise<Array<{ gradeId: ColorGradeId; blob: Blob }>> {
+export async function runMainThreadBaseThumbnailFallback(file: File): Promise<Blob> {
   const bitmap = await decodeOrientedBitmap(file);
   try {
-    return await runThumbnailPipeline(
+    return await runBaseThumbnailPipeline(
       bitmap,
       htmlCanvasAdapter as unknown as CanvasAdapter<{
         width: number;

@@ -28,7 +28,7 @@ export function WorkspaceHeader({
   const isDark = theme === 'dark';
 
   return (
-    <header className="sticky top-0 z-30 h-14 border-b border-[var(--border-hairline)] bg-[var(--bg-surface)]/95 backdrop-blur-sm transition-colors">
+    <header className="sticky top-0 z-30 h-14 border-b border-[var(--border-hairline)] bg-[var(--surface-dock)] transition-colors">
       <div className="mx-auto flex h-full max-w-[1680px] items-center justify-between gap-2 px-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-2.5">
           <svg

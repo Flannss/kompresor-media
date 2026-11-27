@@ -1,6 +1,7 @@
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 import type { VideoProcessProgress, VideoProcessRequest } from '../contracts';
 import { VideoCancelledError } from './videoErrors';
+import { getDeviceProfile } from '../../shared/utils/deviceCapability';
 import { hasActiveColorGrade, hasActiveEnhancements } from '../shared/colorGrades';
 import { adjustCuesForTrim, serializeToSrt, serializeToVtt } from './subtitleParser';
 import { buildFfmpegArgs, getVideoFormatMeta, isAudioMuted } from './videoFilterGraph';
@@ -19,6 +20,10 @@ export interface FfmpegTranscodeOutput {
 }
 
 let cachedFfmpeg: FFmpeg | null = null;
+
+export function isFfmpegInstanceCached(): boolean {
+  return cachedFfmpeg !== null;
+}
 
 function resolveInputExt(file: File): string {
   const lower = file.name.toLowerCase();
@@ -194,12 +199,6 @@ export async function runFfmpegVideoTranscode(
     const cleanCopy = new Uint8Array(rawOut.byteLength);
     cleanCopy.set(rawOut);
 
-    await instance.deleteFile(inputName).catch(() => {});
-    await instance.deleteFile(built.outputFileNameOnFs).catch(() => {});
-    if (subFileName) {
-      await instance.deleteFile(subFileName).catch(() => {});
-    }
-
     let outputBlob = new Blob([cleanCopy], {
       type: canBurnHardsubViaWebCodecs ? 'video/mp4' : formatMeta.mime,
     });
@@ -305,11 +304,6 @@ export async function runFfmpegVideoTranscode(
       engineDetail: engineDetailParts.length > 0 ? engineDetailParts.join(' · ') : 'ffmpeg-wasm-st (1-pass)',
     };
   } catch (err) {
-    await instance.deleteFile(inputName).catch(() => {});
-    await instance.deleteFile(built.outputFileNameOnFs).catch(() => {});
-    if (subFileName) {
-      await instance.deleteFile(subFileName).catch(() => {});
-    }
     const msg = err instanceof Error ? err.message : String(err);
     if (aborted || msg.includes('FFmpeg.terminate()')) {
       throw new VideoCancelledError();
@@ -318,5 +312,22 @@ export async function runFfmpegVideoTranscode(
   } finally {
     signal?.removeEventListener('abort', onAbort);
     instance.off('progress', progressHandler);
+    if (!aborted) {
+      await instance.deleteFile(inputName).catch(() => {});
+      await instance.deleteFile(built.outputFileNameOnFs).catch(() => {});
+      if (subFileName) {
+        await instance.deleteFile(subFileName).catch(() => {});
+      }
+      if (getDeviceProfile().releaseFfmpegAfterExport) {
+        try {
+          instance.terminate();
+        } catch {
+          // Ignore worker cleanup failure
+        }
+        if (cachedFfmpeg === instance) {
+          cachedFfmpeg = null;
+        }
+      }
+    }
   }
 }

@@ -1,11 +1,16 @@
 import { useMemo } from 'react';
 import type { ColorContrastEnhancementConfig, ColorGradeState } from '../../engines/contracts';
-import { buildSvgFilterParams, type SvgFilterParams } from '../../engines/shared/colorGrades';
+import {
+  buildSvgFilterParams,
+  getCssPreviewFilter,
+  type SvgFilterParams,
+} from '../../engines/shared/colorGrades';
 
 export interface LiveGradeSvgFilterProps {
   filterId: string;
   colorGrade: ColorGradeState;
   colorContrast?: ColorContrastEnhancementConfig;
+  disabled?: boolean;
 }
 
 export function getLiveFilterCssStyle(
@@ -18,17 +23,32 @@ export function getLiveFilterCssStyle(
   return `url(#${filterId})`;
 }
 
+export function resolvePreviewFilterStyle(options: {
+  filterId: string;
+  colorGrade: ColorGradeState;
+  colorContrast?: ColorContrastEnhancementConfig;
+  useLightweightCss: boolean;
+}): string | undefined {
+  if (options.useLightweightCss) {
+    const css = getCssPreviewFilter(options.colorGrade, options.colorContrast);
+    return css === 'none' ? undefined : css;
+  }
+  const params = buildSvgFilterParams(options.colorGrade, options.colorContrast);
+  return getLiveFilterCssStyle(options.filterId, params);
+}
+
 export function LiveGradeSvgFilter({
   filterId,
   colorGrade,
   colorContrast,
+  disabled = false,
 }: LiveGradeSvgFilterProps) {
   const params = useMemo(
-    () => buildSvgFilterParams(colorGrade, colorContrast),
-    [colorGrade, colorContrast]
+    () => (disabled ? null : buildSvgFilterParams(colorGrade, colorContrast)),
+    [disabled, colorGrade, colorContrast]
   );
 
-  if (!params.active) {
+  if (disabled || !params?.active) {
     return null;
   }
 

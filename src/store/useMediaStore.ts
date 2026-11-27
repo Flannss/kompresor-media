@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import type {
-  ColorGradeId,
   ColorGradeState,
   EnhancementSuiteState,
   ImageEditState,
@@ -15,7 +14,7 @@ import type {
   VideoProcessResult,
 } from '../engines/contracts';
 import {
-  generateFilterThumbnails,
+  generateBaseThumbnail,
   probeAvifEncodeSupport,
   processImage,
 } from '../engines/image/imageEngineClient';
@@ -26,7 +25,9 @@ import { readMediaMetadata } from '../features/upload/metadataReader';
 import { getMediaPreset, type MediaPresetId } from '../presets/mediaPresets';
 import {
   getAdaptiveQueueLimits,
+  getDeviceProfile,
   type AdaptiveQueueLimits,
+  type DeviceProfile,
 } from '../shared/utils/deviceCapability';
 
 export type MediaLoadStatus = 'idle' | 'analyzing' | 'ready' | 'error';
@@ -52,17 +53,16 @@ export interface QueueItem {
   videoResult: VideoProcessResult | null;
   outputUrl: string | null;
   errorMessage: string | null;
-  filterThumbnails: Partial<Record<ColorGradeId, string>>;
+  baseThumbnailUrl: string | null;
   processSeq: number;
 }
 
 const MAX_HISTORY_ENTRIES = 30;
-const PREVIEW_DEBOUNCE_MS = 75;
-const PREVIEW_MAX_EDGE_PX = 1280;
 
 let nextQueueCounter = 1;
 const previewTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const videoAbortControllers = new Map<string, AbortController>();
+const activeThumbnailRequests = new Set<string>();
 
 function makeItemId(): string {
   return `q-${Date.now()}-${nextQueueCounter++}`;
@@ -72,20 +72,10 @@ function revokeIfPresent(url: string | null | undefined): number {
   if (url) {
     setTimeout(() => {
       URL.revokeObjectURL(url);
-    }, 50);
+    }, 250);
     return 1;
   }
   return 0;
-}
-
-function revokeThumbMap(thumbs: Partial<Record<ColorGradeId, string>>): number {
-  let count = 0;
-  for (const url of Object.values(thumbs)) {
-    if (url) {
-      count += revokeIfPresent(url);
-    }
-  }
-  return count;
 }
 
 function clearItemTimers(itemId: string): void {
@@ -167,6 +157,7 @@ export interface MediaStoreState {
   // Adaptive queue & environment state
   items: QueueItem[];
   activeItemId: string | null;
+  deviceProfile: DeviceProfile;
   queueLimits: AdaptiveQueueLimits;
   queueLimitNotice: string | null;
   avifSupported: boolean;
@@ -192,7 +183,7 @@ export interface MediaStoreState {
   imageProcessResult: ImageProcessResult | null;
   processedImageUrl: string | null;
   imageProcessError: string | null;
-  filterThumbnails: Partial<Record<ColorGradeId, string>>;
+  baseThumbnailUrl: string | null;
 
   videoEdit: VideoEditState;
   videoProcessStatus: VideoProcessStatus;
@@ -219,8 +210,14 @@ export interface MediaStoreState {
   toggleFlipH: () => void;
   toggleFlipV: () => void;
   applyCrop: (crop: NormalizedCropRect | null) => void;
-  selectColorGrade: (gradeId: ColorGradeId) => void;
-  setVideoFilterThumbnails: (itemId: string, thumbs: Partial<Record<ColorGradeId, string>>) => void;
+  selectColorGrade: (gradeId: ColorGradeState['gradeId']) => void;
+  requestBaseThumbnail: (itemId?: string) => Promise<void>;
+  setBaseThumbnail: (itemId: string, url: string) => void;
+  ensureFullResPhotoExport: (itemId?: string) => Promise<{
+    result: ImageProcessResult;
+    url: string;
+  } | null>;
+  ensureAllPhotosFullRes: () => Promise<void>;
   undoPhotoEdit: () => void;
   redoPhotoEdit: () => void;
   resetPhotoEdits: () => void;
@@ -261,7 +258,7 @@ function deriveMirroredActiveState(
       imageProcessResult: null,
       processedImageUrl: null,
       imageProcessError: null,
-      filterThumbnails: {},
+      baseThumbnailUrl: null,
       videoEdit: fallbackVideoEdit,
       videoProcessStatus: 'idle',
       videoProgress: null,
@@ -296,7 +293,7 @@ function deriveMirroredActiveState(
     imageProcessResult: active.imageResult,
     processedImageUrl: isImg ? active.outputUrl : null,
     imageProcessError: isImg ? active.errorMessage : null,
-    filterThumbnails: active.filterThumbnails,
+    baseThumbnailUrl: active.baseThumbnailUrl,
     videoEdit: active.videoEdit,
     videoProcessStatus: !isImg
       ? active.status === 'processing'
@@ -370,12 +367,13 @@ async function processPhotoItem(
     const latest = get().items.find((i) => i.id === itemId);
     if (!latest || latest.metadata.kind !== 'image') return;
 
+    const previewCapPx = previewOnly ? get().deviceProfile.maxPreviewEdge : undefined;
     const result = await processImage({
       requestId: `img-${itemId}-${nextSeq}`,
       file: latest.file,
       sourceMetadata: latest.metadata,
       edit: cloneImageEdit(latest.imageEdit),
-      ...(previewOnly ? { previewMaxEdgePx: PREVIEW_MAX_EDGE_PX } : {}),
+      ...(previewCapPx ? { previewMaxEdgePx: previewCapPx } : {}),
     });
 
     const currentAfter = get().items.find((i) => i.id === itemId);
@@ -577,11 +575,12 @@ function revokeAllItemsUrls(items: QueueItem[]): number {
   let count = 0;
   for (const item of items) {
     clearItemTimers(item.id);
+    activeThumbnailRequests.delete(item.id);
     videoAbortControllers.get(item.id)?.abort();
     videoAbortControllers.delete(item.id);
     count += revokeIfPresent(item.objectUrl);
     count += revokeIfPresent(item.outputUrl);
-    count += revokeThumbMap(item.filterThumbnails);
+    count += revokeIfPresent(item.baseThumbnailUrl);
   }
   return count;
 }
@@ -589,6 +588,7 @@ function revokeAllItemsUrls(items: QueueItem[]): number {
 export const useMediaStore = create<MediaStoreState>((set, get) => ({
   items: [],
   activeItemId: null,
+  deviceProfile: getDeviceProfile(),
   queueLimits: getAdaptiveQueueLimits(),
   queueLimitNotice: null,
   avifSupported: false,
@@ -613,7 +613,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
   imageProcessResult: null,
   processedImageUrl: null,
   imageProcessError: null,
-  filterThumbnails: {},
+  baseThumbnailUrl: null,
 
   videoEdit: cloneVideoEdit(DEFAULT_PRESET.video),
   videoProcessStatus: 'idle',
@@ -623,9 +623,10 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
   videoProcessError: null,
 
   initCapabilities: async () => {
+    const profile = getDeviceProfile();
     const limits = getAdaptiveQueueLimits();
     const avifSupported = await probeAvifEncodeSupport();
-    set({ queueLimits: limits, avifSupported });
+    set({ deviceProfile: profile, queueLimits: limits, avifSupported });
   },
 
   clearLimitNotice: () => {
@@ -662,7 +663,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
         videoProcessResult: null,
         imageProcessStatus: 'idle',
         videoProcessStatus: 'idle',
-        filterThumbnails: {},
+        baseThumbnailUrl: null,
       }));
     } else {
       set({ queueLimits: limits, queueLimitNotice: null, activeLoadToken: token });
@@ -739,7 +740,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
           videoResult: null,
           outputUrl: null,
           errorMessage: null,
-          filterThumbnails: {},
+          baseThumbnailUrl: null,
           processSeq: 0,
         });
 
@@ -813,36 +814,11 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       ),
     }));
 
-    // Auto-optimize newly imported image items (2-worker pool handles concurrent execution)
+    // Auto-optimize newly imported photos; on low-memory mobile cap preview at 960px until export
+    const preferPreviewMode = get().deviceProfile.performanceTier === 'low-memory-mobile';
     const imageAdded = addedItems.filter((it) => it.metadata.kind === 'image');
     for (const imgItem of imageAdded) {
-      void processPhotoItem(imgItem.id, get, set, false);
-    }
-
-    // Generate filter thumbnails for newly selected active image item
-    const activeAfter = get().items.find((i) => i.id === nextActiveId);
-    if (activeAfter && activeAfter.metadata.kind === 'image') {
-      void generateFilterThumbnails(activeAfter.file, activeAfter.metadata.mimeType).then(
-        (thumbList) => {
-          const exists = get().items.find((i) => i.id === activeAfter.id);
-          if (!exists) return;
-          const revoked = revokeThumbMap(exists.filterThumbnails);
-          const nextMap: Partial<Record<ColorGradeId, string>> = {};
-          for (const entry of thumbList) {
-            nextMap[entry.gradeId] = URL.createObjectURL(entry.blob);
-          }
-          set((state) => {
-            const items = state.items.map((it) =>
-              it.id === activeAfter.id ? { ...it, filterThumbnails: nextMap } : it
-            );
-            return {
-              items,
-              revokedUrlCount: state.revokedUrlCount + revoked,
-              ...(state.activeItemId === activeAfter.id ? { filterThumbnails: nextMap } : {}),
-            };
-          });
-        }
-      );
+      void processPhotoItem(imgItem.id, get, set, preferPreviewMode);
     }
   },
 
@@ -870,29 +846,6 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
         state.errorMessage
       ),
     }));
-
-    if (
-      target.metadata.kind === 'image' &&
-      Object.keys(target.filterThumbnails).length === 0
-    ) {
-      void generateFilterThumbnails(target.file, target.metadata.mimeType).then((thumbList) => {
-        const exists = get().items.find((i) => i.id === target.id);
-        if (!exists) return;
-        const nextMap: Partial<Record<ColorGradeId, string>> = {};
-        for (const entry of thumbList) {
-          nextMap[entry.gradeId] = URL.createObjectURL(entry.blob);
-        }
-        set((state) => {
-          const items = state.items.map((it) =>
-            it.id === target.id ? { ...it, filterThumbnails: nextMap } : it
-          );
-          return {
-            items,
-            ...(state.activeItemId === target.id ? { filterThumbnails: nextMap } : {}),
-          };
-        });
-      });
-    }
   },
 
   removeQueueItem: (itemId: string) => {
@@ -1010,7 +963,12 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       photoHistory: pushed.history,
       photoHistoryIndex: pushed.index,
     }));
-    void processPhotoItem(active.id, get, set, false);
+    void processPhotoItem(
+      active.id,
+      get,
+      set,
+      get().deviceProfile.performanceTier === 'low-memory-mobile'
+    );
   },
 
   applySettingsToAll: () => {
@@ -1044,8 +1002,9 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
           queueLimitNotice: `Pengaturan foto (${sameKindTargets.length + 1} file) berhasil disamakan.`,
         };
       });
+      const preferPreviewMode = get().deviceProfile.performanceTier === 'low-memory-mobile';
       for (const peer of sameKindTargets) {
-        void processPhotoItem(peer.id, get, set, false);
+        void processPhotoItem(peer.id, get, set, preferPreviewMode);
       }
       return;
     }
@@ -1131,14 +1090,15 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     });
 
     clearItemTimers(active.id);
+    const lowMemMobile = get().deviceProfile.performanceTier === 'low-memory-mobile';
     if (!commitHistory) {
       const timer = setTimeout(() => {
         previewTimers.delete(active.id);
         void processPhotoItem(active.id, get, set, true);
-      }, PREVIEW_DEBOUNCE_MS);
+      }, get().deviceProfile.previewDebounceMs);
       previewTimers.set(active.id, timer);
     } else {
-      void processPhotoItem(active.id, get, set, false);
+      void processPhotoItem(active.id, get, set, lowMemMobile);
     }
   },
 
@@ -1165,8 +1125,8 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       };
     });
 
-    // Re-render at full HD quality right after interactive slider release
-    void processPhotoItem(active.id, get, set, false);
+    const lowMemMobile = get().deviceProfile.performanceTier === 'low-memory-mobile';
+    void processPhotoItem(active.id, get, set, lowMemMobile);
   },
 
   rotatePhoto90: () => {
@@ -1218,20 +1178,78 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     );
   },
 
-  setVideoFilterThumbnails: (itemId, thumbs) => {
+  requestBaseThumbnail: async (targetId) => {
+    const id = targetId ?? get().activeItemId;
+    if (!id || activeThumbnailRequests.has(id)) return;
+    const item = get().items.find((i) => i.id === id);
+    if (!item || item.metadata.kind !== 'image' || item.baseThumbnailUrl) return;
+
+    activeThumbnailRequests.add(id);
+    try {
+      const blob = await generateBaseThumbnail(item.file, item.metadata.mimeType);
+      const exists = get().items.find((i) => i.id === id);
+      if (!exists) return;
+      const revoked = revokeIfPresent(exists.baseThumbnailUrl);
+      const nextUrl = URL.createObjectURL(blob);
+      set((state) => {
+        const items = state.items.map((it) =>
+          it.id === id ? { ...it, baseThumbnailUrl: nextUrl } : it
+        );
+        return {
+          items,
+          revokedUrlCount: state.revokedUrlCount + revoked,
+          ...(state.activeItemId === id ? { baseThumbnailUrl: nextUrl } : {}),
+        };
+      });
+    } catch {
+      // Non-critical preview thumbnail failure does not block editing
+    } finally {
+      activeThumbnailRequests.delete(id);
+    }
+  },
+
+  setBaseThumbnail: (itemId, url) => {
     const exists = get().items.find((i) => i.id === itemId);
-    if (!exists) return;
-    const revoked = revokeThumbMap(exists.filterThumbnails);
+    if (!exists) {
+      revokeIfPresent(url);
+      return;
+    }
+    const revoked = revokeIfPresent(exists.baseThumbnailUrl);
     set((state) => {
       const items = state.items.map((it) =>
-        it.id === itemId ? { ...it, filterThumbnails: thumbs } : it
+        it.id === itemId ? { ...it, baseThumbnailUrl: url } : it
       );
       return {
         items,
         revokedUrlCount: state.revokedUrlCount + revoked,
-        ...(state.activeItemId === itemId ? { filterThumbnails: thumbs } : {}),
+        ...(state.activeItemId === itemId ? { baseThumbnailUrl: url } : {}),
       };
     });
+  },
+
+  ensureFullResPhotoExport: async (targetId) => {
+    const id = targetId ?? get().activeItemId;
+    if (!id) return null;
+    const item = get().items.find((i) => i.id === id);
+    if (!item || item.metadata.kind !== 'image') return null;
+    if (!item.needsFullResExport && item.imageResult && item.outputUrl) {
+      return { result: item.imageResult, url: item.outputUrl };
+    }
+    await processPhotoItem(id, get, set, false);
+    const updated = get().items.find((i) => i.id === id);
+    if (updated?.imageResult && updated.outputUrl) {
+      return { result: updated.imageResult, url: updated.outputUrl };
+    }
+    return null;
+  },
+
+  ensureAllPhotosFullRes: async () => {
+    const pending = get().items.filter(
+      (i) => i.metadata.kind === 'image' && (!i.imageResult || i.needsFullResExport)
+    );
+    for (const item of pending) {
+      await processPhotoItem(item.id, get, set, false);
+    }
   },
 
   undoPhotoEdit: () => {
@@ -1259,7 +1277,12 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       selectedPresetId: snapshot.presetId,
       photoHistoryIndex: nextIndex,
     }));
-    void processPhotoItem(active.id, get, set, false);
+    void processPhotoItem(
+      active.id,
+      get,
+      set,
+      get().deviceProfile.performanceTier === 'low-memory-mobile'
+    );
   },
 
   redoPhotoEdit: () => {
@@ -1287,7 +1310,12 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       selectedPresetId: snapshot.presetId,
       photoHistoryIndex: nextIndex,
     }));
-    void processPhotoItem(active.id, get, set, false);
+    void processPhotoItem(
+      active.id,
+      get,
+      set,
+      get().deviceProfile.performanceTier === 'low-memory-mobile'
+    );
   },
 
   resetPhotoEdits: () => {
@@ -1320,7 +1348,12 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       photoHistory: pushed.history,
       photoHistoryIndex: pushed.index,
     }));
-    void processPhotoItem(active.id, get, set, false);
+    void processPhotoItem(
+      active.id,
+      get,
+      set,
+      get().deviceProfile.performanceTier === 'low-memory-mobile'
+    );
   },
 
   updateVideoEdit: (patch) => {
@@ -1410,12 +1443,12 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     set({ batchRunning: true, batchCompleted: 0, batchTotal: total });
 
     try {
-      // Photos run at safe worker pool concurrency = 2
-      for (let i = 0; i < photosToProcess.length; i += 2) {
+      const poolStep = Math.max(1, get().deviceProfile.imageWorkerPoolSize);
+      for (let i = 0; i < photosToProcess.length; i += poolStep) {
         if (!get().batchRunning) break;
-        const pair = photosToProcess.slice(i, i + 2);
-        await Promise.all(pair.map((p) => processPhotoItem(p.id, get, set, false)));
-        set((s) => ({ batchCompleted: Math.min(total, s.batchCompleted + pair.length) }));
+        const batchSlice = photosToProcess.slice(i, i + poolStep);
+        await Promise.all(batchSlice.map((p) => processPhotoItem(p.id, get, set, false)));
+        set((s) => ({ batchCompleted: Math.min(total, s.batchCompleted + batchSlice.length) }));
       }
 
       // Videos run strictly sequentially (concurrency = 1) to protect memory
@@ -1475,7 +1508,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       imageProcessResult: null,
       processedImageUrl: null,
       imageProcessError: null,
-      filterThumbnails: {},
+      baseThumbnailUrl: null,
       videoEdit: resetVid,
       videoProcessStatus: 'idle',
       videoProgress: null,

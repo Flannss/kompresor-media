@@ -1,16 +1,11 @@
-import { Suspense, lazy, useEffect, useRef, type ChangeEvent } from 'react';
+import { useEffect, useRef, type ChangeEvent } from 'react';
 import { disposeImageEngine } from '../engines/image/imageEngineClient';
 import { UploadZone } from '../features/upload/UploadZone';
 import { WorkspaceHeader } from '../features/workspace/WorkspaceHeader';
+import { WorkspaceStage } from '../features/workspace/WorkspaceStage';
 import { useTheme } from '../shared/hooks/useTheme';
 import { useMediaStore } from '../store/useMediaStore';
 import { ErrorBoundary } from './ErrorBoundary';
-
-const WorkspaceStage = lazy(() =>
-  import('../features/workspace/WorkspaceStage').then((m) => ({
-    default: m.WorkspaceStage,
-  }))
-);
 
 const ACCEPTED_MEDIA =
   'image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/quicktime,video/webm,video/x-matroska,.jpg,.jpeg,.png,.webp,.gif,.avif,.mp4,.mov,.webm,.mkv';
@@ -22,6 +17,7 @@ export function App() {
 
   const items = useMediaStore((s) => s.items);
   const activeItemId = useMediaStore((s) => s.activeItemId);
+  const deviceProfile = useMediaStore((s) => s.deviceProfile);
   const queueLimits = useMediaStore((s) => s.queueLimits);
   const queueLimitNotice = useMediaStore((s) => s.queueLimitNotice);
   const avifSupported = useMediaStore((s) => s.avifSupported);
@@ -43,7 +39,7 @@ export function App() {
   const imageProcessResult = useMediaStore((s) => s.imageProcessResult);
   const processedImageUrl = useMediaStore((s) => s.processedImageUrl);
   const imageProcessError = useMediaStore((s) => s.imageProcessError);
-  const filterThumbnails = useMediaStore((s) => s.filterThumbnails);
+  const baseThumbnailUrl = useMediaStore((s) => s.baseThumbnailUrl);
 
   const videoEdit = useMediaStore((s) => s.videoEdit);
   const videoProcessStatus = useMediaStore((s) => s.videoProcessStatus);
@@ -67,7 +63,10 @@ export function App() {
   const toggleFlipV = useMediaStore((s) => s.toggleFlipV);
   const applyCrop = useMediaStore((s) => s.applyCrop);
   const selectColorGrade = useMediaStore((s) => s.selectColorGrade);
-  const setVideoFilterThumbnails = useMediaStore((s) => s.setVideoFilterThumbnails);
+  const requestBaseThumbnail = useMediaStore((s) => s.requestBaseThumbnail);
+  const setBaseThumbnail = useMediaStore((s) => s.setBaseThumbnail);
+  const ensureFullResPhotoExport = useMediaStore((s) => s.ensureFullResPhotoExport);
+  const ensureAllPhotosFullRes = useMediaStore((s) => s.ensureAllPhotosFullRes);
   const undoPhotoEdit = useMediaStore((s) => s.undoPhotoEdit);
   const redoPhotoEdit = useMediaStore((s) => s.redoPhotoEdit);
   const resetPhotoEdits = useMediaStore((s) => s.resetPhotoEdits);
@@ -172,65 +171,61 @@ export function App() {
 
         <main className="flex flex-1 flex-col">
           {isReady ? (
-            <Suspense
-              fallback={
-                <div className="bg-cobalt-stage flex flex-1 items-center justify-center text-xs text-[var(--text-secondary)]">
-                  Menyiapkan studio…
-                </div>
-              }
-            >
-              <WorkspaceStage
-                items={items}
-                activeItemId={activeItemId}
-                maxTotal={queueLimits.maxTotal}
-                queueLimitNotice={queueLimitNotice}
-                batchRunning={batchRunning}
-                batchCompleted={batchCompleted}
-                batchTotal={batchTotal}
-                metadata={metadata}
-                validation={validation}
-                objectUrl={objectUrl}
-                selectedPresetId={selectedPresetId}
-                avifSupported={avifSupported}
-                imageEdit={imageEdit}
-                canUndoPhoto={canUndoPhoto}
-                canRedoPhoto={canRedoPhoto}
-                imageProcessStatus={imageProcessStatus}
-                imageProcessResult={imageProcessResult}
-                processedImageUrl={processedImageUrl}
-                imageProcessError={imageProcessError}
-                filterThumbnails={filterThumbnails}
-                videoEdit={videoEdit}
-                videoProcessStatus={videoProcessStatus}
-                videoProgress={videoProgress}
-                videoProcessResult={videoProcessResult}
-                processedVideoUrl={processedVideoUrl}
-                videoProcessError={videoProcessError}
-                onSelectPreset={setPreset}
-                onUpdateImageEdit={updateImageEdit}
-                onCommitPhotoSnapshot={commitCurrentPhotoSnapshot}
-                onRotatePhoto90={rotatePhoto90}
-                onFlipH={toggleFlipH}
-                onFlipV={toggleFlipV}
-                onApplyCrop={applyCrop}
-                onSelectColorGrade={selectColorGrade}
-                onVideoThumbnailsReady={setVideoFilterThumbnails}
-                onUndoPhoto={undoPhotoEdit}
-                onRedoPhoto={redoPhotoEdit}
-                onResetPhoto={resetPhotoEdits}
-                onUpdateVideoEdit={updateVideoEdit}
-                onStartVideoProcess={(backend) => void startVideoProcessing(backend)}
-                onCancelVideoProcess={cancelVideoProcessing}
-                onSelectQueueItem={selectQueueItem}
-                onRemoveQueueItem={removeQueueItem}
-                onAddMoreClick={() => addMoreInputRef.current?.click()}
-                onApplyToAll={applySettingsToAll}
-                onProcessAll={() => void processAllQueue('auto')}
-                onDismissNotice={clearLimitNotice}
-                onDropAddFiles={(files) => void addMediaFiles(files, { replace: false })}
-                onLoadSingleReplacementFile={(file) => void addMediaFiles([file], { replace: true })}
-              />
-            </Suspense>
+            <WorkspaceStage
+              items={items}
+              activeItemId={activeItemId}
+              deviceProfile={deviceProfile}
+              maxTotal={queueLimits.maxTotal}
+              queueLimitNotice={queueLimitNotice}
+              batchRunning={batchRunning}
+              batchCompleted={batchCompleted}
+              batchTotal={batchTotal}
+              metadata={metadata}
+              validation={validation}
+              objectUrl={objectUrl}
+              selectedPresetId={selectedPresetId}
+              avifSupported={avifSupported}
+              imageEdit={imageEdit}
+              canUndoPhoto={canUndoPhoto}
+              canRedoPhoto={canRedoPhoto}
+              imageProcessStatus={imageProcessStatus}
+              imageProcessResult={imageProcessResult}
+              processedImageUrl={processedImageUrl}
+              imageProcessError={imageProcessError}
+              baseThumbnailUrl={baseThumbnailUrl}
+              videoEdit={videoEdit}
+              videoProcessStatus={videoProcessStatus}
+              videoProgress={videoProgress}
+              videoProcessResult={videoProcessResult}
+              processedVideoUrl={processedVideoUrl}
+              videoProcessError={videoProcessError}
+              onSelectPreset={setPreset}
+              onUpdateImageEdit={updateImageEdit}
+              onCommitPhotoSnapshot={commitCurrentPhotoSnapshot}
+              onRotatePhoto90={rotatePhoto90}
+              onFlipH={toggleFlipH}
+              onFlipV={toggleFlipV}
+              onApplyCrop={applyCrop}
+              onSelectColorGrade={selectColorGrade}
+              onRequestPhotoThumbnail={() => void requestBaseThumbnail()}
+              onVideoThumbnailReady={setBaseThumbnail}
+              onEnsureFullResExport={() => ensureFullResPhotoExport()}
+              onEnsureAllPhotosFullRes={() => ensureAllPhotosFullRes()}
+              onUndoPhoto={undoPhotoEdit}
+              onRedoPhoto={redoPhotoEdit}
+              onResetPhoto={resetPhotoEdits}
+              onUpdateVideoEdit={updateVideoEdit}
+              onStartVideoProcess={(backend) => void startVideoProcessing(backend)}
+              onCancelVideoProcess={cancelVideoProcessing}
+              onSelectQueueItem={selectQueueItem}
+              onRemoveQueueItem={removeQueueItem}
+              onAddMoreClick={() => addMoreInputRef.current?.click()}
+              onApplyToAll={applySettingsToAll}
+              onProcessAll={() => void processAllQueue('auto')}
+              onDismissNotice={clearLimitNotice}
+              onDropAddFiles={(files) => void addMediaFiles(files, { replace: false })}
+              onLoadSingleReplacementFile={(file) => void addMediaFiles([file], { replace: true })}
+            />
           ) : (
             <UploadZone
               status={status}

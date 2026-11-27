@@ -1,7 +1,6 @@
-import type { ColorGradeId, ImageEditState, ImageOutputFormat } from '../contracts';
+import type { ImageEditState, ImageOutputFormat } from '../contracts';
 import {
   applyColorGradeToImageData,
-  COLOR_GRADE_PRESETS,
   compute1080pTargetDimensions,
   hasActiveColorGrade,
 } from '../shared/colorGrades';
@@ -57,9 +56,17 @@ export interface PipelineOutput {
   targetSizeMet?: boolean;
 }
 
-export interface ThumbnailOutputItem {
-  gradeId: ColorGradeId;
-  blob: Blob;
+/** Explicitly releases backing GPU/RAM memory allocated for temporary Canvas/OffscreenCanvas buffers (critical for iOS Safari caps). */
+export function releaseCanvasSurface(
+  canvas: { width: number; height: number } | null | undefined
+): void {
+  if (!canvas) return;
+  try {
+    canvas.width = 0;
+    canvas.height = 0;
+  } catch {
+    // Ignore read-only mock surfaces in unit tests
+  }
 }
 
 function drawOrientedAndFlipped<TCanvas extends CanvasSurfaceLike>(
@@ -71,6 +78,7 @@ function drawOrientedAndFlipped<TCanvas extends CanvasSurfaceLike>(
   const canvas = adapter.createCanvas(rotDims.width, rotDims.height);
   const ctx = canvas.getContext('2d');
   if (!ctx) {
+    releaseCanvasSurface(canvas);
     throw new Error('Gagal menyiapkan kanvas untuk memproses foto.');
   }
 
@@ -116,6 +124,10 @@ function resizeCanvas<TCanvas extends CanvasSurfaceLike>(
     const nextCanvas = adapter.createCanvas(step.width, step.height);
     const nextCtx = nextCanvas.getContext('2d');
     if (!nextCtx) {
+      if (currentCanvas !== sourceCanvas) {
+        releaseCanvasSurface(currentCanvas);
+      }
+      releaseCanvasSurface(nextCanvas);
       throw new Error('Gagal mengubah ukuran foto.');
     }
     nextCtx.imageSmoothingEnabled = true;
@@ -127,7 +139,11 @@ function resizeCanvas<TCanvas extends CanvasSurfaceLike>(
       step.width,
       step.height
     );
+    const prev = currentCanvas;
     currentCanvas = nextCanvas;
+    if (prev !== sourceCanvas) {
+      releaseCanvasSurface(prev);
+    }
   }
 
   return currentCanvas;
@@ -143,97 +159,108 @@ async function solveTargetSize<TCanvas extends CanvasSurfaceLike>(
   const targetBytes = Math.max(16 * 1024, Math.round(targetSizeKB * 1024));
   const clampedInitial = Math.min(1, Math.max(0.25, initialQuality));
 
-  // Fast path: if encoding at requested quality already fits target limit, return immediately
-  const firstCandidate = await adapter.encodeBlob(canvas, format, clampedInitial);
-  if (firstCandidate.size <= targetBytes) {
-    return {
-      blob: firstCandidate,
-      width: canvas.width,
-      height: canvas.height,
-      solvedQuality: clampedInitial,
-      targetSizeMet: true,
-    };
-  }
-
   let workingCanvas = canvas;
 
-  for (let scaleAttempt = 0; scaleAttempt < 4; scaleAttempt += 1) {
-    let low = 0.25;
-    let high = Math.max(0.3, clampedInitial);
-    let bestFittingBlob: Blob | null = null;
-    let bestFittingQuality = low;
-    let smallestBlob: Blob | null = scaleAttempt === 0 ? firstCandidate : null;
-    let smallestQuality = clampedInitial;
-
-    for (let iter = 0; iter < 6; iter += 1) {
-      const mid = Number(((low + high) / 2).toFixed(3));
-      const candidate = await adapter.encodeBlob(workingCanvas, format, mid);
-
-      if (!smallestBlob || candidate.size < smallestBlob.size) {
-        smallestBlob = candidate;
-        smallestQuality = mid;
-      }
-
-      if (candidate.size <= targetBytes) {
-        bestFittingBlob = candidate;
-        bestFittingQuality = mid;
-        low = mid;
-      } else {
-        high = mid;
-      }
-
-      if (high - low < 0.04) {
-        break;
-      }
-    }
-
-    if (bestFittingBlob) {
+  try {
+    const firstCandidate = await adapter.encodeBlob(workingCanvas, format, clampedInitial);
+    if (firstCandidate.size <= targetBytes) {
       return {
-        blob: bestFittingBlob,
+        blob: firstCandidate,
         width: workingCanvas.width,
         height: workingCanvas.height,
-        solvedQuality: bestFittingQuality,
+        solvedQuality: clampedInitial,
         targetSizeMet: true,
       };
     }
 
-    const minQualityBlob = await adapter.encodeBlob(workingCanvas, format, 0.25);
-    if (minQualityBlob.size <= targetBytes) {
-      return {
-        blob: minQualityBlob,
-        width: workingCanvas.width,
-        height: workingCanvas.height,
-        solvedQuality: 0.25,
-        targetSizeMet: true,
-      };
+    for (let scaleAttempt = 0; scaleAttempt < 4; scaleAttempt += 1) {
+      let low = 0.25;
+      let high = Math.max(0.3, clampedInitial);
+      let bestFittingBlob: Blob | null = null;
+      let bestFittingQuality = low;
+      let smallestBlob: Blob | null = scaleAttempt === 0 ? firstCandidate : null;
+      let smallestQuality = clampedInitial;
+
+      for (let iter = 0; iter < 6; iter += 1) {
+        const mid = Number(((low + high) / 2).toFixed(3));
+        const candidate = await adapter.encodeBlob(workingCanvas, format, mid);
+
+        if (!smallestBlob || candidate.size < smallestBlob.size) {
+          smallestBlob = candidate;
+          smallestQuality = mid;
+        }
+
+        if (candidate.size <= targetBytes) {
+          bestFittingBlob = candidate;
+          bestFittingQuality = mid;
+          low = mid;
+        } else {
+          high = mid;
+        }
+
+        if (high - low < 0.04) {
+          break;
+        }
+      }
+
+      if (bestFittingBlob) {
+        return {
+          blob: bestFittingBlob,
+          width: workingCanvas.width,
+          height: workingCanvas.height,
+          solvedQuality: bestFittingQuality,
+          targetSizeMet: true,
+        };
+      }
+
+      const minQualityBlob = await adapter.encodeBlob(workingCanvas, format, 0.25);
+      if (minQualityBlob.size <= targetBytes) {
+        return {
+          blob: minQualityBlob,
+          width: workingCanvas.width,
+          height: workingCanvas.height,
+          solvedQuality: 0.25,
+          targetSizeMet: true,
+        };
+      }
+
+      const longest = Math.max(workingCanvas.width, workingCanvas.height);
+      if (longest <= 320 || scaleAttempt === 3) {
+        const chosen =
+          minQualityBlob.size <= (smallestBlob?.size ?? Infinity) ? minQualityBlob : smallestBlob!;
+        const chosenQ =
+          minQualityBlob.size <= (smallestBlob?.size ?? Infinity) ? 0.25 : smallestQuality;
+        return {
+          blob: chosen,
+          width: workingCanvas.width,
+          height: workingCanvas.height,
+          solvedQuality: chosenQ,
+          targetSizeMet: chosen.size <= targetBytes,
+        };
+      }
+
+      const nextW = Math.max(1, Math.round(workingCanvas.width * 0.85));
+      const nextH = Math.max(1, Math.round(workingCanvas.height * 0.85));
+      const resized = resizeCanvas(workingCanvas, nextW, nextH, adapter);
+      if (resized !== workingCanvas && workingCanvas !== canvas) {
+        releaseCanvasSurface(workingCanvas);
+      }
+      workingCanvas = resized;
     }
 
-    const longest = Math.max(workingCanvas.width, workingCanvas.height);
-    if (longest <= 320 || scaleAttempt === 3) {
-      const chosen = minQualityBlob.size <= (smallestBlob?.size ?? Infinity) ? minQualityBlob : smallestBlob!;
-      const chosenQ = minQualityBlob.size <= (smallestBlob?.size ?? Infinity) ? 0.25 : smallestQuality;
-      return {
-        blob: chosen,
-        width: workingCanvas.width,
-        height: workingCanvas.height,
-        solvedQuality: chosenQ,
-        targetSizeMet: chosen.size <= targetBytes,
-      };
+    const fallbackBlob = await adapter.encodeBlob(workingCanvas, format, 0.25);
+    return {
+      blob: fallbackBlob,
+      width: workingCanvas.width,
+      height: workingCanvas.height,
+      solvedQuality: 0.25,
+      targetSizeMet: fallbackBlob.size <= targetBytes,
+    };
+  } finally {
+    if (workingCanvas !== canvas) {
+      releaseCanvasSurface(workingCanvas);
     }
-
-    const nextW = Math.max(1, Math.round(workingCanvas.width * 0.85));
-    const nextH = Math.max(1, Math.round(workingCanvas.height * 0.85));
-    workingCanvas = resizeCanvas(workingCanvas, nextW, nextH, adapter);
   }
-
-  const fallbackBlob = await adapter.encodeBlob(workingCanvas, format, 0.25);
-  return {
-    blob: fallbackBlob,
-    width: workingCanvas.width,
-    height: workingCanvas.height,
-    solvedQuality: 0.25,
-    targetSizeMet: fallbackBlob.size <= targetBytes,
-  };
 }
 
 function getEffectiveSharpenAmount(edit: ImageEditState): number {
@@ -252,140 +279,136 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
 ): Promise<PipelineOutput> {
   let currentCanvas = drawOrientedAndFlipped(bitmap, edit, adapter);
 
-  if (edit.crop) {
-    const { sx, sy, sw, sh } = computeCropPixels(
-      currentCanvas.width,
-      currentCanvas.height,
-      edit.crop
-    );
-    const croppedCanvas = adapter.createCanvas(sw, sh);
-    const cropCtx = croppedCanvas.getContext('2d');
-    if (!cropCtx) {
-      throw new Error('Gagal memotong area foto.');
-    }
-    cropCtx.imageSmoothingEnabled = true;
-    cropCtx.imageSmoothingQuality = 'high';
-    cropCtx.drawImage(
-      currentCanvas as unknown as CanvasImageSource,
-      sx,
-      sy,
-      sw,
-      sh,
-      0,
-      0,
-      sw,
-      sh
-    );
-    currentCanvas = croppedCanvas;
-  }
-
-  let targetDims = edit.enhanceSuite.upscale1080.enabled
-    ? compute1080pTargetDimensions(
+  try {
+    if (edit.crop) {
+      const { sx, sy, sw, sh } = computeCropPixels(
         currentCanvas.width,
         currentCanvas.height,
-        edit.enhanceSuite.upscale1080.keepAspect
-      )
-    : computeTargetDimensions(currentCanvas.width, currentCanvas.height, edit.maxEdgePx);
-
-  if (previewMaxEdgePx && previewMaxEdgePx > 0) {
-    targetDims = computeTargetDimensions(targetDims.width, targetDims.height, previewMaxEdgePx);
-  }
-
-  currentCanvas = resizeCanvas(currentCanvas, targetDims.width, targetDims.height, adapter);
-
-  const effectiveSharpen = getEffectiveSharpenAmount(edit);
-  const needsPixelPass =
-    edit.adjustments.brightness !== 0 ||
-    edit.adjustments.contrast !== 0 ||
-    edit.adjustments.saturation !== 0 ||
-    edit.adjustments.temperature !== 0 ||
-    hasActiveColorGrade(edit.colorGrade) ||
-    effectiveSharpen > 0 ||
-    edit.enhanceSuite.noise.enabled ||
-    edit.enhanceSuite.colorContrast.enabled;
-
-  if (needsPixelPass) {
-    const ctx = currentCanvas.getContext('2d');
-    if (ctx) {
-      const imgData = ctx.getImageData(0, 0, currentCanvas.width, currentCanvas.height);
-      if (edit.enhanceSuite.noise.enabled) {
-        applyEdgePreservingDenoiseParams(
-          imgData,
-          edit.enhanceSuite.noise.grainStrength,
-          edit.enhanceSuite.noise.colorSmooth
-        );
-      }
-      applyColorAdjustments(imgData, edit.adjustments);
-      applyColorGradeToImageData(
-        imgData,
-        edit.colorGrade,
-        edit.enhanceSuite.colorContrast.enabled ? edit.enhanceSuite.colorContrast : undefined
+        edit.crop
       );
-      applySharpen(imgData, effectiveSharpen, edit.enhanceSuite.sharpen.antiArtifact);
-      ctx.putImageData(imgData, 0, 0);
+      const croppedCanvas = adapter.createCanvas(sw, sh);
+      const cropCtx = croppedCanvas.getContext('2d');
+      if (!cropCtx) {
+        releaseCanvasSurface(croppedCanvas);
+        throw new Error('Gagal memotong area foto.');
+      }
+      cropCtx.imageSmoothingEnabled = true;
+      cropCtx.imageSmoothingQuality = 'high';
+      cropCtx.drawImage(
+        currentCanvas as unknown as CanvasImageSource,
+        sx,
+        sy,
+        sw,
+        sh,
+        0,
+        0,
+        sw,
+        sh
+      );
+      releaseCanvasSurface(currentCanvas);
+      currentCanvas = croppedCanvas;
     }
-  }
 
-  if (edit.targetSizeKB !== null && edit.outputFormat !== 'image/png') {
-    return solveTargetSize(
+    let targetDims = edit.enhanceSuite.upscale1080.enabled
+      ? compute1080pTargetDimensions(
+          currentCanvas.width,
+          currentCanvas.height,
+          edit.enhanceSuite.upscale1080.keepAspect
+        )
+      : computeTargetDimensions(currentCanvas.width, currentCanvas.height, edit.maxEdgePx);
+
+    if (previewMaxEdgePx && previewMaxEdgePx > 0) {
+      targetDims = computeTargetDimensions(targetDims.width, targetDims.height, previewMaxEdgePx);
+    }
+
+    const resized = resizeCanvas(currentCanvas, targetDims.width, targetDims.height, adapter);
+    if (resized !== currentCanvas) {
+      releaseCanvasSurface(currentCanvas);
+      currentCanvas = resized;
+    }
+
+    const effectiveSharpen = getEffectiveSharpenAmount(edit);
+    const needsPixelPass =
+      edit.adjustments.brightness !== 0 ||
+      edit.adjustments.contrast !== 0 ||
+      edit.adjustments.saturation !== 0 ||
+      edit.adjustments.temperature !== 0 ||
+      hasActiveColorGrade(edit.colorGrade) ||
+      effectiveSharpen > 0 ||
+      edit.enhanceSuite.noise.enabled ||
+      edit.enhanceSuite.colorContrast.enabled;
+
+    if (needsPixelPass) {
+      const ctx = currentCanvas.getContext('2d');
+      if (ctx) {
+        const imgData = ctx.getImageData(0, 0, currentCanvas.width, currentCanvas.height);
+        if (edit.enhanceSuite.noise.enabled) {
+          applyEdgePreservingDenoiseParams(
+            imgData,
+            edit.enhanceSuite.noise.grainStrength,
+            edit.enhanceSuite.noise.colorSmooth
+          );
+        }
+        applyColorAdjustments(imgData, edit.adjustments);
+        applyColorGradeToImageData(
+          imgData,
+          edit.colorGrade,
+          edit.enhanceSuite.colorContrast.enabled ? edit.enhanceSuite.colorContrast : undefined
+        );
+        applySharpen(imgData, effectiveSharpen, edit.enhanceSuite.sharpen.antiArtifact);
+        ctx.putImageData(imgData, 0, 0);
+      }
+    }
+
+    if (edit.targetSizeKB !== null && edit.outputFormat !== 'image/png') {
+      return await solveTargetSize(
+        currentCanvas,
+        edit.outputFormat,
+        edit.targetSizeKB,
+        edit.quality,
+        adapter
+      );
+    }
+
+    const outW = currentCanvas.width;
+    const outH = currentCanvas.height;
+    const clampedQuality = Math.min(1, Math.max(0.1, edit.quality));
+    const blob = await adapter.encodeBlob(
       currentCanvas,
       edit.outputFormat,
-      edit.targetSizeKB,
-      edit.quality,
-      adapter
+      edit.outputFormat === 'image/png' ? undefined : clampedQuality
     );
+
+    return {
+      blob,
+      width: outW,
+      height: outH,
+    };
+  } finally {
+    releaseCanvasSurface(currentCanvas);
   }
-
-  const clampedQuality = Math.min(1, Math.max(0.1, edit.quality));
-  const blob = await adapter.encodeBlob(
-    currentCanvas,
-    edit.outputFormat,
-    edit.outputFormat === 'image/png' ? undefined : clampedQuality
-  );
-
-  return {
-    blob,
-    width: currentCanvas.width,
-    height: currentCanvas.height,
-  };
 }
 
-export async function runThumbnailPipeline<TCanvas extends CanvasSurfaceLike>(
+/**
+ * Generates ONE tiny 96px base thumbnail Blob. All 7 Color Grade cards apply GPU CSS filters
+ * directly on this single shared thumbnail, avoiding 7 heavy Canvas pixel loops.
+ */
+export async function runBaseThumbnailPipeline<TCanvas extends CanvasSurfaceLike>(
   bitmap: ImageBitmap,
   adapter: CanvasAdapter<TCanvas>
-): Promise<ThumbnailOutputItem[]> {
-  const thumbDims = computeTargetDimensions(bitmap.width, bitmap.height, 160);
+): Promise<Blob> {
+  const thumbDims = computeTargetDimensions(bitmap.width, bitmap.height, 96);
   const baseCanvas = adapter.createCanvas(thumbDims.width, thumbDims.height);
-  const baseCtx = baseCanvas.getContext('2d');
-  if (!baseCtx) {
-    throw new Error('Gagal membuat pratinjau filter.');
-  }
-  baseCtx.imageSmoothingEnabled = true;
-  baseCtx.imageSmoothingQuality = 'medium';
-  baseCtx.drawImage(bitmap, 0, 0, thumbDims.width, thumbDims.height);
-  const basePixels = baseCtx.getImageData(0, 0, thumbDims.width, thumbDims.height);
-
-  const items: ThumbnailOutputItem[] = [];
-  for (const preset of COLOR_GRADE_PRESETS) {
-    const workCanvas = adapter.createCanvas(thumbDims.width, thumbDims.height);
-    const workCtx = workCanvas.getContext('2d');
-    if (!workCtx) {
-      continue;
+  try {
+    const baseCtx = baseCanvas.getContext('2d');
+    if (!baseCtx) {
+      throw new Error('Gagal membuat pratinjau filter.');
     }
-    const copy = new ImageData(
-      new Uint8ClampedArray(basePixels.data),
-      basePixels.width,
-      basePixels.height
-    );
-    applyColorGradeToImageData(copy, {
-      gradeId: preset.id,
-      intensity: 100,
-      tone: { temperature: 0, tint: 0, shadows: 0, highlights: 0 },
-    });
-    workCtx.putImageData(copy, 0, 0);
-    const blob = await adapter.encodeBlob(workCanvas, 'image/jpeg', 0.8);
-    items.push({ gradeId: preset.id, blob });
+    baseCtx.imageSmoothingEnabled = true;
+    baseCtx.imageSmoothingQuality = 'medium';
+    baseCtx.drawImage(bitmap, 0, 0, thumbDims.width, thumbDims.height);
+    return await adapter.encodeBlob(baseCanvas, 'image/jpeg', 0.78);
+  } finally {
+    releaseCanvasSurface(baseCanvas);
   }
-
-  return items;
 }

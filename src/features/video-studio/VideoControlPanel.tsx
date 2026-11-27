@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -42,8 +42,9 @@ import {
   hasActiveEnhancements,
 } from '../../engines/shared/colorGrades';
 import { parseSubtitleText } from '../../engines/video/subtitleParser';
-import { clampTrimRange } from '../../engines/video/videoPresets';
+import { clampTrimRange, resolveCustomVideoParams } from '../../engines/video/videoPresets';
 import { MEDIA_PRESETS, type MediaPresetId } from '../../presets/mediaPresets';
+import type { DeviceProfile } from '../../shared/utils/deviceCapability';
 import { formatDuration } from '../../shared/utils/formatDuration';
 import type { VideoProcessStatus } from '../../store/useMediaStore';
 import type { ZipEntryInput } from '../export-share/zipExport';
@@ -59,9 +60,11 @@ export interface CapturedFrameInfo {
 
 export interface VideoControlPanelProps {
   metadata: VideoMetadata;
+  deviceProfile: DeviceProfile;
   selectedPresetId: MediaPresetId;
   videoEdit: VideoEditState;
-  filterThumbnails: Partial<Record<ColorGradeId, string>>;
+  baseThumbnailUrl: string | null;
+  onRequestThumbnail: () => void;
   holdOriginalActive: boolean;
   onHoldOriginalChange: (held: boolean) => void;
   videoProcessStatus: VideoProcessStatus;
@@ -141,9 +144,11 @@ function getStageLabel(progress: VideoProcessProgress | null): string {
 
 export function VideoControlPanel({
   metadata,
+  deviceProfile,
   selectedPresetId,
   videoEdit,
-  filterThumbnails,
+  baseThumbnailUrl,
+  onRequestThumbnail,
   holdOriginalActive,
   onHoldOriginalChange,
   videoProcessStatus,
@@ -171,6 +176,12 @@ export function VideoControlPanel({
   const [subError, setSubError] = useState<string | null>(null);
   const subFileInputRef = useRef<HTMLInputElement | null>(null);
 
+  useEffect(() => {
+    if (activeTab === 'tampilan') {
+      onRequestThumbnail();
+    }
+  }, [activeTab, onRequestThumbnail]);
+
   const isProcessing = videoProcessStatus === 'processing';
   const isLargeVideo = metadata.sizeBytes > 150 * 1024 * 1024;
   const trim = clampTrimRange(
@@ -182,6 +193,30 @@ export function VideoControlPanel({
 
   const enhanceOrGradeActive =
     hasActiveEnhancements(videoEdit.enhanceSuite) || hasActiveColorGrade(videoEdit.colorGrade);
+
+  const hasHeavyMobileFilters =
+    deviceProfile.performanceTier === 'low-memory-mobile' &&
+    (videoEdit.stabilize.enabled ||
+      videoEdit.enhanceSuite.noise.enabled ||
+      videoEdit.enhanceSuite.upscale1080.enabled) &&
+    (metadata.durationSec > 25 || metadata.sizeBytes > 40 * 1024 * 1024);
+
+  const handleApplyMobileLightSettings = () => {
+    const balancedParams = resolveCustomVideoParams('balanced');
+    const defaults = createDefaultEnhanceSuite();
+    onUpdateVideoEdit({
+      outputFormat: 'mp4',
+      maxHeightPx: 720,
+      qualityTier: 'balanced',
+      ...balancedParams,
+      stabilize: { ...videoEdit.stabilize, enabled: false },
+      enhanceSuite: {
+        ...videoEdit.enhanceSuite,
+        noise: defaults.noise,
+        upscale1080: defaults.upscale1080,
+      },
+    });
+  };
 
   const handleSubtitleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -370,6 +405,31 @@ export function VideoControlPanel({
           <p className="leading-relaxed">
             Video berukuran besar. Pemrosesan di browser mungkin memerlukan waktu lebih lama.
           </p>
+        </div>
+      )}
+
+      {hasHeavyMobileFilters && (
+        <div
+          data-testid="mobile-heavy-video-advisory"
+          className="flex flex-col gap-2 rounded-xl border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-3 py-2.5 text-xs text-[var(--status-warn-ink)]"
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <p className="leading-relaxed">
+              Efek berat diaktifkan pada video panjang/besar di ponsel. Agar proses cepat dan ringan,
+              disarankan gunakan resolusi 720p.
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={isProcessing}
+            data-testid="apply-mobile-light-btn"
+            onClick={handleApplyMobileLightSettings}
+            className="min-h-[38px] self-start"
+          >
+            Pakai Setelan Ringan HP
+          </Button>
         </div>
       )}
 
@@ -671,7 +731,8 @@ export function VideoControlPanel({
           mediaKind="video"
           enhanceSuite={videoEdit.enhanceSuite}
           colorGrade={videoEdit.colorGrade}
-          filterThumbnails={filterThumbnails}
+          baseThumbnailUrl={baseThumbnailUrl}
+          onRequestThumbnail={onRequestThumbnail}
           holdOriginalActive={holdOriginalActive}
           onHoldOriginalChange={onHoldOriginalChange}
           onUpdateEnhanceSuite={(nextSuite) => onUpdateVideoEdit({ enhanceSuite: nextSuite })}

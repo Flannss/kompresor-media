@@ -1,6 +1,11 @@
-import type { ColorGradeId, ImageProcessRequest, ImageProcessResult } from '../contracts';
-import { runMainThreadImageFallback, runMainThreadThumbnailsFallback } from './imageFallback';
+import type { ImageProcessRequest, ImageProcessResult } from '../contracts';
+import { getDeviceProfile } from '../../shared/utils/deviceCapability';
+import {
+  runMainThreadBaseThumbnailFallback,
+  runMainThreadImageFallback,
+} from './imageFallback';
 import type { ImageWorkerRequest, ImageWorkerResponse } from './imageProcessor.worker';
+import { releaseCanvasSurface } from './pipelineRunner';
 import { buildExportFileName, getActiveImageModuleLabels } from './pixelOps';
 
 interface WorkerSlot {
@@ -8,11 +13,14 @@ interface WorkerSlot {
   busy: boolean;
 }
 
-const MAX_WORKERS = 2;
 const workerPool: WorkerSlot[] = [];
 const waitingResolvers: Array<(slot: WorkerSlot) => void> = [];
 let sequenceCounter = 0;
 let cachedAvifSupport: boolean | null = null;
+
+function getWorkerPoolLimit(): number {
+  return getDeviceProfile().imageWorkerPoolSize;
+}
 
 function createWorkerSlot(): WorkerSlot {
   const worker = new Worker(new URL('./imageProcessor.worker.ts', import.meta.url), {
@@ -27,7 +35,7 @@ async function acquireWorkerSlot(): Promise<WorkerSlot> {
     free.busy = true;
     return free;
   }
-  if (workerPool.length < MAX_WORKERS) {
+  if (workerPool.length < getWorkerPoolLimit()) {
     const slot = createWorkerSlot();
     slot.busy = true;
     workerPool.push(slot);
@@ -51,11 +59,13 @@ function releaseWorkerSlot(slot: WorkerSlot, terminateOnFault = false): void {
 
   if (waitingResolvers.length > 0) {
     const next = waitingResolvers.shift()!;
-    const readySlot = workerPool.find((s) => !s.busy) ?? (() => {
-      const fresh = createWorkerSlot();
-      workerPool.push(fresh);
-      return fresh;
-    })();
+    const readySlot =
+      workerPool.find((s) => !s.busy) ??
+      (() => {
+        const fresh = createWorkerSlot();
+        workerPool.push(fresh);
+        return fresh;
+      })();
     readySlot.busy = true;
     next(readySlot);
   }
@@ -105,25 +115,33 @@ export async function probeAvifEncodeSupport(): Promise<boolean> {
   try {
     if (typeof OffscreenCanvas !== 'undefined') {
       const c = new OffscreenCanvas(4, 4);
-      const ctx = c.getContext('2d');
-      ctx?.fillRect(0, 0, 4, 4);
-      const blob = await c.convertToBlob({ type: 'image/avif', quality: 0.8 });
-      cachedAvifSupport = blob.type === 'image/avif' && blob.size > 0;
-      return cachedAvifSupport;
+      try {
+        const ctx = c.getContext('2d');
+        ctx?.fillRect(0, 0, 4, 4);
+        const blob = await c.convertToBlob({ type: 'image/avif', quality: 0.8 });
+        cachedAvifSupport = blob.type === 'image/avif' && blob.size > 0;
+        return cachedAvifSupport;
+      } finally {
+        releaseCanvasSurface(c);
+      }
     }
     if (typeof document !== 'undefined') {
       const canvas = document.createElement('canvas');
       canvas.width = 4;
       canvas.height = 4;
-      const supported = await new Promise<boolean>((resolve) => {
-        canvas.toBlob(
-          (b) => resolve(Boolean(b && b.type === 'image/avif' && b.size > 0)),
-          'image/avif',
-          0.8
-        );
-      });
-      cachedAvifSupport = supported;
-      return supported;
+      try {
+        const supported = await new Promise<boolean>((resolve) => {
+          canvas.toBlob(
+            (b) => resolve(Boolean(b && b.type === 'image/avif' && b.size > 0)),
+            'image/avif',
+            0.8
+          );
+        });
+        cachedAvifSupport = supported;
+        return supported;
+      } finally {
+        releaseCanvasSurface(canvas);
+      }
     }
   } catch {
     cachedAvifSupport = false;
@@ -192,38 +210,35 @@ export async function processImage(
   }
 }
 
-export async function generateFilterThumbnails(
+export async function generateBaseThumbnail(
   file: File,
   mimeType: string
-): Promise<Array<{ gradeId: ColorGradeId; blob: Blob }>> {
+): Promise<Blob> {
   const seq = ++sequenceCounter;
 
   if (typeof Worker === 'undefined') {
-    return runMainThreadThumbnailsFallback(file);
+    return runMainThreadBaseThumbnailFallback(file);
   }
 
   const slot = await acquireWorkerSlot();
   try {
     const inputBuffer = await file.arrayBuffer();
     const response = await sendWorkerMessage(slot.worker, {
-      type: 'thumbnails',
+      type: 'base-thumbnail',
       seq,
       buffer: inputBuffer,
       mimeType,
     });
 
-    if (response.type !== 'thumbnails' || !response.ok || response.fallbackRequired) {
+    if (response.type !== 'base-thumbnail' || !response.ok || response.fallbackRequired) {
       releaseWorkerSlot(slot);
-      return await runMainThreadThumbnailsFallback(file);
+      return await runMainThreadBaseThumbnailFallback(file);
     }
 
     releaseWorkerSlot(slot);
-    return response.items.map((item) => ({
-      gradeId: item.gradeId,
-      blob: new Blob([item.buffer], { type: 'image/jpeg' }),
-    }));
+    return new Blob([response.buffer], { type: 'image/jpeg' });
   } catch {
     releaseWorkerSlot(slot, true);
-    return runMainThreadThumbnailsFallback(file);
+    return runMainThreadBaseThumbnailFallback(file);
   }
 }

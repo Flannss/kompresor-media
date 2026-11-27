@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
   AlertCircle,
   Camera,
@@ -28,37 +28,32 @@ import type {
   VideoProcessProgress,
   VideoProcessResult,
 } from '../../engines/contracts';
+import { releaseCanvasSurface } from '../../engines/image/pipelineRunner';
 import { computeRotatedDimensions } from '../../engines/image/pixelOps';
 import type { MediaPresetId } from '../../presets/mediaPresets';
+import type { DeviceProfile } from '../../shared/utils/deviceCapability';
 import { formatBytes } from '../../shared/utils/formatBytes';
 import { formatDuration } from '../../shared/utils/formatDuration';
 import type { ImageProcessStatus, QueueItem, VideoProcessStatus } from '../../store/useMediaStore';
 import { ExportSharePanel } from '../export-share/ExportSharePanel';
 import { executeWhatsAppShareFlow, triggerObjectUrlDownload } from '../export-share/shareHelper';
 import type { ZipEntryInput } from '../export-share/zipExport';
+import { CropOverlay } from '../image-studio/CropOverlay';
+import { PhotoControlPanel } from '../image-studio/PhotoControlPanel';
 import { MediaInfoBar } from '../upload/MediaInfoBar';
 import {
   VideoCompareStage,
   type VideoCompareViewMode,
 } from '../video-studio/VideoCompareStage';
-import type { CapturedFrameInfo } from '../video-studio/VideoControlPanel';
+import { VideoControlPanel, type CapturedFrameInfo } from '../video-studio/VideoControlPanel';
 import { BeforeAfterPreview, type StageBackdrop } from './BeforeAfterPreview';
 import { CoreSummaryCard } from './CoreSummaryCard';
 import { QueuePanel } from './QueuePanel';
 
-const CropOverlay = lazy(() =>
-  import('../image-studio/CropOverlay').then((m) => ({ default: m.CropOverlay }))
-);
-const PhotoControlPanel = lazy(() =>
-  import('../image-studio/PhotoControlPanel').then((m) => ({ default: m.PhotoControlPanel }))
-);
-const VideoControlPanel = lazy(() =>
-  import('../video-studio/VideoControlPanel').then((m) => ({ default: m.VideoControlPanel }))
-);
-
 export interface WorkspaceStageProps {
   items: QueueItem[];
   activeItemId: string | null;
+  deviceProfile: DeviceProfile;
   maxTotal: number;
   queueLimitNotice: string | null;
   batchRunning: boolean;
@@ -78,7 +73,7 @@ export interface WorkspaceStageProps {
   imageProcessResult: ImageProcessResult | null;
   processedImageUrl: string | null;
   imageProcessError: string | null;
-  filterThumbnails: Partial<Record<ColorGradeId, string>>;
+  baseThumbnailUrl: string | null;
 
   videoEdit: VideoEditState;
   videoProcessStatus: VideoProcessStatus;
@@ -98,7 +93,13 @@ export interface WorkspaceStageProps {
   onFlipV: () => void;
   onApplyCrop: (crop: NormalizedCropRect | null) => void;
   onSelectColorGrade: (gradeId: ColorGradeId) => void;
-  onVideoThumbnailsReady: (itemId: string, thumbs: Partial<Record<ColorGradeId, string>>) => void;
+  onRequestPhotoThumbnail: () => void;
+  onVideoThumbnailReady: (itemId: string, url: string) => void;
+  onEnsureFullResExport: () => Promise<{
+    result: ImageProcessResult;
+    url: string;
+  } | null>;
+  onEnsureAllPhotosFullRes: () => Promise<void>;
   onUndoPhoto: () => void;
   onRedoPhoto: () => void;
   onResetPhoto: () => void;
@@ -133,6 +134,7 @@ function buildCapturedFrameFileName(videoFileName: string, timeSec: number): str
 export function WorkspaceStage({
   items,
   activeItemId,
+  deviceProfile,
   maxTotal,
   queueLimitNotice,
   batchRunning,
@@ -150,7 +152,7 @@ export function WorkspaceStage({
   imageProcessResult,
   processedImageUrl,
   imageProcessError,
-  filterThumbnails,
+  baseThumbnailUrl,
   videoEdit,
   videoProcessStatus,
   videoProgress,
@@ -165,7 +167,10 @@ export function WorkspaceStage({
   onFlipV,
   onApplyCrop,
   onSelectColorGrade,
-  onVideoThumbnailsReady,
+  onRequestPhotoThumbnail,
+  onVideoThumbnailReady,
+  onEnsureFullResExport,
+  onEnsureAllPhotosFullRes,
   onUndoPhoto,
   onRedoPhoto,
   onResetPhoto,
@@ -194,9 +199,12 @@ export function WorkspaceStage({
 
   const [videoCompareViewMode, setVideoCompareViewMode] =
     useState<VideoCompareViewMode>('single');
+  const [videoThumbRequested, setVideoThumbRequested] = useState(false);
   const [seekRequestSec, setSeekRequestSec] = useState<{ sec: number; seq: number } | null>(null);
   const [capturedFrame, setCapturedFrame] = useState<CapturedFrameInfo | null>(null);
 
+  const activeQueueItem = items.find((i) => i.id === activeItemId);
+  const needsFullResExport = Boolean(activeQueueItem?.needsFullResExport);
   const isImage = metadata.kind === 'image';
   const canSplitCompare =
     isImage &&
@@ -229,10 +237,12 @@ export function WorkspaceStage({
     setCompareMode(false);
     setShowOriginalPhoto(false);
     setHoldOriginalMedia(false);
+    setVideoCompareViewMode('single');
+    setVideoThumbRequested(false);
     setSeekRequestSec(null);
     setCapturedFrame((prev) => {
       if (prev) {
-        setTimeout(() => URL.revokeObjectURL(prev.url), 50);
+        setTimeout(() => URL.revokeObjectURL(prev.url), 250);
       }
       return null;
     });
@@ -242,7 +252,7 @@ export function WorkspaceStage({
     return () => {
       setCapturedFrame((prev) => {
         if (prev) {
-          setTimeout(() => URL.revokeObjectURL(prev.url), 50);
+          setTimeout(() => URL.revokeObjectURL(prev.url), 250);
         }
         return null;
       });
@@ -268,7 +278,7 @@ export function WorkspaceStage({
         img.naturalHeight || metadata.height,
         imageEdit.rotationDeg
       );
-      const maxEdge = 1400;
+      const maxEdge = deviceProfile.performanceTier === 'low-memory-mobile' ? 960 : 1400;
       const scale = Math.min(1, maxEdge / Math.max(rotated.width, rotated.height));
       const canvasW = Math.max(1, Math.round(rotated.width * scale));
       const canvasH = Math.max(1, Math.round(rotated.height * scale));
@@ -276,26 +286,30 @@ export function WorkspaceStage({
       const canvas = document.createElement('canvas');
       canvas.width = canvasW;
       canvas.height = canvasH;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        setOrientedCropUrl(objectUrl);
-        return;
-      }
+      try {
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          setOrientedCropUrl(objectUrl);
+          return;
+        }
 
-      ctx.save();
-      ctx.translate(canvasW / 2, canvasH / 2);
-      if (imageEdit.rotationDeg !== 0) {
-        ctx.rotate((imageEdit.rotationDeg * Math.PI) / 180);
-      }
-      ctx.scale(imageEdit.flipH ? -1 : 1, imageEdit.flipV ? -1 : 1);
-      const drawW =
-        imageEdit.rotationDeg === 90 || imageEdit.rotationDeg === 270 ? canvasH : canvasW;
-      const drawH =
-        imageEdit.rotationDeg === 90 || imageEdit.rotationDeg === 270 ? canvasW : canvasH;
-      ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
-      ctx.restore();
+        ctx.save();
+        ctx.translate(canvasW / 2, canvasH / 2);
+        if (imageEdit.rotationDeg !== 0) {
+          ctx.rotate((imageEdit.rotationDeg * Math.PI) / 180);
+        }
+        ctx.scale(imageEdit.flipH ? -1 : 1, imageEdit.flipV ? -1 : 1);
+        const drawW =
+          imageEdit.rotationDeg === 90 || imageEdit.rotationDeg === 270 ? canvasH : canvasW;
+        const drawH =
+          imageEdit.rotationDeg === 90 || imageEdit.rotationDeg === 270 ? canvasW : canvasH;
+        ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+        ctx.restore();
 
-      setOrientedCropUrl(canvas.toDataURL('image/png'));
+        setOrientedCropUrl(canvas.toDataURL('image/png'));
+      } finally {
+        releaseCanvasSurface(canvas);
+      }
     };
     img.src = objectUrl;
 
@@ -311,6 +325,7 @@ export function WorkspaceStage({
     imageEdit.flipV,
     metadata.width,
     metadata.height,
+    deviceProfile.performanceTier,
   ]);
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -354,11 +369,15 @@ export function WorkspaceStage({
     canvas.width = videoEl.videoWidth;
     canvas.height = videoEl.videoHeight;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      releaseCanvasSurface(canvas);
+      return;
+    }
     ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
 
     canvas.toBlob(
       (blob) => {
+        releaseCanvasSurface(canvas);
         if (!blob) return;
         const frameFileName = buildCapturedFrameFileName(
           metadata.fileName,
@@ -368,7 +387,7 @@ export function WorkspaceStage({
         const nextUrl = URL.createObjectURL(blob);
         setCapturedFrame((prev) => {
           if (prev) {
-            setTimeout(() => URL.revokeObjectURL(prev.url), 50);
+            setTimeout(() => URL.revokeObjectURL(prev.url), 250);
           }
           return { file: frameFile, url: nextUrl };
         });
@@ -381,6 +400,36 @@ export function WorkspaceStage({
   const handleEditCapturedFrameAsPhoto = () => {
     if (!capturedFrame) return;
     onLoadSingleReplacementFile(capturedFrame.file);
+  };
+
+  const handlePreparePhotoFullRes = async () => {
+    const res = await onEnsureFullResExport();
+    if (!res) return null;
+    return {
+      blob: res.result.outputBlob,
+      url: res.url,
+      fileName: res.result.outputFileName,
+      mimeType: res.result.outputMime,
+    };
+  };
+
+  const handlePrepareAllZipItems = async (): Promise<ZipEntryInput[]> => {
+    await onEnsureAllPhotosFullRes();
+    const out: ZipEntryInput[] = [];
+    for (const item of items) {
+      if (item.imageResult) {
+        out.push({
+          fileName: item.imageResult.outputFileName,
+          blob: item.imageResult.outputBlob,
+        });
+      } else if (item.videoResult) {
+        out.push({
+          fileName: item.videoResult.outputFileName,
+          blob: item.videoResult.outputBlob,
+        });
+      }
+    }
+    return out;
   };
 
   const orientedDimensions = computeRotatedDimensions(
@@ -402,7 +451,6 @@ export function WorkspaceStage({
 
   return (
     <div className="flex min-h-[calc(100vh-56px)] w-full flex-col lg:flex-row">
-      {/* Queue Strip (Mobile/Tablet) & Collapsible Left Queue Rail (Desktop) */}
       <QueuePanel
         items={items}
         activeItemId={activeItemId}
@@ -423,7 +471,7 @@ export function WorkspaceStage({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`bg-cobalt-stage relative flex min-h-[44vh] flex-1 flex-col items-center justify-center gap-3.5 px-3 py-5 transition-colors sm:min-h-[50vh] sm:px-7 sm:py-6 lg:min-h-[calc(100vh-56px)] ${
+        className={`bg-cobalt-stage relative flex min-h-[42vh] flex-1 flex-col items-center justify-center gap-3 px-3 py-4 transition-colors sm:min-h-[50vh] sm:px-7 sm:py-6 lg:min-h-[calc(100vh-56px)] ${
           isDraggingOverStage ? 'ring-2 ring-inset ring-[var(--border-active)]' : ''
         }`}
       >
@@ -447,19 +495,17 @@ export function WorkspaceStage({
 
         {isImage ? (
           isCropping && orientedCropUrl ? (
-            <Suspense fallback={<div className="h-64 w-full animate-pulse rounded-2xl bg-[var(--bg-elevated)]" />}>
-              <CropOverlay
-                imageUrl={orientedCropUrl}
-                sourceWidth={orientedDimensions.width}
-                sourceHeight={orientedDimensions.height}
-                initialCrop={imageEdit.crop}
-                onApply={(nextCrop) => {
-                  onApplyCrop(nextCrop);
-                  setIsCropping(false);
-                }}
-                onCancel={() => setIsCropping(false)}
-              />
-            </Suspense>
+            <CropOverlay
+              imageUrl={orientedCropUrl}
+              sourceWidth={orientedDimensions.width}
+              sourceHeight={orientedDimensions.height}
+              initialCrop={imageEdit.crop}
+              onApply={(nextCrop) => {
+                onApplyCrop(nextCrop);
+                setIsCropping(false);
+              }}
+              onCancel={() => setIsCropping(false)}
+            />
           ) : (
             <BeforeAfterPreview
               originalUrl={objectUrl}
@@ -476,6 +522,8 @@ export function WorkspaceStage({
         ) : (
           <VideoCompareStage
             itemId={activeItemId}
+            sourceSizeBytes={metadata.sizeBytes}
+            deviceProfile={deviceProfile}
             objectUrl={objectUrl}
             processedVideoUrl={processedVideoUrl}
             videoEdit={videoEdit}
@@ -485,17 +533,16 @@ export function WorkspaceStage({
             onChangeCompareViewMode={setVideoCompareViewMode}
             holdOriginalActive={holdOriginalMedia}
             onHoldOriginalChange={setHoldOriginalMedia}
-            hasGeneratedThumbnails={Object.keys(filterThumbnails).length > 0}
-            onVideoThumbnailsReady={onVideoThumbnailsReady}
+            thumbnailRequested={videoThumbRequested}
+            baseThumbnailUrl={baseThumbnailUrl}
+            onBaseThumbnailReady={onVideoThumbnailReady}
             seekRequestSec={seekRequestSec}
-            onVideoTimeChange={() => {}}
             videoElementRef={(el) => {
               videoElementRef.current = el;
             }}
           />
         )}
 
-        {/* Summary pill */}
         <MediaInfoBar
           metadata={metadata}
           validation={validation}
@@ -505,11 +552,11 @@ export function WorkspaceStage({
           videoProcessResult={videoProcessResult}
         />
 
-        {/* Floating Studio Stage Dock */}
+        {/* Studio Stage Dock (zero backdrop-blur for 60fps mobile compositing) */}
         {!isCropping && (
           <div
             data-testid="studio-stage-dock"
-            className="flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)]/95 p-1.5 backdrop-blur-md"
+            className="flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-2xl border border-[var(--border-hairline)] bg-[var(--surface-dock)] p-1.5"
             style={{ boxShadow: 'var(--dock-shadow)' }}
           >
             {isImage ? (
@@ -523,7 +570,7 @@ export function WorkspaceStage({
                       setShowOriginalPhoto(false);
                       setCompareMode((v) => !v);
                     }}
-                    className={`inline-flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium transition-all active:scale-[0.97] ${
+                    className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium transition-all active:scale-[0.97] ${
                       compareMode
                         ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                         : 'text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]'
@@ -539,7 +586,7 @@ export function WorkspaceStage({
                         type="button"
                         data-testid="view-original-btn"
                         onClick={() => setShowOriginalPhoto(true)}
-                        className={`rounded-lg px-2 py-1 font-medium transition-colors ${
+                        className={`min-h-[32px] rounded-lg px-2 py-1 font-medium transition-colors ${
                           showOriginalPhoto
                             ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                             : 'text-[var(--text-secondary)]'
@@ -551,7 +598,7 @@ export function WorkspaceStage({
                         type="button"
                         data-testid="view-result-btn"
                         onClick={() => setShowOriginalPhoto(false)}
-                        className={`rounded-lg px-2 py-1 font-medium transition-colors ${
+                        className={`min-h-[32px] rounded-lg px-2 py-1 font-medium transition-colors ${
                           !showOriginalPhoto
                             ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                             : 'text-[var(--text-secondary)]'
@@ -571,7 +618,7 @@ export function WorkspaceStage({
                     onPointerUp={() => setHoldOriginalMedia(false)}
                     onPointerLeave={() => setHoldOriginalMedia(false)}
                     onPointerCancel={() => setHoldOriginalMedia(false)}
-                    className="inline-flex h-8 items-center gap-1 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] select-none"
+                    className="inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] select-none"
                   >
                     <Eye className="h-3.5 w-3.5" aria-hidden="true" />
                     <span>Tahan: Asli</span>
@@ -585,7 +632,7 @@ export function WorkspaceStage({
                   data-testid="dock-rotate-btn"
                   onClick={onRotatePhoto90}
                   title="Putar 90°"
-                  className="inline-flex h-8 items-center gap-1 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
+                  className="inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
                 >
                   <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
                   <span className="hidden sm:inline">Putar 90°</span>
@@ -597,7 +644,7 @@ export function WorkspaceStage({
                   aria-pressed={imageEdit.flipH}
                   onClick={onFlipH}
                   title="Balik Horizontal"
-                  className={`inline-flex h-8 items-center gap-1 rounded-xl px-2.5 text-xs font-medium transition-all active:scale-[0.97] ${
+                  className={`inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2.5 text-xs font-medium transition-all active:scale-[0.97] ${
                     imageEdit.flipH
                       ? 'bg-[var(--bg-subtle)] text-[var(--accent-highlight)]'
                       : 'text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]'
@@ -615,7 +662,7 @@ export function WorkspaceStage({
                   disabled={!canUndoPhoto}
                   onClick={onUndoPhoto}
                   title="Urungkan (Ctrl+Z)"
-                  className="inline-flex h-8 items-center gap-1 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
+                  className="inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
                 >
                   <Undo2 className="h-3.5 w-3.5" aria-hidden="true" />
                   <span className="hidden md:inline">Urungkan</span>
@@ -627,7 +674,7 @@ export function WorkspaceStage({
                   disabled={!canRedoPhoto}
                   onClick={onRedoPhoto}
                   title="Ulangi (Ctrl+Shift+Z)"
-                  className="inline-flex h-8 items-center gap-1 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
+                  className="inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
                 >
                   <Redo2 className="h-3.5 w-3.5" aria-hidden="true" />
                   <span className="hidden md:inline">Ulangi</span>
@@ -638,7 +685,7 @@ export function WorkspaceStage({
                   data-testid="dock-reset-btn"
                   onClick={onResetPhoto}
                   title="Atur ulang editan foto"
-                  className="inline-flex h-8 items-center gap-1 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
+                  className="inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
                 >
                   <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
                   <span className="hidden md:inline">Atur Ulang</span>
@@ -649,7 +696,7 @@ export function WorkspaceStage({
                 type="button"
                 data-testid="dock-capture-frame-btn"
                 onClick={handleCaptureFrame}
-                className="inline-flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
+                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
               >
                 <Camera className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>Ambil Frame</span>
@@ -677,7 +724,7 @@ export function WorkspaceStage({
                   data-testid={`backdrop-${bg.id}-btn`}
                   aria-pressed={backdrop === bg.id}
                   onClick={() => setBackdrop(bg.id)}
-                  className={`rounded-lg px-2 py-1 font-medium transition-colors ${
+                  className={`min-h-[32px] rounded-lg px-2 py-1 font-medium transition-colors ${
                     backdrop === bg.id
                       ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -692,57 +739,54 @@ export function WorkspaceStage({
       </section>
 
       {/* Right Inspector Panel */}
-      <aside className="flex w-full shrink-0 flex-col gap-4 border-t border-[var(--border-hairline)] bg-[var(--bg-surface)] p-4 pb-20 sm:p-5 md:pb-6 lg:w-[392px] lg:border-l lg:border-t-0">
-        <Suspense
-          fallback={
-            <div className="h-64 w-full animate-pulse rounded-2xl bg-[var(--bg-elevated)]" />
-          }
-        >
-          {isImage ? (
-            <PhotoControlPanel
-              selectedPresetId={selectedPresetId}
-              imageEdit={imageEdit}
-              imageProcessResult={imageProcessResult}
-              filterThumbnails={filterThumbnails}
-              avifSupported={avifSupported}
-              isCropping={isCropping}
-              holdOriginalActive={holdOriginalMedia}
-              onHoldOriginalChange={setHoldOriginalMedia}
-              onSelectPreset={onSelectPreset}
-              onUpdateImageEdit={onUpdateImageEdit}
-              onCommitSnapshot={onCommitPhotoSnapshot}
-              onToggleCrop={() => setIsCropping((v) => !v)}
-              onRotate90={onRotatePhoto90}
-              onFlipH={onFlipH}
-              onFlipV={onFlipV}
-              onSelectColorGrade={onSelectColorGrade}
-            />
-          ) : (
-            <VideoControlPanel
-              metadata={metadata}
-              selectedPresetId={selectedPresetId}
-              videoEdit={videoEdit}
-              filterThumbnails={filterThumbnails}
-              holdOriginalActive={holdOriginalMedia}
-              onHoldOriginalChange={setHoldOriginalMedia}
-              videoProcessStatus={videoProcessStatus}
-              videoProgress={videoProgress}
-              videoProcessResult={videoProcessResult}
-              processedVideoUrl={processedVideoUrl}
-              videoProcessError={videoProcessError}
-              capturedFrame={capturedFrame}
-              finishedBatchItems={finishedBatchItems}
-              onSelectPreset={onSelectPreset}
-              onUpdateVideoEdit={onUpdateVideoEdit}
-              onSelectColorGrade={onSelectColorGrade}
-              onStartProcess={() => onStartVideoProcess('auto')}
-              onCancelProcess={onCancelVideoProcess}
-              onSeekPreview={handleSeekVideoPreview}
-              onCaptureFrame={handleCaptureFrame}
-              onEditCapturedFrameAsPhoto={handleEditCapturedFrameAsPhoto}
-            />
-          )}
-        </Suspense>
+      <aside className="flex w-full shrink-0 flex-col gap-4 border-t border-[var(--border-hairline)] bg-[var(--bg-surface)] p-4 pb-24 sm:p-5 md:pb-6 lg:w-[392px] lg:border-l lg:border-t-0">
+        {isImage ? (
+          <PhotoControlPanel
+            selectedPresetId={selectedPresetId}
+            imageEdit={imageEdit}
+            imageProcessResult={imageProcessResult}
+            baseThumbnailUrl={baseThumbnailUrl}
+            avifSupported={avifSupported}
+            isCropping={isCropping}
+            holdOriginalActive={holdOriginalMedia}
+            onHoldOriginalChange={setHoldOriginalMedia}
+            onSelectPreset={onSelectPreset}
+            onUpdateImageEdit={onUpdateImageEdit}
+            onCommitSnapshot={onCommitPhotoSnapshot}
+            onToggleCrop={() => setIsCropping((v) => !v)}
+            onRotate90={onRotatePhoto90}
+            onFlipH={onFlipH}
+            onFlipV={onFlipV}
+            onSelectColorGrade={onSelectColorGrade}
+            onRequestThumbnail={onRequestPhotoThumbnail}
+          />
+        ) : (
+          <VideoControlPanel
+            metadata={metadata}
+            deviceProfile={deviceProfile}
+            selectedPresetId={selectedPresetId}
+            videoEdit={videoEdit}
+            baseThumbnailUrl={baseThumbnailUrl}
+            onRequestThumbnail={() => setVideoThumbRequested(true)}
+            holdOriginalActive={holdOriginalMedia}
+            onHoldOriginalChange={setHoldOriginalMedia}
+            videoProcessStatus={videoProcessStatus}
+            videoProgress={videoProgress}
+            videoProcessResult={videoProcessResult}
+            processedVideoUrl={processedVideoUrl}
+            videoProcessError={videoProcessError}
+            capturedFrame={capturedFrame}
+            finishedBatchItems={finishedBatchItems}
+            onSelectPreset={onSelectPreset}
+            onUpdateVideoEdit={onUpdateVideoEdit}
+            onSelectColorGrade={onSelectColorGrade}
+            onStartProcess={() => onStartVideoProcess('auto')}
+            onCancelProcess={onCancelVideoProcess}
+            onSeekPreview={handleSeekVideoPreview}
+            onCaptureFrame={handleCaptureFrame}
+            onEditCapturedFrameAsPhoto={handleEditCapturedFrameAsPhoto}
+          />
+        )}
 
         {imageProcessError && isImage && (
           <p
@@ -753,7 +797,6 @@ export function WorkspaceStage({
           </p>
         )}
 
-        {/* Always-Visible Core Summary Readout (Ringkasan Inti) */}
         <CoreSummaryCard
           metadata={metadata}
           selectedPresetId={selectedPresetId}
@@ -772,17 +815,19 @@ export function WorkspaceStage({
               outputFileName={imageProcessResult?.outputFileName ?? null}
               outputMime={imageProcessResult?.outputMime ?? null}
               finishedBatchItems={finishedBatchItems}
+              needsFullResPreparation={needsFullResExport}
+              onPrepareFullResExport={handlePreparePhotoFullRes}
+              onPrepareAllZipItems={handlePrepareAllZipItems}
               isProcessing={imageProcessStatus === 'processing'}
             />
           </div>
         )}
 
-        {/* Collapsed Detail teknis Disclosure (raw technical parameters strictly tucked here) */}
         <details
           data-testid="file-details-accordion"
           className="group mt-auto border-t border-[var(--border-hairline)] pt-3.5"
         >
-          <summary className="flex cursor-pointer list-none items-center justify-between py-1 text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-[38px] cursor-pointer list-none items-center justify-between py-1 text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] [&::-webkit-details-marker]:hidden">
             <span>Detail teknis</span>
             <ChevronDown
               className="h-4 w-4 transition-transform group-open:rotate-180"
@@ -873,17 +918,26 @@ export function WorkspaceStage({
         </details>
       </aside>
 
-      {/* Mobile Sticky Bottom Action Bar (< 768px) */}
+      {/* Mobile Sticky Bottom Action Bar (< 768px) with safe-area padding & solid dock surface */}
       <div
         data-testid="mobile-sticky-action-bar"
-        className="sticky bottom-0 z-20 flex items-center gap-2 border-t border-[var(--border-hairline)] bg-[var(--bg-surface)]/95 px-3 py-2.5 backdrop-blur-md md:hidden"
+        className="sticky bottom-0 z-20 flex items-center gap-2 border-t border-[var(--border-hairline)] bg-[var(--surface-dock)] px-3 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] md:hidden"
       >
         {activeExportUrl && activeExportName && activeExportBlob && activeExportMime ? (
           <>
             <button
               type="button"
               data-testid="mobile-sticky-download-btn"
-              onClick={() => triggerObjectUrlDownload(activeExportUrl, activeExportName)}
+              onClick={() => {
+                void (async () => {
+                  const target =
+                    isImage && needsFullResExport ? await handlePreparePhotoFullRes() : null;
+                  triggerObjectUrlDownload(
+                    target?.url ?? activeExportUrl,
+                    target?.fileName ?? activeExportName
+                  );
+                })();
+              }}
               className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--accent-primary)] px-3 text-xs font-semibold text-[var(--ink-on-accent)]"
             >
               <Download className="h-4 w-4" aria-hidden="true" />
@@ -892,14 +946,18 @@ export function WorkspaceStage({
             <button
               type="button"
               data-testid="mobile-sticky-whatsapp-btn"
-              onClick={() =>
-                void executeWhatsAppShareFlow({
-                  blob: activeExportBlob,
-                  objectUrl: activeExportUrl,
-                  fileName: activeExportName,
-                  mimeType: activeExportMime,
-                })
-              }
+              onClick={() => {
+                void (async () => {
+                  const target =
+                    isImage && needsFullResExport ? await handlePreparePhotoFullRes() : null;
+                  await executeWhatsAppShareFlow({
+                    blob: target?.blob ?? activeExportBlob,
+                    objectUrl: target?.url ?? activeExportUrl,
+                    fileName: target?.fileName ?? activeExportName,
+                    mimeType: target?.mimeType ?? activeExportMime,
+                  });
+                })();
+              }}
               className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-[var(--border-active)] bg-[var(--bg-elevated)] px-3.5 text-xs font-semibold text-[var(--text-primary)]"
             >
               <Send className="h-4 w-4 text-[var(--accent-highlight)]" aria-hidden="true" />

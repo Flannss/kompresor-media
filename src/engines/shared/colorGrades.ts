@@ -529,6 +529,70 @@ export function buildSvgFilterParams(
 }
 
 /**
+ * Lightweight GPU-composited pure-CSS filter fallback for iOS Safari / low-RAM mobile previews
+ * and shared thumbnail cards. Matches calibrated contrast, brightness, saturation, and hue feel
+ * without triggering <svg><filter> thermal stalls on mobile video playback.
+ */
+export function getCssPreviewFilter(
+  grade: ColorGradeState,
+  colorContrast?: ColorContrastEnhancementConfig
+): string {
+  const active = hasActiveColorGrade(grade) || Boolean(colorContrast?.enabled);
+  if (!active) {
+    return 'none';
+  }
+
+  const c = resolveGradeAndEnhanceCoefficients(grade, colorContrast);
+  const t = grade.gradeId === 'original' ? 0 : Math.min(1, Math.max(0, grade.intensity / 100));
+
+  const brightnessCss = Math.min(
+    1.85,
+    Math.max(0.35, 1 + c.brightnessAdd * 1.15 + (c.gammaExp - 1) * 0.45 + c.blackLift * 0.5)
+  );
+  const contrastCss = Math.min(1.9, Math.max(0.45, c.contrastMul));
+  const saturateCss = Math.min(2.0, Math.max(0, c.saturationMul));
+
+  const warmDelta = c.rm - c.bm + (c.rh - c.bh) * 0.6;
+  const sepiaCss =
+    grade.gradeId === 'vintage-kodak'
+      ? 0.24 * t
+      : grade.gradeId === 'golden-hour'
+        ? 0.16 * t
+        : grade.gradeId === 'iphone-pro'
+          ? 0.04 * t
+          : Math.max(0, Math.min(0.4, warmDelta * 0.65));
+
+  const baseHueDeg =
+    grade.gradeId === 'teal-orange'
+      ? -6 * t
+      : grade.gradeId === 'vintage-kodak'
+        ? -4 * t
+        : grade.gradeId === 'golden-hour'
+          ? -3 * t
+          : 0;
+  const toneHueDeg = (grade.tone.tint / 50) * 8 + (grade.tone.temperature / 50) * -4;
+  const totalHueDeg = Number((baseHueDeg + toneHueDeg).toFixed(1));
+
+  const parts: string[] = [
+    `brightness(${brightnessCss.toFixed(3)})`,
+    `contrast(${contrastCss.toFixed(3)})`,
+    `saturate(${saturateCss.toFixed(3)})`,
+  ];
+
+  if (c.monoBlend > 0.01) {
+    parts.push(`grayscale(${Math.min(1, c.monoBlend).toFixed(3)})`);
+  }
+  if (sepiaCss > 0.005) {
+    parts.push(`sepia(${sepiaCss.toFixed(3)})`);
+  }
+  if (Math.abs(totalHueDeg) >= 0.4) {
+    parts.push(`hue-rotate(${totalHueDeg}deg)`);
+  }
+
+  return parts.join(' ');
+}
+
+/**
  * Generates verified LUT-free FFmpeg filter chain segments for Color Grading + Color Contrast.
  * Uses strictly verified compiled filters: eq, colorchannelmixer, colorbalance, curves.
  */

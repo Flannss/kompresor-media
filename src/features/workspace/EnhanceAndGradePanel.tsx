@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown, Eye } from 'lucide-react';
 import type {
   ColorGradeId,
@@ -12,6 +12,7 @@ import {
   COLOR_GRADE_PRESETS,
   createDefaultColorGrade,
   createDefaultEnhanceSuite,
+  getCssPreviewFilter,
   hasActiveEnhancements,
   NOISE_PRESET_VALUES,
 } from '../../engines/shared/colorGrades';
@@ -20,7 +21,8 @@ export interface EnhanceAndGradePanelProps {
   mediaKind: 'image' | 'video';
   enhanceSuite: EnhancementSuiteState;
   colorGrade: ColorGradeState;
-  filterThumbnails: Partial<Record<ColorGradeId, string>>;
+  baseThumbnailUrl: string | null;
+  onRequestThumbnail?: () => void;
   holdOriginalActive: boolean;
   onHoldOriginalChange: (held: boolean) => void;
   onUpdateEnhanceSuite: (next: EnhancementSuiteState) => void;
@@ -41,11 +43,14 @@ const NOISE_LEVELS: ReadonlyArray<{ id: NoisePresetLevel; label: string }> = [
   { id: 'strong', label: 'Kuat' },
 ];
 
+const NEUTRAL_TONE = { temperature: 0, tint: 0, shadows: 0, highlights: 0 };
+
 export function EnhanceAndGradePanel({
   mediaKind,
   enhanceSuite,
   colorGrade,
-  filterThumbnails,
+  baseThumbnailUrl,
+  onRequestThumbnail,
   holdOriginalActive,
   onHoldOriginalChange,
   onUpdateEnhanceSuite,
@@ -57,6 +62,12 @@ export function EnhanceAndGradePanel({
     'noise' | 'sharpen' | 'colorContrast' | 'upscale1080' | null
   >(null);
   const [toneOpen, setToneOpen] = useState(false);
+
+  useEffect(() => {
+    if (!baseThumbnailUrl) {
+      onRequestThumbnail?.();
+    }
+  }, [baseThumbnailUrl, onRequestThumbnail]);
 
   const enhanceActive = hasActiveEnhancements(enhanceSuite);
 
@@ -87,7 +98,7 @@ export function EnhanceAndGradePanel({
       <section className="space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-xs font-semibold text-[var(--text-primary)]">
-            Penjernihan & Upscale 1080p HD
+            Penjernihan &amp; Upscale 1080p HD
           </h3>
           {enhanceActive && (
             <button
@@ -109,7 +120,7 @@ export function EnhanceAndGradePanel({
               type="button"
               data-testid={`enhance-recipe-${rec.id}`}
               onClick={() => onUpdateEnhanceSuite(applyEnhanceRecipe(rec.id, enhanceSuite))}
-              className="rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--border-active)] hover:text-[var(--text-primary)]"
+              className="min-h-[36px] rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--border-active)] hover:text-[var(--text-primary)]"
             >
               {rec.label}
             </button>
@@ -124,7 +135,7 @@ export function EnhanceAndGradePanel({
               <button
                 type="button"
                 onClick={() => setExpandedCard((prev) => (prev === 'noise' ? null : 'noise'))}
-                className="flex flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
+                className="flex min-h-[34px] flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
               >
                 <ChevronDown
                   className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${
@@ -140,7 +151,7 @@ export function EnhanceAndGradePanel({
                 data-testid="enhance-noise-toggle"
                 aria-checked={enhanceSuite.noise.enabled}
                 onClick={() => toggleCardEnabled('noise')}
-                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
+                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
                   enhanceSuite.noise.enabled
                     ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                     : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
@@ -171,7 +182,7 @@ export function EnhanceAndGradePanel({
                             },
                           })
                         }
-                        className={`rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors ${
+                        className={`min-h-[34px] rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors ${
                           active
                             ? 'border-[var(--border-active)] bg-[var(--accent-deep)] text-white'
                             : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
@@ -206,7 +217,7 @@ export function EnhanceAndGradePanel({
                       })
                     }
                     onPointerUp={onCommitSliderSnapshot}
-                    className="km-range-input"
+                    className="km-range-input w-full"
                   />
                 </label>
 
@@ -233,7 +244,7 @@ export function EnhanceAndGradePanel({
                       })
                     }
                     onPointerUp={onCommitSliderSnapshot}
-                    className="km-range-input"
+                    className="km-range-input w-full"
                   />
                 </label>
 
@@ -260,7 +271,7 @@ export function EnhanceAndGradePanel({
                           },
                         })
                       }
-                      className="km-range-input"
+                      className="km-range-input w-full"
                     />
                   </label>
                 )}
@@ -274,7 +285,7 @@ export function EnhanceAndGradePanel({
               <button
                 type="button"
                 onClick={() => setExpandedCard((prev) => (prev === 'sharpen' ? null : 'sharpen'))}
-                className="flex flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
+                className="flex min-h-[34px] flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
               >
                 <ChevronDown
                   className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${
@@ -290,7 +301,7 @@ export function EnhanceAndGradePanel({
                 data-testid="enhance-sharpen-toggle"
                 aria-checked={enhanceSuite.sharpen.enabled}
                 onClick={() => toggleCardEnabled('sharpen')}
-                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
+                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
                   enhanceSuite.sharpen.enabled
                     ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                     : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
@@ -326,7 +337,7 @@ export function EnhanceAndGradePanel({
                       })
                     }
                     onPointerUp={onCommitSliderSnapshot}
-                    className="km-range-input"
+                    className="km-range-input w-full"
                   />
                 </label>
 
@@ -355,7 +366,7 @@ export function EnhanceAndGradePanel({
                             },
                           })
                         }
-                        className={`rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors ${
+                        className={`min-h-[34px] rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors ${
                           enhanceSuite.sharpen.kernelSize === opt.size
                             ? 'border-[var(--border-active)] bg-[var(--accent-deep)] text-white'
                             : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
@@ -367,7 +378,7 @@ export function EnhanceAndGradePanel({
                   </div>
                 </div>
 
-                <label className="flex cursor-pointer items-center justify-between text-[11px] text-[var(--text-secondary)]">
+                <label className="flex min-h-[32px] cursor-pointer items-center justify-between text-[11px] text-[var(--text-secondary)]">
                   <span>Jaga Warna Alami</span>
                   <input
                     type="checkbox"
@@ -382,7 +393,7 @@ export function EnhanceAndGradePanel({
                         },
                       })
                     }
-                    className="h-3.5 w-3.5 accent-[var(--accent-primary)]"
+                    className="h-4 w-4 accent-[var(--accent-primary)]"
                   />
                 </label>
               </div>
@@ -397,7 +408,7 @@ export function EnhanceAndGradePanel({
                 onClick={() =>
                   setExpandedCard((prev) => (prev === 'colorContrast' ? null : 'colorContrast'))
                 }
-                className="flex flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
+                className="flex min-h-[34px] flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
               >
                 <ChevronDown
                   className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${
@@ -405,7 +416,7 @@ export function EnhanceAndGradePanel({
                   }`}
                   aria-hidden="true"
                 />
-                <span>Perbaiki Warna & Kontras</span>
+                <span>Perbaiki Warna &amp; Kontras</span>
               </button>
               <button
                 type="button"
@@ -413,7 +424,7 @@ export function EnhanceAndGradePanel({
                 data-testid="enhance-color-toggle"
                 aria-checked={enhanceSuite.colorContrast.enabled}
                 onClick={() => toggleCardEnabled('colorContrast')}
-                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
+                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
                   enhanceSuite.colorContrast.enabled
                     ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                     : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
@@ -458,7 +469,7 @@ export function EnhanceAndGradePanel({
                           })
                         }
                         onPointerUp={onCommitSliderSnapshot}
-                        className="km-range-input"
+                        className="km-range-input w-full"
                       />
                     </label>
                   );
@@ -475,7 +486,7 @@ export function EnhanceAndGradePanel({
                 onClick={() =>
                   setExpandedCard((prev) => (prev === 'upscale1080' ? null : 'upscale1080'))
                 }
-                className="flex flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
+                className="flex min-h-[34px] flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
               >
                 <ChevronDown
                   className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${
@@ -491,7 +502,7 @@ export function EnhanceAndGradePanel({
                 data-testid="enhance-upscale1080-toggle"
                 aria-checked={enhanceSuite.upscale1080.enabled}
                 onClick={() => toggleCardEnabled('upscale1080')}
-                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
+                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
                   enhanceSuite.upscale1080.enabled
                     ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                     : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
@@ -527,7 +538,7 @@ export function EnhanceAndGradePanel({
                           },
                         })
                       }
-                      className={`rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors ${
+                      className={`min-h-[34px] rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors ${
                         enhanceSuite.upscale1080.method === opt.id
                           ? 'border-[var(--border-active)] bg-[var(--accent-deep)] text-white'
                           : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
@@ -537,7 +548,7 @@ export function EnhanceAndGradePanel({
                     </button>
                   ))}
                 </div>
-                <label className="flex cursor-pointer items-center justify-between text-[11px] text-[var(--text-secondary)]">
+                <label className="flex min-h-[32px] cursor-pointer items-center justify-between text-[11px] text-[var(--text-secondary)]">
                   <span>Pertahankan Proporsi</span>
                   <input
                     type="checkbox"
@@ -552,7 +563,7 @@ export function EnhanceAndGradePanel({
                         },
                       })
                     }
-                    className="h-3.5 w-3.5 accent-[var(--accent-primary)]"
+                    className="h-4 w-4 accent-[var(--accent-primary)]"
                   />
                 </label>
               </div>
@@ -561,11 +572,11 @@ export function EnhanceAndGradePanel({
         </div>
       </section>
 
-      {/* SECTION 2: Filter & Color Grading (7 LUT-free looks) */}
+      {/* SECTION 2: Filter & Color Grading (Shared 96px thumbnail + instant CSS filters) */}
       <section className="space-y-2.5 border-t border-[var(--border-hairline)] pt-3.5">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-xs font-semibold text-[var(--text-primary)]">
-            Filter & Color Grading
+            Filter &amp; Color Grading
           </h3>
           <button
             type="button"
@@ -575,18 +586,21 @@ export function EnhanceAndGradePanel({
             onPointerUp={() => onHoldOriginalChange(false)}
             onPointerLeave={() => onHoldOriginalChange(false)}
             onPointerCancel={() => onHoldOriginalChange(false)}
-            className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] select-none"
+            className="inline-flex min-h-[34px] items-center gap-1 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] select-none"
           >
-            <Eye className="h-3 w-3" aria-hidden="true" />
+            <Eye className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Tahan: Asli</span>
           </button>
         </div>
 
-        {/* 7 Preset Look Cards with Live 160px Thumbnails */}
         <div className="grid grid-cols-2 gap-2">
           {COLOR_GRADE_PRESETS.map((look) => {
             const active = colorGrade.gradeId === look.id;
-            const thumbUrl = filterThumbnails[look.id];
+            const cssFilter = getCssPreviewFilter({
+              gradeId: look.id,
+              intensity: 100,
+              tone: NEUTRAL_TONE,
+            });
             return (
               <button
                 key={look.id}
@@ -602,19 +616,22 @@ export function EnhanceAndGradePanel({
                 }`}
               >
                 <div className="relative h-16 w-full overflow-hidden bg-[var(--bg-subtle)]">
-                  {thumbUrl ? (
+                  {baseThumbnailUrl ? (
                     <img
-                      src={thumbUrl}
+                      src={baseThumbnailUrl}
                       alt={look.title}
+                      style={{ filter: cssFilter === 'none' ? undefined : cssFilter }}
                       className="h-full w-full object-cover"
-                      loading="lazy"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#020C47] via-[#011F65] to-[#2078CF]/50 text-[10px] font-semibold text-white/80">
+                    <div
+                      style={{ filter: cssFilter === 'none' ? undefined : cssFilter }}
+                      className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#020C47] via-[#011F65] to-[#2078CF]/50 text-[10px] font-semibold text-white/80"
+                    >
                       {look.badge}
                     </div>
                   )}
-                  <span className="absolute right-1.5 top-1.5 rounded-md bg-[#000521]/75 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                  <span className="absolute right-1.5 top-1.5 rounded-md bg-[var(--surface-badge)] px-1.5 py-0.5 text-[9px] font-semibold text-white">
                     {look.badge}
                   </span>
                 </div>
@@ -628,7 +645,6 @@ export function EnhanceAndGradePanel({
           })}
         </div>
 
-        {/* Intensitas Filter slider when a look is selected */}
         {colorGrade.gradeId !== 'original' && (
           <label className="block space-y-1 pt-1">
             <div className="flex justify-between text-xs">
@@ -656,19 +672,18 @@ export function EnhanceAndGradePanel({
                 )
               }
               onPointerUp={onCommitSliderSnapshot}
-              className="km-range-input"
+              className="km-range-input w-full"
             />
           </label>
         )}
 
-        {/* Collapsible Tone Adjustments */}
         <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-2.5">
           <div className="flex items-center justify-between gap-2">
             <button
               type="button"
               data-testid="tone-accordion-btn"
               onClick={() => setToneOpen((v) => !v)}
-              className="flex flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
+              className="flex min-h-[34px] flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
             >
               <ChevronDown
                 className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${
@@ -736,7 +751,7 @@ export function EnhanceAndGradePanel({
                         )
                       }
                       onPointerUp={onCommitSliderSnapshot}
-                      className="km-range-input"
+                      className="km-range-input w-full"
                     />
                   </label>
                 );

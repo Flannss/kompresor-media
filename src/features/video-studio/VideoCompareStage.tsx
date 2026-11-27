@@ -1,23 +1,22 @@
-import { useEffect, useId, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { memo, useEffect, useId, useRef, useState, type PointerEvent } from 'react';
 import { Columns2, Eye, Pause, Play, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
-import type { ColorGradeId, SubtitleCue, VideoEditState, VideoProcessResult } from '../../engines/contracts';
-import {
-  applyColorGradeToImageData,
-  buildSvgFilterParams,
-  COLOR_GRADE_PRESETS,
-  hasActiveColorGrade,
-} from '../../engines/shared/colorGrades';
+import type { SubtitleCue, VideoEditState, VideoProcessResult } from '../../engines/contracts';
+import { hasActiveColorGrade } from '../../engines/shared/colorGrades';
 import { computeTargetDimensions } from '../../engines/image/pixelOps';
+import { releaseCanvasSurface } from '../../engines/image/pipelineRunner';
 import { findActiveCuesAtTime } from '../../engines/video/subtitleParser';
+import type { DeviceProfile } from '../../shared/utils/deviceCapability';
 import { formatBytes } from '../../shared/utils/formatBytes';
 import { formatDuration } from '../../shared/utils/formatDuration';
 import { getBackdropClasses, type StageBackdrop } from '../workspace/BeforeAfterPreview';
-import { getLiveFilterCssStyle, LiveGradeSvgFilter } from '../workspace/LiveGradeSvgFilter';
+import { LiveGradeSvgFilter, resolvePreviewFilterStyle } from '../workspace/LiveGradeSvgFilter';
 
 export type VideoCompareViewMode = 'single' | 'side-by-side' | 'split';
 
 export interface VideoCompareStageProps {
   itemId: string | null;
+  sourceSizeBytes: number;
+  deviceProfile: DeviceProfile;
   objectUrl: string;
   processedVideoUrl: string | null;
   videoEdit: VideoEditState;
@@ -27,15 +26,213 @@ export interface VideoCompareStageProps {
   onChangeCompareViewMode: (mode: VideoCompareViewMode) => void;
   holdOriginalActive: boolean;
   onHoldOriginalChange: (held: boolean) => void;
-  hasGeneratedThumbnails: boolean;
-  onVideoThumbnailsReady: (itemId: string, thumbs: Partial<Record<ColorGradeId, string>>) => void;
+  thumbnailRequested: boolean;
+  baseThumbnailUrl: string | null;
+  onBaseThumbnailReady: (itemId: string, url: string) => void;
   seekRequestSec: { sec: number; seq: number } | null;
-  onVideoTimeChange: (sec: number) => void;
   videoElementRef?: (el: HTMLVideoElement | null) => void;
 }
 
+const LiveSubtitleOverlay = memo(function LiveSubtitleOverlay({
+  videoEl,
+  cues,
+  enabled,
+  position,
+  isSingleMode,
+}: {
+  videoEl: HTMLVideoElement | null;
+  cues: SubtitleCue[];
+  enabled: boolean;
+  position: VideoEditState['subtitle']['position'];
+  isSingleMode: boolean;
+}) {
+  const [activeCues, setActiveCues] = useState<SubtitleCue[]>([]);
+
+  useEffect(() => {
+    if (!videoEl || !enabled || cues.length === 0) {
+      setActiveCues([]);
+      return;
+    }
+    const update = () => {
+      const next = findActiveCuesAtTime(cues, videoEl.currentTime || 0);
+      setActiveCues((prev) => {
+        if (prev.length === next.length && prev.every((c, idx) => c.id === next[idx]?.id)) {
+          return prev;
+        }
+        return next;
+      });
+    };
+    update();
+    videoEl.addEventListener('timeupdate', update);
+    videoEl.addEventListener('seeked', update);
+    return () => {
+      videoEl.removeEventListener('timeupdate', update);
+      videoEl.removeEventListener('seeked', update);
+    };
+  }, [videoEl, cues, enabled]);
+
+  if (!enabled || activeCues.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      data-testid="live-subtitle-overlay"
+      className={`pointer-events-none absolute left-1/2 -translate-x-1/2 rounded-lg bg-[var(--surface-badge)] px-3 py-1.5 text-center text-xs font-semibold text-white shadow sm:text-sm ${
+        position === 'top'
+          ? 'top-4'
+          : position === 'center'
+            ? 'top-1/2 -translate-y-1/2'
+            : isSingleMode
+              ? 'bottom-12'
+              : 'bottom-4'
+      }`}
+    >
+      {activeCues.map((c) => c.text).join('\n')}
+    </div>
+  );
+});
+
+const VideoSyncTransportBar = memo(function VideoSyncTransportBar({
+  primaryVideoEl,
+  isPlaying,
+  playbackRate,
+  previewMuted,
+  compareViewMode,
+  splitPct,
+  onTogglePlay,
+  onSeekChange,
+  onToggleRate,
+  onToggleMute,
+  onSplitPctChange,
+}: {
+  primaryVideoEl: HTMLVideoElement | null;
+  isPlaying: boolean;
+  playbackRate: 1 | 0.5;
+  previewMuted: boolean;
+  compareViewMode: VideoCompareViewMode;
+  splitPct: number;
+  onTogglePlay: () => void;
+  onSeekChange: (sec: number) => void;
+  onToggleRate: () => void;
+  onToggleMute: () => void;
+  onSplitPctChange: (pct: number) => void;
+}) {
+  const [timeSec, setTimeSec] = useState(0);
+  const [durationSec, setDurationSec] = useState(0);
+
+  useEffect(() => {
+    if (!primaryVideoEl) {
+      setTimeSec(0);
+      setDurationSec(0);
+      return;
+    }
+    const syncMeta = () => {
+      if (Number.isFinite(primaryVideoEl.duration)) {
+        setDurationSec(primaryVideoEl.duration);
+      }
+      setTimeSec(primaryVideoEl.currentTime || 0);
+    };
+    const syncTime = () => {
+      setTimeSec(primaryVideoEl.currentTime || 0);
+    };
+    syncMeta();
+    primaryVideoEl.addEventListener('loadedmetadata', syncMeta);
+    primaryVideoEl.addEventListener('durationchange', syncMeta);
+    primaryVideoEl.addEventListener('timeupdate', syncTime);
+    primaryVideoEl.addEventListener('seeked', syncTime);
+    return () => {
+      primaryVideoEl.removeEventListener('loadedmetadata', syncMeta);
+      primaryVideoEl.removeEventListener('durationchange', syncMeta);
+      primaryVideoEl.removeEventListener('timeupdate', syncTime);
+      primaryVideoEl.removeEventListener('seeked', syncTime);
+    };
+  }, [primaryVideoEl]);
+
+  return (
+    <div
+      data-testid="video-sync-transport"
+      className="flex w-full max-w-[820px] flex-wrap items-center gap-2 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3 py-2 text-xs tabular-nums"
+    >
+      <button
+        type="button"
+        data-testid="video-sync-play-btn"
+        onClick={onTogglePlay}
+        aria-label={isPlaying ? 'Jeda video' : 'Putar video'}
+        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-primary)] text-[var(--ink-on-accent)] transition-colors hover:bg-[var(--accent-hover)]"
+      >
+        {isPlaying ? (
+          <Pause className="h-4 w-4" aria-hidden="true" />
+        ) : (
+          <Play className="h-4 w-4" aria-hidden="true" />
+        )}
+      </button>
+
+      <input
+        type="range"
+        data-testid="video-sync-seek"
+        min={0}
+        max={Math.max(0.1, durationSec)}
+        step={0.05}
+        value={Math.min(Math.max(0, timeSec), Math.max(0.1, durationSec))}
+        onChange={(e) => onSeekChange(Number(e.target.value))}
+        aria-label="Posisi pemutaran video"
+        className="km-range-input min-w-[110px] flex-1"
+      />
+
+      <span className="text-[11px] font-medium text-[var(--text-secondary)]">
+        {formatDuration(timeSec)} / {formatDuration(durationSec)}
+      </span>
+
+      <button
+        type="button"
+        data-testid="video-sync-rate-btn"
+        onClick={onToggleRate}
+        className="min-h-[36px] rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 text-[11px] font-semibold text-[var(--text-primary)]"
+      >
+        {playbackRate === 1 ? '1×' : '0,5×'}
+      </button>
+
+      <button
+        type="button"
+        data-testid="video-sync-mute-btn"
+        onClick={onToggleMute}
+        aria-label={previewMuted ? 'Nyalakan suara pratinjau' : 'Bisukan suara pratinjau'}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+      >
+        {previewMuted ? (
+          <VolumeX className="h-4 w-4" aria-hidden="true" />
+        ) : (
+          <Volume2 className="h-4 w-4" aria-hidden="true" />
+        )}
+      </button>
+
+      {compareViewMode === 'split' && (
+        <label className="ml-auto flex items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+          <span>Garis belah</span>
+          <input
+            data-testid="video-compare-slider"
+            type="range"
+            min={5}
+            max={95}
+            value={splitPct}
+            onChange={(e) => onSplitPctChange(Number(e.target.value))}
+            aria-label="Geser pembanding video Asli dan Sesudah"
+            className="km-range-input w-24"
+          />
+          <span className="w-8 text-right font-semibold text-[var(--text-primary)]">
+            {splitPct}%
+          </span>
+        </label>
+      )}
+    </div>
+  );
+});
+
 export function VideoCompareStage({
   itemId,
+  sourceSizeBytes,
+  deviceProfile,
   objectUrl,
   processedVideoUrl,
   videoEdit,
@@ -45,10 +242,10 @@ export function VideoCompareStage({
   onChangeCompareViewMode,
   holdOriginalActive,
   onHoldOriginalChange,
-  hasGeneratedThumbnails,
-  onVideoThumbnailsReady,
+  thumbnailRequested,
+  baseThumbnailUrl,
+  onBaseThumbnailReady,
   seekRequestSec,
-  onVideoTimeChange,
   videoElementRef,
 }: VideoCompareStageProps) {
   const reactFilterId = useId().replace(/[^a-zA-Z0-9_-]/g, '') || 'v';
@@ -58,50 +255,61 @@ export function VideoCompareStage({
   const secondaryVideoRef = useRef<HTMLVideoElement | null>(null);
   const splitBoxRef = useRef<HTMLDivElement | null>(null);
   const draggingSplitRef = useRef(false);
-  const generatedForKeyRef = useRef<string | null>(null);
+  const extractedKeyRef = useRef<string | null>(null);
 
+  const [primaryElState, setPrimaryElState] = useState<HTMLVideoElement | null>(null);
   const [singleSourceChoice, setSingleSourceChoice] = useState<'original' | 'result'>('original');
   const [splitPct, setSplitPct] = useState(50);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState<1 | 0.5>(1);
   const [previewMuted, setPreviewMuted] = useState(false);
-  const [currentTimeSec, setCurrentTimeSec] = useState(0);
-  const [durationSec, setDurationSec] = useState(0);
   const [processedPreviewUnsupported, setProcessedPreviewUnsupported] = useState(false);
+  const [dualBlockedNotice, setDualBlockedNotice] = useState(false);
 
-  const svgParams = useMemo(
-    () =>
-      buildSvgFilterParams(
-        videoEdit.colorGrade,
-        videoEdit.enhanceSuite.colorContrast.enabled
-          ? videoEdit.enhanceSuite.colorContrast
-          : undefined
-      ),
-    [videoEdit.colorGrade, videoEdit.enhanceSuite.colorContrast]
-  );
+  const dualBlockedByMemory =
+    deviceProfile.performanceTier === 'low-memory-mobile' &&
+    sourceSizeBytes > deviceProfile.maxDualVideoBytes;
+
+  const effectiveViewMode: VideoCompareViewMode =
+    dualBlockedByMemory && compareViewMode !== 'single' ? 'single' : compareViewMode;
 
   const canPlayProcessedResult = Boolean(processedVideoUrl) && !processedPreviewUnsupported;
   const trimOffsetSec = canPlayProcessedResult ? Math.max(0, videoEdit.trimStartSec) : 0;
 
-  // Automatically show processed output when a fresh render finishes
+  useEffect(() => {
+    if (dualBlockedByMemory && compareViewMode !== 'single') {
+      setDualBlockedNotice(true);
+      onChangeCompareViewMode('single');
+    } else if (!dualBlockedByMemory) {
+      setDualBlockedNotice(false);
+    }
+  }, [dualBlockedByMemory, compareViewMode, onChangeCompareViewMode]);
+
   useEffect(() => {
     setProcessedPreviewUnsupported(false);
-    if (processedVideoUrl) {
-      setSingleSourceChoice('result');
-    } else {
-      setSingleSourceChoice('original');
-    }
+    setSingleSourceChoice(processedVideoUrl ? 'result' : 'original');
   }, [processedVideoUrl]);
 
   useEffect(() => {
     setIsPlaying(false);
-    setCurrentTimeSec(0);
     setProcessedPreviewUnsupported(false);
     setSingleSourceChoice(processedVideoUrl ? 'result' : 'original');
-    generatedForKeyRef.current = null;
+    extractedKeyRef.current = null;
   }, [objectUrl]);
 
-  // Apply seek requests (e.g. from subtitle cue click) cleanly
+  // Cleanly release video decoder handles on unmount
+  useEffect(() => {
+    return () => {
+      for (const vid of [primaryVideoRef.current, secondaryVideoRef.current]) {
+        if (vid) {
+          vid.pause();
+          vid.removeAttribute('src');
+          vid.load();
+        }
+      }
+    };
+  }, [objectUrl, effectiveViewMode]);
+
   useEffect(() => {
     if (!seekRequestSec) return;
     const target = Math.max(0, seekRequestSec.sec);
@@ -111,131 +319,109 @@ export function VideoCompareStage({
     if (secondaryVideoRef.current) {
       secondaryVideoRef.current.currentTime = Math.max(0, target + trimOffsetSec);
     }
-    setCurrentTimeSec(target);
-    onVideoTimeChange(target);
-  }, [seekRequestSec, trimOffsetSec, onVideoTimeChange]);
+  }, [seekRequestSec, trimOffsetSec]);
 
-  // Frame-accurate RAF sync between primary and secondary (always muted) videos
+  // Throttled 180ms drift sync ONLY while actively playing in dual/split mode (zero idle RAF loops)
   useEffect(() => {
-    if (compareViewMode === 'single') {
+    if (effectiveViewMode === 'single' || !isPlaying) {
       return;
     }
-    let rafId = 0;
-
-    const syncTick = () => {
+    const timer = setInterval(() => {
       const pri = primaryVideoRef.current;
       const sec = secondaryVideoRef.current;
-      if (pri && sec) {
-        if (Math.abs(sec.playbackRate - pri.playbackRate) > 0.01) {
-          sec.playbackRate = pri.playbackRate;
-        }
-        const expectedSecTime = canPlayProcessedResult ? pri.currentTime + trimOffsetSec : pri.currentTime;
-        const maxSecDur = Number.isFinite(sec.duration) && sec.duration > 0 ? sec.duration : expectedSecTime;
-        const clampedTarget = Math.min(maxSecDur, Math.max(0, expectedSecTime));
-        if (Math.abs(sec.currentTime - clampedTarget) > 0.08) {
-          sec.currentTime = clampedTarget;
-        }
-        if (!pri.paused && sec.paused) {
-          void sec.play().catch(() => {});
-        } else if (pri.paused && !sec.paused) {
-          sec.pause();
-        }
+      if (!pri || !sec) return;
+      if (Math.abs(sec.playbackRate - pri.playbackRate) > 0.01) {
+        sec.playbackRate = pri.playbackRate;
       }
-      if (isPlaying) {
-        rafId = requestAnimationFrame(syncTick);
+      const expectedSecTime = canPlayProcessedResult
+        ? pri.currentTime + trimOffsetSec
+        : pri.currentTime;
+      const maxSecDur =
+        Number.isFinite(sec.duration) && sec.duration > 0 ? sec.duration : expectedSecTime;
+      const clampedTarget = Math.min(maxSecDur, Math.max(0, expectedSecTime));
+      if (Math.abs(sec.currentTime - clampedTarget) > 0.12) {
+        sec.currentTime = clampedTarget;
       }
-    };
-
-    if (isPlaying) {
-      rafId = requestAnimationFrame(syncTick);
-    }
-
-    return () => {
-      if (rafId) {
-        cancelAnimationFrame(rafId);
+      if (!pri.paused && sec.paused) {
+        void sec.play().catch(() => {});
+      } else if (pri.paused && !sec.paused) {
+        sec.pause();
       }
-    };
-  }, [compareViewMode, isPlaying, canPlayProcessedResult, trimOffsetSec]);
+    }, 180);
 
-  // Extract 7x 160px real-frame Color Grade thumbnails when the source video loads its first frame
-  const handleExtractThumbnailsFromVideo = (videoEl: HTMLVideoElement) => {
-    if (!itemId || hasGeneratedThumbnails) return;
+    return () => clearInterval(timer);
+  }, [effectiveViewMode, isPlaying, canPlayProcessedResult, trimOffsetSec]);
+
+  // Lazy single 96px thumbnail extraction ONLY when user opens the Tampilan tab
+  const tryExtractSingleThumbnail = (videoEl: HTMLVideoElement | null) => {
+    if (!thumbnailRequested || !itemId || baseThumbnailUrl || !videoEl) return;
     const key = `${itemId}:${objectUrl}`;
-    if (generatedForKeyRef.current === key) return;
-    if (videoEl.videoWidth <= 0 || videoEl.videoHeight <= 0) return;
+    if (extractedKeyRef.current === key) return;
+    if (videoEl.readyState < 2 || videoEl.videoWidth <= 0 || videoEl.videoHeight <= 0) return;
 
-    generatedForKeyRef.current = key;
-    const dims = computeTargetDimensions(videoEl.videoWidth, videoEl.videoHeight, 160);
-    const baseCanvas = document.createElement('canvas');
-    baseCanvas.width = dims.width;
-    baseCanvas.height = dims.height;
-    const baseCtx = baseCanvas.getContext('2d');
-    if (!baseCtx) return;
+    extractedKeyRef.current = key;
+    const dims = computeTargetDimensions(videoEl.videoWidth, videoEl.videoHeight, 96);
+    const canvas = document.createElement('canvas');
+    canvas.width = dims.width;
+    canvas.height = dims.height;
 
     try {
-      baseCtx.drawImage(videoEl, 0, 0, dims.width, dims.height);
-      const basePixels = baseCtx.getImageData(0, 0, dims.width, dims.height);
-
-      void (async () => {
-        const nextMap: Partial<Record<ColorGradeId, string>> = {};
-        for (const preset of COLOR_GRADE_PRESETS) {
-          const workCanvas = document.createElement('canvas');
-          workCanvas.width = dims.width;
-          workCanvas.height = dims.height;
-          const workCtx = workCanvas.getContext('2d');
-          if (!workCtx) continue;
-          const copy = new ImageData(
-            new Uint8ClampedArray(basePixels.data),
-            basePixels.width,
-            basePixels.height
-          );
-          applyColorGradeToImageData(copy, {
-            gradeId: preset.id,
-            intensity: 100,
-            tone: { temperature: 0, tint: 0, shadows: 0, highlights: 0 },
-          });
-          workCtx.putImageData(copy, 0, 0);
-          const blob = await new Promise<Blob | null>((resolve) =>
-            workCanvas.toBlob((b) => resolve(b), 'image/jpeg', 0.8)
-          );
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        releaseCanvasSurface(canvas);
+        return;
+      }
+      ctx.drawImage(videoEl, 0, 0, dims.width, dims.height);
+      canvas.toBlob(
+        (blob) => {
+          releaseCanvasSurface(canvas);
           if (blob) {
-            nextMap[preset.id] = URL.createObjectURL(blob);
+            onBaseThumbnailReady(itemId, URL.createObjectURL(blob));
           }
-        }
-        onVideoThumbnailsReady(itemId, nextMap);
-      })();
+        },
+        'image/jpeg',
+        0.78
+      );
     } catch {
-      // Security or zero-frame draw error should not break player
+      releaseCanvasSurface(canvas);
     }
   };
 
-  // In Tunggal mode: choose URL & live CSS SVG filter cleanly
+  useEffect(() => {
+    if (thumbnailRequested && !baseThumbnailUrl && primaryVideoRef.current) {
+      tryExtractSingleThumbnail(primaryVideoRef.current);
+    }
+  }, [thumbnailRequested, baseThumbnailUrl, objectUrl]);
+
+  const activeColorContrast = videoEdit.enhanceSuite.colorContrast.enabled
+    ? videoEdit.enhanceSuite.colorContrast
+    : undefined;
+
+  const livePreviewCssOrSvg = resolvePreviewFilterStyle({
+    filterId: filterDomId,
+    colorGrade: videoEdit.colorGrade,
+    colorContrast: activeColorContrast,
+    useLightweightCss: deviceProfile.useLightweightCssPreview,
+  });
+
   const isShowingProcessedInSingle =
     singleSourceChoice === 'result' && canPlayProcessedResult && !holdOriginalActive;
   const singleSrc = isShowingProcessedInSingle && processedVideoUrl ? processedVideoUrl : objectUrl;
-  const shouldApplyLiveSvgToAfter = !canPlayProcessedResult && !holdOriginalActive;
+  const shouldApplyLiveFilterToAfter = !canPlayProcessedResult && !holdOriginalActive;
   const afterVideoSrc = canPlayProcessedResult && processedVideoUrl ? processedVideoUrl : objectUrl;
-  const afterFilterStyle = shouldApplyLiveSvgToAfter
-    ? getLiveFilterCssStyle(filterDomId, svgParams)
-    : undefined;
-
+  const afterFilterStyle = shouldApplyLiveFilterToAfter ? livePreviewCssOrSvg : undefined;
   const singleFilterStyle =
-    !isShowingProcessedInSingle && !holdOriginalActive
-      ? getLiveFilterCssStyle(filterDomId, svgParams)
-      : undefined;
+    !isShowingProcessedInSingle && !holdOriginalActive ? livePreviewCssOrSvg : undefined;
 
-  // Live synced subtitles overlay
-  const showSubtitleOverlay =
+  const showSubOverlay =
     videoEdit.subtitle.enabled &&
     videoEdit.subtitle.cues.length > 0 &&
     !holdOriginalActive &&
     (!isShowingProcessedInSingle || videoEdit.subtitle.mode === 'softsub');
-  const activeCues: SubtitleCue[] = showSubtitleOverlay
-    ? findActiveCuesAtTime(videoEdit.subtitle.cues, currentTimeSec)
-    : [];
 
   const bindPrimaryRef = (el: HTMLVideoElement | null) => {
     primaryVideoRef.current = el;
+    setPrimaryElState(el);
     videoElementRef?.(el);
   };
 
@@ -245,8 +431,7 @@ export function VideoCompareStage({
     if (!pri) return;
     if (pri.paused) {
       if (sec) {
-        const expected = canPlayProcessedResult ? pri.currentTime + trimOffsetSec : pri.currentTime;
-        sec.currentTime = expected;
+        sec.currentTime = canPlayProcessedResult ? pri.currentTime + trimOffsetSec : pri.currentTime;
         sec.playbackRate = playbackRate;
         void sec.play().catch(() => {});
       }
@@ -261,8 +446,6 @@ export function VideoCompareStage({
   const handleSeekBarChange = (secValue: number) => {
     const pri = primaryVideoRef.current;
     const sec = secondaryVideoRef.current;
-    setCurrentTimeSec(secValue);
-    onVideoTimeChange(secValue);
     if (pri) pri.currentTime = secValue;
     if (sec) sec.currentTime = canPlayProcessedResult ? secValue + trimOffsetSec : secValue;
   };
@@ -284,7 +467,7 @@ export function VideoCompareStage({
   };
 
   const handleSplitPointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (compareViewMode !== 'split') return;
+    if (effectiveViewMode !== 'split') return;
     e.currentTarget.setPointerCapture(e.pointerId);
     draggingSplitRef.current = true;
     updateSplitFromClientX(e.clientX);
@@ -323,7 +506,7 @@ export function VideoCompareStage({
     ? 'Asli'
     : canPlayProcessedResult
       ? 'Hasil'
-      : svgParams.active || hasActiveColorGrade(videoEdit.colorGrade)
+      : livePreviewCssOrSvg || hasActiveColorGrade(videoEdit.colorGrade)
         ? 'Sesudah (Pratinjau)'
         : 'Sesudah';
 
@@ -332,11 +515,8 @@ export function VideoCompareStage({
       <LiveGradeSvgFilter
         filterId={filterDomId}
         colorGrade={videoEdit.colorGrade}
-        colorContrast={
-          videoEdit.enhanceSuite.colorContrast.enabled
-            ? videoEdit.enhanceSuite.colorContrast
-            : undefined
-        }
+        colorContrast={activeColorContrast}
+        disabled={deviceProfile.useLightweightCssPreview}
       />
 
       {/* Mode Switcher Bar Above Stage */}
@@ -353,15 +533,23 @@ export function VideoCompareStage({
               { id: 'split', label: 'Geser Belah', Icon: SlidersHorizontal },
             ] as const
           ).map(({ id, label, Icon }) => {
-            const active = compareViewMode === id;
+            const active = effectiveViewMode === id;
+            const disabledByRam = dualBlockedByMemory && id !== 'single';
             return (
               <button
                 key={id}
                 type="button"
                 data-testid={`video-mode-${id}-btn`}
                 aria-pressed={active}
-                onClick={() => onChangeCompareViewMode(id)}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-colors ${
+                disabled={disabledByRam}
+                onClick={() => {
+                  if (disabledByRam) {
+                    setDualBlockedNotice(true);
+                    return;
+                  }
+                  onChangeCompareViewMode(id);
+                }}
+                className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-colors disabled:opacity-45 ${
                   active
                     ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -375,13 +563,13 @@ export function VideoCompareStage({
         </div>
 
         <div className="flex items-center gap-2">
-          {compareViewMode === 'single' && canPlayProcessedResult && (
+          {effectiveViewMode === 'single' && canPlayProcessedResult && (
             <div className="inline-flex rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-0.5 text-xs">
               <button
                 type="button"
                 data-testid="video-view-original-btn"
                 onClick={() => setSingleSourceChoice('original')}
-                className={`rounded-lg px-2.5 py-1 font-medium transition-colors ${
+                className={`min-h-[36px] rounded-lg px-2.5 py-1 font-medium transition-colors ${
                   singleSourceChoice === 'original'
                     ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                     : 'text-[var(--text-secondary)]'
@@ -393,7 +581,7 @@ export function VideoCompareStage({
                 type="button"
                 data-testid="video-view-result-btn"
                 onClick={() => setSingleSourceChoice('result')}
-                className={`rounded-lg px-2.5 py-1 font-medium transition-colors ${
+                className={`min-h-[36px] rounded-lg px-2.5 py-1 font-medium transition-colors ${
                   singleSourceChoice === 'result'
                     ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                     : 'text-[var(--text-secondary)]'
@@ -422,7 +610,7 @@ export function VideoCompareStage({
                 onHoldOriginalChange(false);
               }
             }}
-            className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-medium transition-all select-none ${
+            className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-medium transition-all select-none ${
               holdOriginalActive
                 ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                 : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -434,12 +622,21 @@ export function VideoCompareStage({
         </div>
       </div>
 
+      {(dualBlockedByMemory || dualBlockedNotice) && (
+        <p
+          data-testid="video-dual-memory-advisory"
+          className="w-full max-w-[820px] rounded-xl border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-3 py-2 text-[11px] leading-relaxed text-[var(--status-warn-ink)]"
+        >
+          Video cukup besar untuk mode 2 pemutar di perangkat ini. Gunakan &quot;Tahan: Lihat Asli&quot; agar tetap lancar.
+        </p>
+      )}
+
       {/* Main Stage Surface */}
       <div
         className={`relative flex w-full max-w-[820px] items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-hairline)] p-1.5 transition-colors ${getBackdropClasses(backdrop)}`}
         style={{ boxShadow: 'var(--stage-shadow)' }}
       >
-        {compareViewMode === 'single' && (
+        {effectiveViewMode === 'single' && (
           <div className="relative flex w-full items-center justify-center">
             {processedPreviewUnsupported && singleSourceChoice === 'result' ? (
               renderFallbackBox()
@@ -451,21 +648,13 @@ export function VideoCompareStage({
                 src={singleSrc}
                 controls
                 playsInline
-                preload="auto"
+                preload="metadata"
                 muted={previewMuted}
                 style={{ filter: singleFilterStyle }}
-                onLoadedMetadata={(e) => {
-                  if (Number.isFinite(e.currentTarget.duration)) {
-                    setDurationSec(e.currentTarget.duration);
-                  }
-                }}
-                onLoadedData={(e) => handleExtractThumbnailsFromVideo(e.currentTarget)}
+                onLoadedData={(e) => tryExtractSingleThumbnail(e.currentTarget)}
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
-                onTimeUpdate={(e) => {
-                  setCurrentTimeSec(e.currentTarget.currentTime);
-                  onVideoTimeChange(e.currentTarget.currentTime);
-                }}
+                onEnded={() => setIsPlaying(false)}
                 onError={() => {
                   if (singleSourceChoice === 'result' && processedVideoUrl) {
                     setProcessedPreviewUnsupported(true);
@@ -475,13 +664,13 @@ export function VideoCompareStage({
               />
             )}
 
-            {(processedVideoUrl || svgParams.active || holdOriginalActive) && (
-              <span className="pointer-events-none absolute left-3 top-3 rounded-md bg-[#000521]/80 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-xs">
+            {(processedVideoUrl || livePreviewCssOrSvg || holdOriginalActive) && (
+              <span className="pointer-events-none absolute left-3 top-3 rounded-md bg-[var(--surface-badge)] px-2 py-0.5 text-[11px] font-medium text-white">
                 {holdOriginalActive
                   ? 'Asli'
                   : isShowingProcessedInSingle
                     ? 'Hasil'
-                    : svgParams.active
+                    : livePreviewCssOrSvg
                       ? 'Pratinjau'
                       : 'Asli'}
               </span>
@@ -489,12 +678,11 @@ export function VideoCompareStage({
           </div>
         )}
 
-        {compareViewMode === 'side-by-side' && (
+        {effectiveViewMode === 'side-by-side' && (
           <div
             data-testid="video-side-by-side-stage"
             className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2"
           >
-            {/* Left / Top: Asli (strictly muted=true so zero audio echo!) */}
             <div className="relative flex items-center justify-center overflow-hidden rounded-xl bg-black/40">
               <video
                 ref={secondaryVideoRef}
@@ -503,15 +691,14 @@ export function VideoCompareStage({
                 src={objectUrl}
                 muted
                 playsInline
-                preload="auto"
+                preload="metadata"
                 className="max-h-[42vh] w-full object-contain sm:max-h-[50vh]"
               />
-              <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-[#000521]/85 px-2 py-0.5 text-[11px] font-medium text-white">
+              <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-[var(--surface-badge)] px-2 py-0.5 text-[11px] font-medium text-white">
                 Asli
               </span>
             </div>
 
-            {/* Right / Bottom: Sesudah (Master clock + audio) */}
             <div className="relative flex items-center justify-center overflow-hidden rounded-xl bg-black/40">
               {processedPreviewUnsupported && processedVideoUrl ? (
                 renderFallbackBox()
@@ -522,15 +709,10 @@ export function VideoCompareStage({
                   data-testid="preview-video"
                   src={afterVideoSrc}
                   playsInline
-                  preload="auto"
+                  preload="metadata"
                   muted={previewMuted}
                   style={{ filter: afterFilterStyle }}
-                  onLoadedMetadata={(e) => {
-                    if (Number.isFinite(e.currentTarget.duration)) {
-                      setDurationSec(e.currentTarget.duration);
-                    }
-                  }}
-                  onLoadedData={(e) => handleExtractThumbnailsFromVideo(e.currentTarget)}
+                  onLoadedData={(e) => tryExtractSingleThumbnail(e.currentTarget)}
                   onPlay={() => {
                     setIsPlaying(true);
                     void secondaryVideoRef.current?.play().catch(() => {});
@@ -539,10 +721,7 @@ export function VideoCompareStage({
                     setIsPlaying(false);
                     secondaryVideoRef.current?.pause();
                   }}
-                  onTimeUpdate={(e) => {
-                    setCurrentTimeSec(e.currentTarget.currentTime);
-                    onVideoTimeChange(e.currentTarget.currentTime);
-                  }}
+                  onEnded={() => setIsPlaying(false)}
                   onError={() => {
                     if (processedVideoUrl) {
                       setProcessedPreviewUnsupported(true);
@@ -551,14 +730,14 @@ export function VideoCompareStage({
                   className="max-h-[42vh] w-full object-contain sm:max-h-[50vh]"
                 />
               )}
-              <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-md bg-[var(--accent-deep)]/95 px-2 py-0.5 text-[11px] font-medium text-white">
+              <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-medium text-white">
                 {afterBadgeLabel}
               </span>
             </div>
           </div>
         )}
 
-        {compareViewMode === 'split' && (
+        {effectiveViewMode === 'split' && (
           <div
             ref={splitBoxRef}
             data-testid="video-split-stage"
@@ -582,7 +761,6 @@ export function VideoCompareStage({
             }}
             className="relative flex w-full cursor-ew-resize touch-none select-none items-center justify-center overflow-hidden rounded-xl"
           >
-            {/* Base layer: Sesudah (Master clock + audio) */}
             {processedPreviewUnsupported && processedVideoUrl ? (
               renderFallbackBox()
             ) : (
@@ -592,15 +770,10 @@ export function VideoCompareStage({
                 data-testid="preview-video"
                 src={afterVideoSrc}
                 playsInline
-                preload="auto"
+                preload="metadata"
                 muted={previewMuted}
                 style={{ filter: afterFilterStyle }}
-                onLoadedMetadata={(e) => {
-                  if (Number.isFinite(e.currentTarget.duration)) {
-                    setDurationSec(e.currentTarget.duration);
-                  }
-                }}
-                onLoadedData={(e) => handleExtractThumbnailsFromVideo(e.currentTarget)}
+                onLoadedData={(e) => tryExtractSingleThumbnail(e.currentTarget)}
                 onPlay={() => {
                   setIsPlaying(true);
                   void secondaryVideoRef.current?.play().catch(() => {});
@@ -609,10 +782,7 @@ export function VideoCompareStage({
                   setIsPlaying(false);
                   secondaryVideoRef.current?.pause();
                 }}
-                onTimeUpdate={(e) => {
-                  setCurrentTimeSec(e.currentTarget.currentTime);
-                  onVideoTimeChange(e.currentTarget.currentTime);
-                }}
+                onEnded={() => setIsPlaying(false)}
                 onError={() => {
                   if (processedVideoUrl) {
                     setProcessedPreviewUnsupported(true);
@@ -622,7 +792,6 @@ export function VideoCompareStage({
               />
             )}
 
-            {/* Overlay layer: Asli (strictly muted=true, clipped on the left 0..splitPct%) */}
             <video
               ref={secondaryVideoRef}
               key={`split-orig-${objectUrl}`}
@@ -630,12 +799,11 @@ export function VideoCompareStage({
               src={objectUrl}
               muted
               playsInline
-              preload="auto"
+              preload="metadata"
               className="pointer-events-none absolute inset-0 h-full w-full object-contain"
               style={{ clipPath: `inset(0 ${100 - splitPct}% 0 0)` }}
             />
 
-            {/* Vertical Divider Handle */}
             <div
               aria-hidden="true"
               className="pointer-events-none absolute inset-y-0 w-0.5 bg-white shadow"
@@ -646,112 +814,38 @@ export function VideoCompareStage({
               </div>
             </div>
 
-            <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-[#000521]/85 px-2 py-0.5 text-[11px] font-medium text-white">
+            <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-[var(--surface-badge)] px-2 py-0.5 text-[11px] font-medium text-white">
               Asli
             </span>
-            <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-md bg-[var(--accent-deep)]/95 px-2 py-0.5 text-[11px] font-medium text-white">
+            <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-medium text-white">
               {afterBadgeLabel}
             </span>
           </div>
         )}
 
-        {/* Active Live Subtitle Overlay */}
-        {activeCues.length > 0 && !(processedPreviewUnsupported && singleSourceChoice === 'result') && (
-          <div
-            data-testid="live-subtitle-overlay"
-            className={`pointer-events-none absolute left-1/2 -translate-x-1/2 rounded-lg bg-[#000521]/82 px-3 py-1.5 text-center text-xs font-semibold text-white shadow sm:text-sm ${
-              videoEdit.subtitle.position === 'top'
-                ? 'top-4'
-                : videoEdit.subtitle.position === 'center'
-                  ? 'top-1/2 -translate-y-1/2'
-                  : compareViewMode === 'single'
-                    ? 'bottom-12'
-                    : 'bottom-4'
-            }`}
-          >
-            {activeCues.map((c) => c.text).join('\n')}
-          </div>
-        )}
+        <LiveSubtitleOverlay
+          videoEl={primaryElState}
+          cues={videoEdit.subtitle.cues}
+          enabled={showSubOverlay && !(processedPreviewUnsupported && singleSourceChoice === 'result')}
+          position={videoEdit.subtitle.position}
+          isSingleMode={effectiveViewMode === 'single'}
+        />
       </div>
 
-      {/* Synchronized Transport + Split Slider in Dual/Split Mode */}
-      {compareViewMode !== 'single' && (
-        <div
-          data-testid="video-sync-transport"
-          className="flex w-full max-w-[820px] flex-wrap items-center gap-2 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3 py-2 text-xs tabular-nums"
-        >
-          <button
-            type="button"
-            data-testid="video-sync-play-btn"
-            onClick={togglePlayPause}
-            aria-label={isPlaying ? 'Jeda video' : 'Putar video'}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-primary)] text-[var(--ink-on-accent)] transition-colors hover:bg-[var(--accent-hover)]"
-          >
-            {isPlaying ? (
-              <Pause className="h-3.5 w-3.5" aria-hidden="true" />
-            ) : (
-              <Play className="h-3.5 w-3.5" aria-hidden="true" />
-            )}
-          </button>
-
-          <input
-            type="range"
-            data-testid="video-sync-seek"
-            min={0}
-            max={Math.max(0.1, durationSec)}
-            step={0.05}
-            value={Math.min(Math.max(0, currentTimeSec), Math.max(0.1, durationSec))}
-            onChange={(e) => handleSeekBarChange(Number(e.target.value))}
-            aria-label="Posisi pemutaran video"
-            className="km-range-input min-w-[120px] flex-1"
-          />
-
-          <span className="text-[11px] font-medium text-[var(--text-secondary)]">
-            {formatDuration(currentTimeSec)} / {formatDuration(durationSec)}
-          </span>
-
-          <button
-            type="button"
-            data-testid="video-sync-rate-btn"
-            onClick={handleToggleRate}
-            className="rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2 py-1 text-[11px] font-semibold text-[var(--text-primary)]"
-          >
-            {playbackRate === 1 ? '1×' : '0,5×'}
-          </button>
-
-          <button
-            type="button"
-            data-testid="video-sync-mute-btn"
-            onClick={() => setPreviewMuted((v) => !v)}
-            aria-label={previewMuted ? 'Nyalakan suara pratinjau' : 'Bisukan suara pratinjau'}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-          >
-            {previewMuted ? (
-              <VolumeX className="h-3.5 w-3.5" aria-hidden="true" />
-            ) : (
-              <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
-            )}
-          </button>
-
-          {compareViewMode === 'split' && (
-            <label className="ml-auto flex items-center gap-2 text-[11px] text-[var(--text-secondary)]">
-              <span>Garis belah</span>
-              <input
-                data-testid="video-compare-slider"
-                type="range"
-                min={5}
-                max={95}
-                value={splitPct}
-                onChange={(e) => setSplitPct(Number(e.target.value))}
-                aria-label="Geser pembanding video Asli dan Sesudah"
-                className="km-range-input w-24"
-              />
-              <span className="w-8 text-right font-semibold text-[var(--text-primary)]">
-                {splitPct}%
-              </span>
-            </label>
-          )}
-        </div>
+      {effectiveViewMode !== 'single' && (
+        <VideoSyncTransportBar
+          primaryVideoEl={primaryElState}
+          isPlaying={isPlaying}
+          playbackRate={playbackRate}
+          previewMuted={previewMuted}
+          compareViewMode={effectiveViewMode}
+          splitPct={splitPct}
+          onTogglePlay={togglePlayPause}
+          onSeekChange={handleSeekBarChange}
+          onToggleRate={handleToggleRate}
+          onToggleMute={() => setPreviewMuted((v) => !v)}
+          onSplitPctChange={setSplitPct}
+        />
       )}
     </div>
   );

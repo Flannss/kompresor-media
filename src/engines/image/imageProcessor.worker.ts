@@ -1,7 +1,7 @@
-import type { ColorGradeId, ImageEditState, ImageOutputFormat } from '../contracts';
+import type { ImageEditState, ImageOutputFormat } from '../contracts';
 import {
+  runBaseThumbnailPipeline,
   runImagePipeline,
-  runThumbnailPipeline,
   type CanvasAdapter,
   type Canvas2DContextLike,
 } from './pipelineRunner';
@@ -17,7 +17,7 @@ export type ImageWorkerRequest =
       previewMaxEdgePx?: number;
     }
   | {
-      type: 'thumbnails';
+      type: 'base-thumbnail';
       seq: number;
       buffer: ArrayBuffer;
       mimeType: string;
@@ -46,20 +46,20 @@ export type ImageWorkerResponse =
       targetSizeMet?: boolean;
     }
   | {
-      type: 'thumbnails';
+      type: 'base-thumbnail';
       seq: number;
       ok: true;
       fallbackRequired: true;
     }
   | {
-      type: 'thumbnails';
+      type: 'base-thumbnail';
       seq: number;
       ok: true;
       fallbackRequired: false;
-      items: Array<{ gradeId: ColorGradeId; buffer: ArrayBuffer }>;
+      buffer: ArrayBuffer;
     }
   | {
-      type: 'process' | 'thumbnails';
+      type: 'process' | 'base-thumbnail';
       seq: number;
       requestId?: string;
       ok: false;
@@ -111,7 +111,7 @@ workerScope.onmessage = async (event: MessageEvent<ImageWorkerRequest>) => {
       });
     } else {
       workerScope.postMessage({
-        type: 'thumbnails',
+        type: 'base-thumbnail',
         seq: payload.seq,
         ok: true,
         fallbackRequired: true,
@@ -125,8 +125,8 @@ workerScope.onmessage = async (event: MessageEvent<ImageWorkerRequest>) => {
     const inputBlob = new Blob([payload.buffer], { type: payload.mimeType });
     bitmap = await decodeOrientedBitmap(inputBlob);
 
-    if (payload.type === 'thumbnails') {
-      const thumbItems = await runThumbnailPipeline(
+    if (payload.type === 'base-thumbnail') {
+      const thumbBlob = await runBaseThumbnailPipeline(
         bitmap,
         offscreenAdapter as unknown as CanvasAdapter<{
           width: number;
@@ -134,23 +134,16 @@ workerScope.onmessage = async (event: MessageEvent<ImageWorkerRequest>) => {
           getContext(type: '2d'): Canvas2DContextLike | null;
         }>
       );
-      const transfers: Transferable[] = [];
-      const encodedItems = await Promise.all(
-        thumbItems.map(async (item) => {
-          const buffer = await item.blob.arrayBuffer();
-          transfers.push(buffer);
-          return { gradeId: item.gradeId, buffer };
-        })
-      );
+      const buffer = await thumbBlob.arrayBuffer();
       workerScope.postMessage(
         {
-          type: 'thumbnails',
+          type: 'base-thumbnail',
           seq: payload.seq,
           ok: true,
           fallbackRequired: false,
-          items: encodedItems,
+          buffer,
         },
-        transfers
+        [buffer]
       );
       return;
     }

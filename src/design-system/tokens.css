@@ -7,6 +7,8 @@
   --bg-surface: #ffffff;
   --bg-elevated: #f7faff;
   --bg-subtle: #ebf3fc;
+  --surface-dock: rgba(255, 255, 255, 0.94);
+  --surface-badge: rgba(0, 5, 33, 0.88);
 
   --border-hairline: #cfdff3;
   --border-active: #0e4eb2;
@@ -48,6 +50,8 @@
   --bg-surface: #07143d;
   --bg-elevated: #011f65;
   --bg-subtle: #0a256b;
+  --surface-dock: rgba(7, 20, 61, 0.92);
+  --surface-badge: rgba(0, 5, 33, 0.88);
 
   --border-hairline: rgba(32, 120, 207, 0.24);
   --border-active: #2078cf;

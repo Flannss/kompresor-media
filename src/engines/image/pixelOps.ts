@@ -110,7 +110,7 @@ function clampByte(v: number): number {
 
 /**
  * Fast 3x3 edge-preserving denoise smoothing noise while protecting strong edges.
- * Accepts numeric lumaStrength (1..10) and chromaSmooth (1..8) from KM-T006 Noise module.
+ * Uses a 3-row rolling buffer (3 * width * 4 bytes) instead of duplicating the full ImageData.
  */
 export function applyEdgePreservingDenoiseParams(
   imageData: ImageData,
@@ -125,31 +125,39 @@ export function applyEdgePreservingDenoiseParams(
   const threshold = Math.min(48, 8 + grainStrength * 3.5);
   const lumaBlend = Math.min(0.75, 0.14 + (grainStrength / 10) * 0.56);
   const chromaBlend = Math.min(0.85, 0.18 + (colorSmooth / 8) * 0.62);
-  const src = new Uint8ClampedArray(data);
   const stride = width * 4;
 
+  let prevRow = new Uint8ClampedArray(stride);
+  let currRow = new Uint8ClampedArray(stride);
+  let nextRow = new Uint8ClampedArray(stride);
+  prevRow.set(data.subarray(0, stride));
+  currRow.set(data.subarray(stride, stride * 2));
+  nextRow.set(data.subarray(stride * 2, stride * 3));
+
   for (let y = 1; y < height - 1; y += 1) {
-    const row = y * stride;
+    const outRow = y * stride;
     for (let x = 1; x < width - 1; x += 1) {
-      const idx = row + x * 4;
-      const cr = src[idx];
-      const cg = src[idx + 1];
-      const cb = src[idx + 2];
+      const col = x * 4;
+      const outIdx = outRow + col;
+      const cr = currRow[col];
+      const cg = currRow[col + 1];
+      const cb = currRow[col + 2];
 
       let sumR = 0;
       let sumG = 0;
       let sumB = 0;
       let count = 0;
 
-      for (let dy = -1; dy <= 1; dy += 1) {
-        const nRow = (y + dy) * stride;
-        for (let dx = -1; dx <= 1; dx += 1) {
-          const nIdx = nRow + (x + dx) * 4;
-          const nr = src[nIdx];
-          const ng = src[nIdx + 1];
-          const nb = src[nIdx + 2];
-          const diff =
-            (Math.abs(nr - cr) + Math.abs(ng - cg) + Math.abs(nb - cb)) / 3;
+      const leftCol = col - 4;
+      const rightCol = col + 4;
+      const rows = [prevRow, currRow, nextRow];
+      for (let rIdx = 0; rIdx < 3; rIdx += 1) {
+        const srcRow = rows[rIdx];
+        for (let cOff = leftCol; cOff <= rightCol; cOff += 4) {
+          const nr = srcRow[cOff];
+          const ng = srcRow[cOff + 1];
+          const nb = srcRow[cOff + 2];
+          const diff = (Math.abs(nr - cr) + Math.abs(ng - cg) + Math.abs(nb - cb)) / 3;
           if (diff <= threshold) {
             sumR += nr;
             sumG += ng;
@@ -171,11 +179,20 @@ export function applyEdgePreservingDenoiseParams(
         const dg = (avgG - avgLuma - (cg - origLuma)) * chromaBlend;
         const db = (avgB - avgLuma - (cb - origLuma)) * chromaBlend;
 
-        data[idx] = clampByte(outLuma + (cr - origLuma) + dr);
-        data[idx + 1] = clampByte(outLuma + (cg - origLuma) + dg);
-        data[idx + 2] = clampByte(outLuma + (cb - origLuma) + db);
+        data[outIdx] = clampByte(outLuma + (cr - origLuma) + dr);
+        data[outIdx + 1] = clampByte(outLuma + (cg - origLuma) + dg);
+        data[outIdx + 2] = clampByte(outLuma + (cb - origLuma) + db);
       }
-      data[idx + 3] = src[idx + 3];
+      data[outIdx + 3] = currRow[col + 3];
+    }
+
+    if (y + 1 < height - 1) {
+      const recycled = prevRow;
+      prevRow = currRow;
+      currRow = nextRow;
+      nextRow = recycled;
+      const aheadOffset = (y + 2) * stride;
+      nextRow.set(data.subarray(aheadOffset, aheadOffset + stride));
     }
   }
 }
@@ -225,7 +242,7 @@ export function applyColorAdjustments(
 
 /**
  * Applies 3x3 unsharp luminance convolution after resize, clamped cleanly to [0, 255].
- * When antiArtifact=true, chroma stays smooth to avoid harsh color haloing.
+ * Uses a 3-row rolling buffer (3 * width * 4 bytes) to protect low-RAM iOS devices.
  */
 export function applySharpen(
   imageData: ImageData,
@@ -243,40 +260,61 @@ export function applySharpen(
   }
 
   const alpha = (level / 100) * 0.65;
-  const src = new Uint8ClampedArray(data);
   const rowStride = width * 4;
 
+  let prevRow = new Uint8ClampedArray(rowStride);
+  let currRow = new Uint8ClampedArray(rowStride);
+  let nextRow = new Uint8ClampedArray(rowStride);
+  prevRow.set(data.subarray(0, rowStride));
+  currRow.set(data.subarray(rowStride, rowStride * 2));
+  nextRow.set(data.subarray(rowStride * 2, rowStride * 3));
+
   for (let y = 1; y < height - 1; y += 1) {
-    const rowOffset = y * rowStride;
+    const outRow = y * rowStride;
     for (let x = 1; x < width - 1; x += 1) {
-      const idx = rowOffset + x * 4;
-      const top = idx - rowStride;
-      const bottom = idx + rowStride;
-      const left = idx - 4;
-      const right = idx + 4;
+      const col = x * 4;
+      const outIdx = outRow + col;
+      const leftCol = col - 4;
+      const rightCol = col + 4;
 
       if (antiArtifact) {
-        const lCenter = 0.2126 * src[idx] + 0.7152 * src[idx + 1] + 0.0722 * src[idx + 2];
+        const lCenter =
+          0.2126 * currRow[col] + 0.7152 * currRow[col + 1] + 0.0722 * currRow[col + 2];
         const lNeighbors =
-          (0.2126 * (src[top] + src[bottom] + src[left] + src[right]) +
-            0.7152 * (src[top + 1] + src[bottom + 1] + src[left + 1] + src[right + 1]) +
-            0.0722 * (src[top + 2] + src[bottom + 2] + src[left + 2] + src[right + 2])) /
+          (0.2126 * (prevRow[col] + nextRow[col] + currRow[leftCol] + currRow[rightCol]) +
+            0.7152 *
+              (prevRow[col + 1] + nextRow[col + 1] + currRow[leftCol + 1] + currRow[rightCol + 1]) +
+            0.0722 *
+              (prevRow[col + 2] + nextRow[col + 2] + currRow[leftCol + 2] + currRow[rightCol + 2])) /
           4;
         const delta = (lCenter - lNeighbors) * (alpha * 2.2);
-        data[idx] = clampByte(src[idx] + delta);
-        data[idx + 1] = clampByte(src[idx + 1] + delta);
-        data[idx + 2] = clampByte(src[idx + 2] + delta);
+        data[outIdx] = clampByte(currRow[col] + delta);
+        data[outIdx + 1] = clampByte(currRow[col + 1] + delta);
+        data[outIdx + 2] = clampByte(currRow[col + 2] + delta);
       } else {
         const centerWeight = 1 + 4 * alpha;
         const sideWeight = -alpha;
         for (let c = 0; c < 3; c += 1) {
           const value =
-            src[idx + c] * centerWeight +
-            (src[top + c] + src[bottom + c] + src[left + c] + src[right + c]) * sideWeight;
-          data[idx + c] = clampByte(value);
+            currRow[col + c] * centerWeight +
+            (prevRow[col + c] +
+              nextRow[col + c] +
+              currRow[leftCol + c] +
+              currRow[rightCol + c]) *
+              sideWeight;
+          data[outIdx + c] = clampByte(value);
         }
       }
-      data[idx + 3] = src[idx + 3];
+      data[outIdx + 3] = currRow[col + 3];
+    }
+
+    if (y + 1 < height - 1) {
+      const recycled = prevRow;
+      prevRow = currRow;
+      currRow = nextRow;
+      nextRow = recycled;
+      const aheadOffset = (y + 2) * rowStride;
+      nextRow.set(data.subarray(aheadOffset, aheadOffset + rowStride));
     }
   }
 }
