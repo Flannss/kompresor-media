@@ -1,33 +1,42 @@
 :root,
 [data-theme='light'] {
-  /* Cobalt Terang (Light Mode Toggle) */
-  --bg-app: #f3f7fd;
-  --bg-stage: #e6effa;
-  --bg-stage-glow: #dce9fa;
-  --bg-surface: #ffffff;
-  --bg-elevated: #f7faff;
-  --bg-subtle: #ebf3fc;
-  --surface-dock: rgba(255, 255, 255, 0.94);
-  --surface-badge: rgba(0, 5, 33, 0.88);
+  /* Liquid Glass Terang (Airy Sapphire-White Toggle) */
+  --bg-app: #edf4fc;
+  --bg-stage: #e2eef9;
+  --bg-stage-glow: #f4f9ff;
+  --bg-surface: rgba(255, 255, 255, 0.88);
+  --bg-elevated: rgba(246, 250, 255, 0.92);
+  --bg-subtle: rgba(224, 237, 252, 0.86);
+  --surface-dock: rgba(255, 255, 255, 0.92);
+  --surface-badge: rgba(6, 20, 51, 0.88);
 
-  --border-hairline: #cfdff3;
-  --border-active: #0e4eb2;
+  --glass-surface: rgba(255, 255, 255, 0.74);
+  --glass-surface-strong: rgba(255, 255, 255, 0.90);
+  --glass-surface-mobile: rgba(255, 255, 255, 0.96);
+  --glass-border: rgba(15, 92, 214, 0.16);
+  --glass-border-strong: rgba(15, 92, 214, 0.34);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  --glass-shadow: 0 20px 44px -22px rgba(6, 20, 51, 0.18);
 
-  /* #0E4EB2 paired with #FFFFFF achieves ~7.5:1 WCAG AAA */
-  --accent-primary: #0e4eb2;
-  --accent-primary-hover: #2078cf;
-  --accent-highlight: #0e4eb2;
+  --border-hairline: rgba(15, 92, 214, 0.16);
+  --border-active: #0f5cd6;
+
+  /* #0F5CD6 paired with #FFFFFF achieves > 6.1:1 WCAG AA/AAA */
+  --accent-primary: #0f5cd6;
+  --accent-primary-hover: #1a6fe3;
+  --accent-highlight: #0f5cd6;
+  --accent-deep: #15408e;
   --ink-on-accent: #ffffff;
 
-  --text-primary: #000521;
-  --text-secondary: #2b426d;
-  --text-muted: #5f77a0;
+  --text-primary: #061433;
+  --text-secondary: #2b4570;
+  --text-muted: #58729c;
 
   --checker-a: #ffffff;
-  --checker-b: #dde7f7;
+  --checker-b: #dbe7f6;
 
-  --stage-shadow: 0 20px 48px -24px rgba(0, 5, 33, 0.16);
-  --dock-shadow: 0 12px 30px -12px rgba(1, 31, 101, 0.16);
+  --stage-shadow: 0 20px 48px -24px rgba(6, 20, 51, 0.16);
+  --dock-shadow: 0 12px 30px -12px rgba(15, 92, 214, 0.16);
 
   --status-ok-bg: #e7f6ee;
   --status-ok-ink: #0f5f3c;
@@ -43,34 +52,43 @@
 }
 
 [data-theme='dark'] {
-  /* Cobalt Gelap (Default Studio Theme) */
-  --bg-app: #000521;
-  --bg-stage: #020c47;
-  --bg-stage-glow: #011f65;
-  --bg-surface: #07143d;
-  --bg-elevated: #011f65;
-  --bg-subtle: #0a256b;
-  --surface-dock: rgba(7, 20, 61, 0.92);
-  --surface-badge: rgba(0, 5, 33, 0.88);
+  /* Liquid Glass Gelap (Deep Oceanic Sapphire Default Studio) */
+  --bg-app: #030a1c;
+  --bg-stage: #051029;
+  --bg-stage-glow: #0b2559;
+  --bg-surface: rgba(10, 26, 66, 0.84);
+  --bg-elevated: rgba(14, 36, 86, 0.72);
+  --bg-subtle: rgba(24, 58, 128, 0.58);
+  --surface-dock: rgba(8, 22, 56, 0.94);
+  --surface-badge: rgba(3, 10, 28, 0.90);
 
-  --border-hairline: rgba(32, 120, 207, 0.24);
-  --border-active: #2078cf;
+  --glass-surface: rgba(12, 32, 78, 0.62);
+  --glass-surface-strong: rgba(8, 22, 56, 0.84);
+  --glass-surface-mobile: rgba(8, 22, 56, 0.95);
+  --glass-border: rgba(130, 188, 255, 0.22);
+  --glass-border-strong: rgba(130, 188, 255, 0.38);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  --glass-shadow: 0 24px 52px -22px rgba(1, 5, 18, 0.78);
 
-  /* #0E4EB2 accent + #FFFFFF (~7.5:1 AAA), hover #2078CF (~4.55:1 AA) */
-  --accent-primary: #0e4eb2;
-  --accent-primary-hover: #2078cf;
-  --accent-highlight: #4ca1f5;
+  --border-hairline: rgba(130, 188, 255, 0.22);
+  --border-active: #59b8ff;
+
+  /* #1565D8 primary accent + #FFFFFF (~5.5:1 WCAG AA) */
+  --accent-primary: #1565d8;
+  --accent-primary-hover: #1a6fe3;
+  --accent-highlight: #59b8ff;
+  --accent-deep: #0b2559;
   --ink-on-accent: #ffffff;
 
-  --text-primary: #f2f7ff;
-  --text-secondary: #adc6ea;
-  --text-muted: #7090bc;
+  --text-primary: #f3f8ff;
+  --text-secondary: #b7cef0;
+  --text-muted: #7f9ec9;
 
   --checker-a: #0a1b4f;
   --checker-b: #040d33;
 
-  --stage-shadow: 0 22px 48px -20px rgba(0, 2, 18, 0.72);
-  --dock-shadow: 0 12px 32px -10px rgba(0, 2, 18, 0.7);
+  --stage-shadow: 0 24px 52px -20px rgba(1, 5, 18, 0.76);
+  --dock-shadow: 0 12px 32px -10px rgba(1, 5, 18, 0.72);
 
   --status-ok-bg: #0b2d27;
   --status-ok-ink: #7be3bc;

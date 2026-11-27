@@ -59,7 +59,11 @@ export async function runMainThreadImageFallback(
         height: number;
         getContext(type: '2d'): Canvas2DContextLike | null;
       }>,
-      request.previewMaxEdgePx
+      request.previewMaxEdgePx,
+      {
+        maxCanvasPixels: request.maxCanvasPixels,
+        allow8K: request.allow8K,
+      }
     );
 
     const activeModules = getActiveImageModuleLabels(request.edit);
@@ -77,6 +81,8 @@ export async function runMainThreadImageFallback(
       durationMs: performance.now() - t0,
       solvedQuality: out.solvedQuality,
       targetSizeMet: out.targetSizeMet,
+      clampedByMemoryGuard: out.clampedByMemoryGuard,
+      appliedTargetResolution: out.appliedTargetResolution,
       activeModules,
     };
   } finally {

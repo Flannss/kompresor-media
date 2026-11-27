@@ -4,8 +4,11 @@ import type {
   ImageOutputFormat,
   ImageRotation,
   NormalizedCropRect,
+  PhotoQualityModel,
+  PhotoTargetResolution,
 } from '../contracts';
-import { hasActiveColorGrade } from '../shared/colorGrades';
+import { applyPhotoFilterToImageData } from '../grading/photoFilters';
+import { compute1080pTargetDimensions, hasActiveColorGrade } from '../shared/colorGrades';
 
 export interface Dimensions {
   width: number;
@@ -19,6 +22,24 @@ export interface PixelCropRect {
   sh: number;
 }
 
+export interface PhotoCanvasGuardrails {
+  maxCanvasPixels?: number;
+  allow8K?: boolean;
+}
+
+export interface PhotoTargetResolutionResult extends Dimensions {
+  clampedByMemoryGuard: boolean;
+  appliedTargetResolution: PhotoTargetResolution;
+}
+
+export const PHOTO_TARGET_LONG_EDGE: Record<PhotoTargetResolution, number | null> = {
+  original: null,
+  hd: 1920,
+  '2k': 2560,
+  '4k': 3840,
+  '8k': 7680,
+};
+
 export function computeRotatedDimensions(
   width: number,
   height: number,
@@ -28,6 +49,26 @@ export function computeRotatedDimensions(
     return { width: height, height: width };
   }
   return { width, height };
+}
+
+/**
+ * Exact inscribed-rectangle scale factor when straightening by small angles (-15..+15 deg)
+ * so rotated frames fill the canvas edge-to-edge with zero black triangles.
+ */
+export function computeStraightenScale(
+  width: number,
+  height: number,
+  degrees: number
+): number {
+  const clamped = Math.min(45, Math.max(-45, degrees));
+  if (clamped === 0 || width <= 0 || height <= 0) {
+    return 1;
+  }
+  const rad = (Math.abs(clamped) * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const aspectMax = Math.max(height / width, width / height);
+  return cos + aspectMax * sin;
 }
 
 export function computeCropPixels(
@@ -70,7 +111,99 @@ export function computeTargetDimensions(
 }
 
 /**
- * Generates progressive halving dimensions when downscaling more than 2x to reduce aliasing.
+ * Resolves exact export dimensions honoring HD/2K/4K/8K targets and hardware canvas memory caps.
+ */
+export function computePhotoTargetDimensions(
+  srcWidth: number,
+  srcHeight: number,
+  edit: Pick<ImageEditState, 'maxEdgePx' | 'targetResolution' | 'enhanceSuite'>,
+  guard?: PhotoCanvasGuardrails
+): PhotoTargetResolutionResult {
+  if (srcWidth <= 0 || srcHeight <= 0) {
+    throw new Error(`Dimensi foto tidak valid: ${srcWidth}x${srcHeight}`);
+  }
+
+  let appliedTargetResolution: PhotoTargetResolution = edit.targetResolution ?? 'original';
+  if (appliedTargetResolution === '8k' && guard?.allow8K === false) {
+    appliedTargetResolution = '4k';
+  }
+
+  let dims: Dimensions;
+  const targetEdge = PHOTO_TARGET_LONG_EDGE[appliedTargetResolution];
+  if (targetEdge !== null) {
+    const scale = targetEdge / Math.max(srcWidth, srcHeight);
+    dims = {
+      width: Math.max(1, Math.round(srcWidth * scale)),
+      height: Math.max(1, Math.round(srcHeight * scale)),
+    };
+  } else if (edit.enhanceSuite.upscale1080.enabled) {
+    dims = compute1080pTargetDimensions(
+      srcWidth,
+      srcHeight,
+      edit.enhanceSuite.upscale1080.keepAspect
+    );
+  } else {
+    dims = computeTargetDimensions(srcWidth, srcHeight, edit.maxEdgePx);
+  }
+
+  let clampedByMemoryGuard = false;
+  const maxPixels = guard?.maxCanvasPixels;
+  if (maxPixels && maxPixels > 0 && dims.width * dims.height > maxPixels) {
+    const clampScale = Math.sqrt(maxPixels / (dims.width * dims.height));
+    dims = {
+      width: Math.max(1, Math.floor(dims.width * clampScale)),
+      height: Math.max(1, Math.floor(dims.height * clampScale)),
+    };
+    clampedByMemoryGuard = true;
+  }
+
+  return {
+    width: dims.width,
+    height: dims.height,
+    clampedByMemoryGuard,
+    appliedTargetResolution,
+  };
+}
+
+/**
+ * Generates stepped upscaling dimensions (max 1.5x per intermediate step) to preserve
+ * edge continuity when rendering HD/2K/4K/8K outputs without single-jump softness.
+ */
+export function computeProgressiveUpscaleSteps(
+  srcWidth: number,
+  srcHeight: number,
+  dstWidth: number,
+  dstHeight: number
+): Dimensions[] {
+  if (dstWidth <= srcWidth && dstHeight <= srcHeight) {
+    return [{ width: dstWidth, height: dstHeight }];
+  }
+
+  const steps: Dimensions[] = [];
+  let currentW = srcWidth;
+  let currentH = srcHeight;
+
+  while (dstWidth / currentW > 1.5 || dstHeight / currentH > 1.5) {
+    const nextW = Math.min(dstWidth, Math.max(currentW + 1, Math.round(currentW * 1.5)));
+    const nextH = Math.min(dstHeight, Math.max(currentH + 1, Math.round(currentH * 1.5)));
+    if (nextW === currentW && nextH === currentH) {
+      break;
+    }
+    if (nextW === dstWidth && nextH === dstHeight) {
+      break;
+    }
+    steps.push({ width: nextW, height: nextH });
+    currentW = nextW;
+    currentH = nextH;
+  }
+
+  steps.push({ width: dstWidth, height: dstHeight });
+  return steps;
+}
+
+/**
+ * Generates progressive halving dimensions when downscaling more than 2x,
+ * or 1.5x stepped passes when upscaling toward HD/2K/4K/8K.
  */
 export function computeProgressiveSteps(
   srcWidth: number,
@@ -78,6 +211,10 @@ export function computeProgressiveSteps(
   dstWidth: number,
   dstHeight: number
 ): Dimensions[] {
+  if (dstWidth > srcWidth || dstHeight > srcHeight) {
+    return computeProgressiveUpscaleSteps(srcWidth, srcHeight, dstWidth, dstHeight);
+  }
+
   if (srcWidth <= dstWidth && srcHeight <= dstHeight) {
     return [{ width: dstWidth, height: dstHeight }];
   }
@@ -198,28 +335,63 @@ export function applyEdgePreservingDenoiseParams(
 }
 
 /**
- * Applies brightness, contrast, saturation, and color temperature (-100..100 each) in-place.
+ * Applies exposure/tone/color/vignette adjustments (-100..100, vignette 0..100) in-place.
  */
 export function applyColorAdjustments(
   imageData: ImageData,
-  adjustments: ImageColorAdjustments
+  adjustments: Partial<ImageColorAdjustments>
 ): void {
-  const { brightness, contrast, saturation, temperature } = adjustments;
-  if (brightness === 0 && contrast === 0 && saturation === 0 && temperature === 0) {
+  const brightness = adjustments.brightness ?? 0;
+  const contrast = adjustments.contrast ?? 0;
+  const highlights = adjustments.highlights ?? 0;
+  const shadows = adjustments.shadows ?? 0;
+  const vignette = adjustments.vignette ?? 0;
+  const saturation = adjustments.saturation ?? 0;
+  const vibrance = adjustments.vibrance ?? 0;
+  const temperature = adjustments.temperature ?? 0;
+  const tint = adjustments.tint ?? 0;
+
+  if (
+    brightness === 0 &&
+    contrast === 0 &&
+    highlights === 0 &&
+    shadows === 0 &&
+    vignette === 0 &&
+    saturation === 0 &&
+    vibrance === 0 &&
+    temperature === 0 &&
+    tint === 0
+  ) {
     return;
   }
 
-  const data = imageData.data;
+  const { width, height, data } = imageData;
   const brightShift = (brightness / 100) * 70;
   const cVal = (contrast / 100) * 100;
   const contrastFactor = (259 * (cVal + 255)) / (255 * (259 - cVal));
   const satFactor = 1 + saturation / 100;
+  const vibNorm = vibrance / 100;
   const tempShift = temperature * 0.36;
+  const tintShift = tint * 0.3;
+  const vigStrength = Math.min(100, Math.max(0, vignette)) / 100;
+  const halfW = Math.max(1, width / 2);
+  const halfH = Math.max(1, height / 2);
 
   for (let i = 0; i < data.length; i += 4) {
-    let r = data[i] + brightShift + tempShift;
-    let g = data[i + 1] + brightShift;
-    let b = data[i + 2] + brightShift - tempShift;
+    let r = data[i] + brightShift + tempShift + tintShift * 0.45;
+    let g = data[i + 1] + brightShift - tintShift * 0.85;
+    let b = data[i + 2] + brightShift - tempShift + tintShift * 0.45;
+
+    if (highlights !== 0 || shadows !== 0) {
+      const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      const norm = Math.min(1, Math.max(0, luma / 255));
+      const sw = Math.pow(Math.max(0, 1 - norm * 1.35), 1.4);
+      const hw = Math.pow(Math.max(0, (norm - 0.26) / 0.74), 1.4);
+      const toneDelta = shadows * 0.55 * sw + highlights * 0.55 * hw;
+      r += toneDelta;
+      g += toneDelta;
+      b += toneDelta;
+    }
 
     if (contrast !== 0) {
       r = (r - 128) * contrastFactor + 128;
@@ -234,9 +406,102 @@ export function applyColorAdjustments(
       b = luma + (b - luma) * satFactor;
     }
 
+    if (vibrance !== 0) {
+      const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      const maxC = Math.max(r, g, b);
+      const minC = Math.min(r, g, b);
+      const chroma = Math.min(1, Math.max(0, (maxC - minC) / 255));
+      // Gently protect skin-like warm orange hues while boosting muted greens/blues
+      const isWarmSkin = r > g && g > b && r - b > 20;
+      const skinWeight = isWarmSkin ? 0.65 : 1;
+      const vibFactor = 1 + vibNorm * (1 - chroma) * skinWeight * 0.95;
+      r = luma + (r - luma) * vibFactor;
+      g = luma + (g - luma) * vibFactor;
+      b = luma + (b - luma) * vibFactor;
+    }
+
+    if (vigStrength > 0 && width > 1 && height > 1) {
+      const px = i / 4;
+      const x = px % width;
+      const y = (px - x) / width;
+      const nx = (x - halfW) / halfW;
+      const ny = (y - halfH) / halfH;
+      const distSq = nx * nx + ny * ny;
+      const falloff = 1 - vigStrength * 0.52 * Math.min(1.35, distSq);
+      r *= falloff;
+      g *= falloff;
+      b *= falloff;
+    }
+
     data[i] = clampByte(r);
     data[i + 1] = clampByte(g);
     data[i + 2] = clampByte(b);
+  }
+}
+
+/**
+ * Local midtone micro-contrast (Clarity -100..100) using a 3-row rolling luminance buffer.
+ */
+export function applyClarity(imageData: ImageData, clarity: number): void {
+  const clamped = Math.min(100, Math.max(-100, clarity));
+  if (clamped === 0) {
+    return;
+  }
+
+  const { width, height, data } = imageData;
+  if (width < 3 || height < 3) {
+    return;
+  }
+
+  const strength = (clamped / 100) * 0.75;
+  const rowStride = width * 4;
+
+  let prevRow = new Uint8ClampedArray(rowStride);
+  let currRow = new Uint8ClampedArray(rowStride);
+  let nextRow = new Uint8ClampedArray(rowStride);
+  prevRow.set(data.subarray(0, rowStride));
+  currRow.set(data.subarray(rowStride, rowStride * 2));
+  nextRow.set(data.subarray(rowStride * 2, rowStride * 3));
+
+  for (let y = 1; y < height - 1; y += 1) {
+    const outRow = y * rowStride;
+    for (let x = 1; x < width - 1; x += 1) {
+      const col = x * 4;
+      const outIdx = outRow + col;
+      const lc = col - 4;
+      const rc = col + 4;
+
+      const lCenter =
+        0.2126 * currRow[col] + 0.7152 * currRow[col + 1] + 0.0722 * currRow[col + 2];
+
+      let avgL = 0;
+      const rows = [prevRow, currRow, nextRow];
+      for (let rIdx = 0; rIdx < 3; rIdx += 1) {
+        const sr = rows[rIdx];
+        for (let cOff = lc; cOff <= rc; cOff += 4) {
+          avgL += 0.2126 * sr[cOff] + 0.7152 * sr[cOff + 1] + 0.0722 * sr[cOff + 2];
+        }
+      }
+      avgL /= 9;
+
+      // Weight strongest in midtones (bell curve centered around luma = 128)
+      const midWeight = 1 - Math.abs(lCenter / 255 - 0.5) * 1.25;
+      const delta = (lCenter - avgL) * strength * Math.max(0.25, midWeight);
+
+      data[outIdx] = clampByte(currRow[col] + delta);
+      data[outIdx + 1] = clampByte(currRow[col + 1] + delta);
+      data[outIdx + 2] = clampByte(currRow[col + 2] + delta);
+      data[outIdx + 3] = currRow[col + 3];
+    }
+
+    if (y + 1 < height - 1) {
+      const recycled = prevRow;
+      prevRow = currRow;
+      currRow = nextRow;
+      nextRow = recycled;
+      const aheadOffset = (y + 2) * rowStride;
+      nextRow.set(data.subarray(aheadOffset, aheadOffset + rowStride));
+    }
   }
 }
 
@@ -319,6 +584,34 @@ export function applySharpen(
   }
 }
 
+/**
+ * Style-preserving image quality refinement model:
+ * - 'realphoto': gentle natural tone/clarity preservation without artificial edge halos.
+ * - 'high-quality': chroma noise smoothing (when upscaled) + crisp micro-contrast + fine detail recovery.
+ */
+export function applyQualityModelPass(
+  imageData: ImageData,
+  qualityModel: PhotoQualityModel,
+  upscaleRatio: number
+): void {
+  if (qualityModel === 'high-quality') {
+    if (upscaleRatio > 1.05) {
+      applyEdgePreservingDenoiseParams(imageData, Math.min(3.5, upscaleRatio * 1.35), 4);
+    }
+    applyClarity(imageData, upscaleRatio > 1.05 ? 16 : 10);
+    applySharpen(imageData, upscaleRatio > 1.05 ? 24 : 14, true);
+    return;
+  }
+
+  // RealPhoto (Natural): preserves natural photo style cleanly
+  if (upscaleRatio > 1.05) {
+    applyClarity(imageData, 8);
+    applySharpen(imageData, 14, true);
+  }
+}
+
+export { applyPhotoFilterToImageData };
+
 export function buildExportFileName(
   originalName: string,
   outputFormat: ImageOutputFormat
@@ -353,10 +646,22 @@ export function formatOutputMimeShort(mime: ImageOutputFormat): string {
 
 export function getActiveImageModuleLabels(edit: ImageEditState): string[] {
   const labels = ['Kompres'];
-  if (edit.enhanceSuite.noise.enabled) labels.push('Noise');
-  if (edit.enhanceSuite.sharpen.enabled) labels.push('Tajam');
-  if (edit.enhanceSuite.colorContrast.enabled) labels.push('Warna');
-  if (edit.enhanceSuite.upscale1080.enabled) labels.push('1080p');
-  if (hasActiveColorGrade(edit.colorGrade)) labels.push('Filter');
+  if (edit.qualityModel === 'high-quality') {
+    labels.push('High Quality');
+  } else {
+    labels.push('RealPhoto');
+  }
+  if (edit.targetResolution !== 'original') {
+    labels.push(edit.targetResolution.toUpperCase());
+  }
+  if (edit.denoiseAmount > 0 || edit.enhanceSuite.noise.enabled) {
+    labels.push('Redam Noise');
+  }
+  if (edit.photoFilterId !== 'original' || hasActiveColorGrade(edit.colorGrade)) {
+    labels.push('Filter');
+  }
+  if (edit.straightenDeg !== 0 || edit.crop !== null || edit.rotationDeg !== 0) {
+    labels.push('Bingkai');
+  }
   return labels;
 }

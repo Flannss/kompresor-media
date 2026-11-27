@@ -1,4 +1,47 @@
+export type SharePlatform = 'whatsapp' | 'instagram' | 'tiktok';
 export type WhatsAppShareOutcome = 'shared' | 'cancelled' | 'desktop-helper';
+
+export interface PlatformShareSpec {
+  id: SharePlatform;
+  label: string;
+  helperText: string;
+  tipText: string;
+  openLabel: string;
+  url: string;
+}
+
+export const PLATFORM_SHARE_META: Record<SharePlatform, PlatformShareSpec> = {
+  whatsapp: {
+    id: 'whatsapp',
+    label: 'WhatsApp',
+    helperText:
+      'File sudah disimpan ke folder Unduhan. Buka WhatsApp Web lalu kirim file dari folder Unduhan.',
+    tipText:
+      'Tip: Pilih ikon HD atau kirim sebagai Dokumen di WhatsApp agar ketajaman maksimal terjaga.',
+    openLabel: 'Buka WhatsApp Web',
+    url: 'https://web.whatsapp.com/',
+  },
+  instagram: {
+    id: 'instagram',
+    label: 'Instagram',
+    helperText:
+      'File sudah diunduh dengan ukuran optimal. Buka Instagram Web untuk membuat postingan atau unggah dari galeri.',
+    tipText:
+      'Tip: Untuk Feed gunakan 1440 px, dan untuk Story/Reels aktifkan unggah kualitas tertinggi di setelan IG.',
+    openLabel: 'Buka Instagram',
+    url: 'https://www.instagram.com/',
+  },
+  tiktok: {
+    id: 'tiktok',
+    label: 'TikTok',
+    helperText:
+      'File sudah disimpan ke perangkat. Buka halaman unggah TikTok lalu pilih file dari folder Unduhan.',
+    tipText:
+      'Tip: Untuk hasil paling jernih di TikTok, gunakan format MP4 1080p dengan kecepatan 30 atau 60 gerak/detik.',
+    openLabel: 'Buka Unggah TikTok',
+    url: 'https://www.tiktok.com/upload',
+  },
+};
 
 export function triggerObjectUrlDownload(objectUrl: string, fileName: string): void {
   const anchor = document.createElement('a');
@@ -35,7 +78,8 @@ export function canNativeShareFile(blob: Blob, fileName: string, mimeType: strin
   }
 }
 
-export async function executeWhatsAppShareFlow(params: {
+export async function executePlatformShareFlow(params: {
+  platform: SharePlatform;
   blob: Blob;
   objectUrl: string;
   fileName: string;
@@ -55,10 +99,19 @@ export async function executeWhatsAppShareFlow(params: {
       if (err instanceof DOMException && err.name === 'AbortError') {
         return 'cancelled';
       }
-      // Fall through to desktop download + WhatsApp Web helper if Web Share fails
+      // Fall through to download + platform helper card
     }
   }
 
   triggerObjectUrlDownload(objectUrl, fileName);
   return 'desktop-helper';
+}
+
+export async function executeWhatsAppShareFlow(params: {
+  blob: Blob;
+  objectUrl: string;
+  fileName: string;
+  mimeType: string;
+}): Promise<WhatsAppShareOutcome> {
+  return executePlatformShareFlow({ ...params, platform: 'whatsapp' });
 }

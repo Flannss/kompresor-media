@@ -62,6 +62,7 @@ export function App() {
   const toggleFlipH = useMediaStore((s) => s.toggleFlipH);
   const toggleFlipV = useMediaStore((s) => s.toggleFlipV);
   const applyCrop = useMediaStore((s) => s.applyCrop);
+  const selectPhotoFilter = useMediaStore((s) => s.selectPhotoFilter);
   const selectColorGrade = useMediaStore((s) => s.selectColorGrade);
   const requestBaseThumbnail = useMediaStore((s) => s.requestBaseThumbnail);
   const setBaseThumbnail = useMediaStore((s) => s.setBaseThumbnail);
@@ -87,6 +88,10 @@ export function App() {
 
   const isReady =
     status === 'ready' && metadata !== null && validation?.valid === true && objectUrl !== null;
+
+  useEffect(() => {
+    document.documentElement.dataset.glassLite = deviceProfile.useGlassLite ? 'true' : 'false';
+  }, [deviceProfile.useGlassLite]);
 
   useEffect(() => {
     if (!isReady || metadata?.kind !== 'image') {
@@ -137,6 +142,7 @@ export function App() {
       <div className="flex min-h-screen flex-col bg-[var(--bg-app)] text-[var(--text-primary)]">
         <WorkspaceHeader
           hasMedia={isReady}
+          activeMediaKind={isReady && metadata ? metadata.kind : null}
           canAddMore={items.length < queueLimits.maxTotal}
           itemCount={items.length}
           maxTotal={queueLimits.maxTotal}
@@ -206,6 +212,7 @@ export function App() {
               onFlipH={toggleFlipH}
               onFlipV={toggleFlipV}
               onApplyCrop={applyCrop}
+              onSelectPhotoFilter={selectPhotoFilter}
               onSelectColorGrade={selectColorGrade}
               onRequestPhotoThumbnail={() => void requestBaseThumbnail()}
               onVideoThumbnailReady={setBaseThumbnail}

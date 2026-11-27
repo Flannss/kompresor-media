@@ -43,7 +43,11 @@ import {
 } from '../../engines/shared/colorGrades';
 import { parseSubtitleText } from '../../engines/video/subtitleParser';
 import { clampTrimRange, resolveCustomVideoParams } from '../../engines/video/videoPresets';
-import { MEDIA_PRESETS, type MediaPresetId } from '../../presets/mediaPresets';
+import {
+  getMediaPreset,
+  VIDEO_PRESET_IDS,
+  type MediaPresetId,
+} from '../../presets/mediaPresets';
 import type { DeviceProfile } from '../../shared/utils/deviceCapability';
 import { formatDuration } from '../../shared/utils/formatDuration';
 import type { VideoProcessStatus } from '../../store/useMediaStore';
@@ -85,9 +89,9 @@ export interface VideoControlPanelProps {
 }
 
 const VIDEO_TABS = [
-  { id: 'utama' as const, label: 'Utama' },
-  { id: 'tampilan' as const, label: 'Tampilan' },
-  { id: 'lanjutan' as const, label: 'Lanjutan' },
+  { id: 'utama' as const, label: 'Tujuan & Format' },
+  { id: 'tampilan' as const, label: 'Jernihkan & Warna' },
+  { id: 'lanjutan' as const, label: 'Potong & Lanjutan' },
 ];
 
 const VIDEO_FORMAT_OPTIONS: ReadonlyArray<{ value: VideoOutputFormat; label: string }> = [
@@ -443,7 +447,7 @@ export function VideoControlPanel({
               role="radiogroup"
               aria-label="Pilih tujuan video"
             >
-              {MEDIA_PRESETS.map((preset) => {
+              {VIDEO_PRESET_IDS.map((id) => getMediaPreset(id)).map((preset) => {
                 const selected = preset.id === selectedPresetId;
                 return (
                   <button

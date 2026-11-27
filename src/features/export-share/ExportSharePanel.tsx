@@ -1,7 +1,14 @@
-import { useEffect, useState } from 'react';
-import { Check, Download, ExternalLink, FileArchive, Send } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Check, Download, ExternalLink, FileArchive, Share2 } from 'lucide-react';
 import { Button } from '../../design-system/components/Button';
-import { executeWhatsAppShareFlow, triggerObjectUrlDownload } from './shareHelper';
+import type { PhotoTargetResolution } from '../../engines/contracts';
+import {
+  executePlatformShareFlow,
+  isLikelyMobileDevice,
+  PLATFORM_SHARE_META,
+  triggerObjectUrlDownload,
+  type SharePlatform,
+} from './shareHelper';
 import type { ZipEntryInput } from './zipExport';
 
 export interface ExportSharePanelProps {
@@ -10,6 +17,7 @@ export interface ExportSharePanelProps {
   readyUrl: string | null;
   outputFileName: string | null;
   outputMime: string | null;
+  targetResolution?: PhotoTargetResolution;
   finishedBatchItems?: ZipEntryInput[];
   needsFullResPreparation?: boolean;
   onPrepareFullResExport?: () => Promise<{
@@ -29,6 +37,7 @@ export function ExportSharePanel({
   readyUrl,
   outputFileName,
   outputMime,
+  targetResolution = 'original',
   finishedBatchItems = [],
   needsFullResPreparation = false,
   onPrepareFullResExport,
@@ -37,15 +46,22 @@ export function ExportSharePanel({
   isProcessing = false,
 }: ExportSharePanelProps) {
   const [downloadConfirmed, setDownloadConfirmed] = useState(false);
-  const [showWhatsappHelper, setShowWhatsappHelper] = useState(false);
+  const [activeHelperPlatform, setActiveHelperPlatform] = useState<SharePlatform | null>(null);
   const [preparingFullRes, setPreparingFullRes] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [zipping, setZipping] = useState(false);
   const [zipDoneMsg, setZipDoneMsg] = useState<string | null>(null);
+  const selfPreparedUrlRef = useRef<string | null>(null);
+
+  const likelyMobile = isLikelyMobileDevice();
 
   useEffect(() => {
+    if (readyUrl && selfPreparedUrlRef.current === readyUrl) {
+      selfPreparedUrlRef.current = null;
+      return;
+    }
     setDownloadConfirmed(false);
-    setShowWhatsappHelper(false);
+    setActiveHelperPlatform(null);
   }, [readyUrl]);
 
   const canExport =
@@ -65,6 +81,7 @@ export function ExportSharePanel({
       try {
         const prepared = await onPrepareFullResExport();
         if (prepared) {
+          selfPreparedUrlRef.current = prepared.url;
           return prepared;
         }
       } finally {
@@ -89,19 +106,20 @@ export function ExportSharePanel({
     setDownloadConfirmed(true);
   };
 
-  const handleWhatsApp = async () => {
+  const handleSharePlatform = async (platform: SharePlatform) => {
     setSharing(true);
     try {
       const target = await resolveReadyExport();
       if (!target) return;
-      const outcome = await executeWhatsAppShareFlow({
+      const outcome = await executePlatformShareFlow({
+        platform,
         blob: target.blob,
         objectUrl: target.url,
         fileName: target.fileName,
         mimeType: target.mimeType,
       });
       if (outcome === 'desktop-helper') {
-        setShowWhatsappHelper(true);
+        setActiveHelperPlatform(platform);
         setDownloadConfirmed(true);
       }
     } finally {
@@ -126,8 +144,16 @@ export function ExportSharePanel({
     }
   };
 
+  const renderResTag =
+    targetResolution === '2k' ||
+    targetResolution === '4k' ||
+    targetResolution === '8k' ||
+    targetResolution === 'hd'
+      ? targetResolution.toUpperCase()
+      : 'HD';
+
   const downloadLabel = preparingFullRes
-    ? 'Menyiapkan HD…'
+    ? `Merender ${renderResTag}…`
     : mediaKind === 'image'
       ? isProcessing
         ? 'Memproses Foto…'
@@ -136,6 +162,8 @@ export function ExportSharePanel({
 
   const downloadedText =
     mediaKind === 'image' ? 'Foto berhasil diunduh' : 'Video berhasil diunduh';
+
+  const helperSpec = activeHelperPlatform ? PLATFORM_SHARE_META[activeHelperPlatform] : null;
 
   return (
     <div className="flex flex-col gap-2">
@@ -151,17 +179,52 @@ export function ExportSharePanel({
         <span>{downloadLabel}</span>
       </Button>
 
-      <Button
-        variant="secondary"
-        size="lg"
-        data-testid="whatsapp-share-btn"
-        disabled={!canExport || sharing}
-        onClick={() => void handleWhatsApp()}
-        className="min-h-[44px] w-full"
-      >
-        <Send className="h-4 w-4 text-[var(--accent-highlight)]" aria-hidden="true" />
-        <span>{preparingFullRes ? 'Menyiapkan HD…' : 'Kirim ke WhatsApp'}</span>
-      </Button>
+      {likelyMobile ? (
+        <Button
+          variant="secondary"
+          size="lg"
+          data-testid="whatsapp-share-btn"
+          disabled={!canExport || sharing}
+          onClick={() => void handleSharePlatform('whatsapp')}
+          className="min-h-[44px] w-full"
+        >
+          <Share2 className="h-4 w-4 text-[var(--accent-highlight)]" aria-hidden="true" />
+          <span>{preparingFullRes ? `Merender ${renderResTag}…` : 'Bagikan ke Aplikasi'}</span>
+        </Button>
+      ) : (
+        <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Kirim cepat ke aplikasi">
+          <Button
+            variant="secondary"
+            size="sm"
+            data-testid="whatsapp-share-btn"
+            disabled={!canExport || sharing}
+            onClick={() => void handleSharePlatform('whatsapp')}
+            className="min-h-[40px] px-2 text-[11px] font-semibold"
+          >
+            WhatsApp
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            data-testid="instagram-share-btn"
+            disabled={!canExport || sharing}
+            onClick={() => void handleSharePlatform('instagram')}
+            className="min-h-[40px] px-2 text-[11px] font-semibold"
+          >
+            Instagram
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            data-testid="tiktok-share-btn"
+            disabled={!canExport || sharing}
+            onClick={() => void handleSharePlatform('tiktok')}
+            className="min-h-[40px] px-2 text-[11px] font-semibold"
+          >
+            TikTok
+          </Button>
+        </div>
+      )}
 
       {finishedBatchItems.length >= 2 && (
         <Button
@@ -201,26 +264,30 @@ export function ExportSharePanel({
         </p>
       )}
 
-      {showWhatsappHelper && (
+      {helperSpec && (
         <div
-          data-testid="whatsapp-web-helper"
+          data-testid={
+            helperSpec.id === 'whatsapp' ? 'whatsapp-web-helper' : 'platform-share-helper'
+          }
+          data-platform={helperSpec.id}
           className="mt-1 flex flex-col gap-2 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3 text-xs text-[var(--text-secondary)]"
         >
-          <p className="leading-relaxed">
-            File sudah disimpan ke perangkat. Buka WhatsApp Web lalu kirim file dari folder Unduhan.
-          </p>
+          <p className="leading-relaxed">{helperSpec.helperText}</p>
           <p className="rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-1.5 text-[11px] leading-relaxed text-[var(--text-primary)]">
-            Tip: Pilih ikon <strong>HD</strong> atau kirim sebagai <strong>Dokumen</strong> di
-            WhatsApp agar ketajaman tetap maksimal.
+            {helperSpec.tipText}
           </p>
           <a
-            href="https://web.whatsapp.com/"
+            href={helperSpec.url}
             target="_blank"
             rel="noopener noreferrer"
-            data-testid="open-whatsapp-web-link"
+            data-testid={
+              helperSpec.id === 'whatsapp'
+                ? 'open-whatsapp-web-link'
+                : `open-${helperSpec.id}-link`
+            }
             className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg border border-[var(--border-active)] bg-[var(--bg-surface)] px-3 text-xs font-semibold text-[var(--accent-highlight)] transition-colors hover:bg-[var(--bg-subtle)]"
           >
-            <span>Buka WhatsApp Web</span>
+            <span>{helperSpec.openLabel}</span>
             <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
           </a>
         </div>

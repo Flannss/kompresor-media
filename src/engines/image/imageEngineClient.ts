@@ -156,22 +156,32 @@ export async function processImage(
 ): Promise<ImageProcessResult> {
   const tStart = performance.now();
   const seq = ++sequenceCounter;
+  const profile = getDeviceProfile();
+  const maxCanvasPixels = request.maxCanvasPixels ?? profile.maxPhotoCanvasPixels;
+  const allow8K = request.allow8K ?? profile.allow8KPhotoExport;
+  const normalizedRequest: ImageProcessRequest = {
+    ...request,
+    maxCanvasPixels,
+    allow8K,
+  };
 
   if (typeof Worker === 'undefined') {
-    return runMainThreadImageFallback(request);
+    return runMainThreadImageFallback(normalizedRequest);
   }
 
   const slot = await acquireWorkerSlot();
   try {
-    const inputBuffer = await request.file.arrayBuffer();
+    const inputBuffer = await normalizedRequest.file.arrayBuffer();
     const response = await sendWorkerMessage(slot.worker, {
       type: 'process',
       seq,
-      requestId: request.requestId,
+      requestId: normalizedRequest.requestId,
       buffer: inputBuffer,
-      mimeType: request.sourceMetadata.mimeType,
-      edit: request.edit,
-      previewMaxEdgePx: request.previewMaxEdgePx,
+      mimeType: normalizedRequest.sourceMetadata.mimeType,
+      edit: normalizedRequest.edit,
+      previewMaxEdgePx: normalizedRequest.previewMaxEdgePx,
+      maxCanvasPixels,
+      allow8K,
     });
 
     if (response.type !== 'process') {
@@ -182,31 +192,33 @@ export async function processImage(
     }
     if (response.fallbackRequired) {
       releaseWorkerSlot(slot);
-      return await runMainThreadImageFallback(request);
+      return await runMainThreadImageFallback(normalizedRequest);
     }
 
     const outputBlob = new Blob([response.outputBuffer], { type: response.outputMime });
-    const activeModules = getActiveImageModuleLabels(request.edit);
+    const activeModules = getActiveImageModuleLabels(normalizedRequest.edit);
 
     releaseWorkerSlot(slot);
     return {
-      requestId: request.requestId,
+      requestId: normalizedRequest.requestId,
       backend: 'worker-offscreen-canvas',
       outputBlob,
-      outputFileName: buildExportFileName(request.file.name, response.outputMime),
+      outputFileName: buildExportFileName(normalizedRequest.file.name, response.outputMime),
       outputMime: response.outputMime,
       outputWidth: response.outputWidth,
       outputHeight: response.outputHeight,
-      inputBytes: request.file.size,
+      inputBytes: normalizedRequest.file.size,
       outputBytes: outputBlob.size,
       durationMs: performance.now() - tStart,
       solvedQuality: response.solvedQuality,
       targetSizeMet: response.targetSizeMet,
+      clampedByMemoryGuard: response.clampedByMemoryGuard,
+      appliedTargetResolution: response.appliedTargetResolution,
       activeModules,
     };
   } catch {
     releaseWorkerSlot(slot, true);
-    return runMainThreadImageFallback(request);
+    return runMainThreadImageFallback(normalizedRequest);
   }
 }
 

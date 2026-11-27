@@ -1,17 +1,26 @@
-import type { ImageEditState, ImageOutputFormat } from '../contracts';
+import type {
+  ImageEditState,
+  ImageOutputFormat,
+  PhotoTargetResolution,
+} from '../contracts';
+import { applyPhotoFilterToImageData } from '../grading/photoFilters';
 import {
   applyColorGradeToImageData,
-  compute1080pTargetDimensions,
   hasActiveColorGrade,
 } from '../shared/colorGrades';
 import {
+  applyClarity,
   applyColorAdjustments,
   applyEdgePreservingDenoiseParams,
+  applyQualityModelPass,
   applySharpen,
   computeCropPixels,
+  computePhotoTargetDimensions,
   computeProgressiveSteps,
   computeRotatedDimensions,
+  computeStraightenScale,
   computeTargetDimensions,
+  type PhotoCanvasGuardrails,
 } from './pixelOps';
 
 export interface Canvas2DContextLike {
@@ -54,6 +63,8 @@ export interface PipelineOutput {
   height: number;
   solvedQuality?: number;
   targetSizeMet?: boolean;
+  clampedByMemoryGuard?: boolean;
+  appliedTargetResolution?: PhotoTargetResolution;
 }
 
 /** Explicitly releases backing GPU/RAM memory allocated for temporary Canvas/OffscreenCanvas buffers (critical for iOS Safari caps). */
@@ -71,7 +82,7 @@ export function releaseCanvasSurface(
 
 function drawOrientedAndFlipped<TCanvas extends CanvasSurfaceLike>(
   bitmap: ImageBitmap,
-  edit: Pick<ImageEditState, 'rotationDeg' | 'flipH' | 'flipV'>,
+  edit: Pick<ImageEditState, 'rotationDeg' | 'straightenDeg' | 'flipH' | 'flipV'>,
   adapter: CanvasAdapter<TCanvas>
 ): TCanvas {
   const rotDims = computeRotatedDimensions(bitmap.width, bitmap.height, edit.rotationDeg);
@@ -85,8 +96,15 @@ function drawOrientedAndFlipped<TCanvas extends CanvasSurfaceLike>(
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
 
+  const straightenDeg = edit.straightenDeg ?? 0;
+  const straightenScale = computeStraightenScale(rotDims.width, rotDims.height, straightenDeg);
+
   ctx.save();
   ctx.translate(rotDims.width / 2, rotDims.height / 2);
+  if (straightenDeg !== 0) {
+    ctx.rotate((straightenDeg * Math.PI) / 180);
+    ctx.scale(straightenScale, straightenScale);
+  }
   if (edit.rotationDeg !== 0) {
     ctx.rotate((edit.rotationDeg * Math.PI) / 180);
   }
@@ -275,7 +293,8 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
   bitmap: ImageBitmap,
   edit: ImageEditState,
   adapter: CanvasAdapter<TCanvas>,
-  previewMaxEdgePx?: number
+  previewMaxEdgePx?: number,
+  guard?: PhotoCanvasGuardrails
 ): Promise<PipelineOutput> {
   let currentCanvas = drawOrientedAndFlipped(bitmap, edit, adapter);
 
@@ -309,17 +328,20 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
       currentCanvas = croppedCanvas;
     }
 
-    let targetDims = edit.enhanceSuite.upscale1080.enabled
-      ? compute1080pTargetDimensions(
-          currentCanvas.width,
-          currentCanvas.height,
-          edit.enhanceSuite.upscale1080.keepAspect
-        )
-      : computeTargetDimensions(currentCanvas.width, currentCanvas.height, edit.maxEdgePx);
+    const preResizeW = currentCanvas.width;
+    const targetPlan = computePhotoTargetDimensions(
+      currentCanvas.width,
+      currentCanvas.height,
+      edit,
+      guard
+    );
 
+    let targetDims = { width: targetPlan.width, height: targetPlan.height };
     if (previewMaxEdgePx && previewMaxEdgePx > 0) {
       targetDims = computeTargetDimensions(targetDims.width, targetDims.height, previewMaxEdgePx);
     }
+
+    const upscaleRatio = targetDims.width / Math.max(1, preResizeW);
 
     const resized = resizeCanvas(currentCanvas, targetDims.width, targetDims.height, adapter);
     if (resized !== currentCanvas) {
@@ -328,13 +350,28 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
     }
 
     const effectiveSharpen = getEffectiveSharpenAmount(edit);
-    const needsPixelPass =
+    const hasAdjustments =
       edit.adjustments.brightness !== 0 ||
       edit.adjustments.contrast !== 0 ||
+      edit.adjustments.highlights !== 0 ||
+      edit.adjustments.shadows !== 0 ||
+      edit.adjustments.clarity !== 0 ||
+      edit.adjustments.vignette !== 0 ||
       edit.adjustments.saturation !== 0 ||
+      edit.adjustments.vibrance !== 0 ||
       edit.adjustments.temperature !== 0 ||
+      edit.adjustments.tint !== 0;
+
+    const needsQualityModelPass =
+      edit.qualityModel === 'high-quality' || upscaleRatio > 1.05;
+
+    const needsPixelPass =
+      hasAdjustments ||
+      (edit.photoFilterId !== 'original' && edit.photoFilterIntensity > 0) ||
       hasActiveColorGrade(edit.colorGrade) ||
+      edit.denoiseAmount > 0 ||
       effectiveSharpen > 0 ||
+      needsQualityModelPass ||
       edit.enhanceSuite.noise.enabled ||
       edit.enhanceSuite.colorContrast.enabled;
 
@@ -342,32 +379,62 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
       const ctx = currentCanvas.getContext('2d');
       if (ctx) {
         const imgData = ctx.getImageData(0, 0, currentCanvas.width, currentCanvas.height);
-        if (edit.enhanceSuite.noise.enabled) {
+
+        if (edit.denoiseAmount > 0) {
+          const grainStrength = (edit.denoiseAmount / 100) * 8;
+          const colorSmooth = Math.max(2, Math.round((edit.denoiseAmount / 100) * 6));
+          applyEdgePreservingDenoiseParams(imgData, grainStrength, colorSmooth);
+        } else if (edit.enhanceSuite.noise.enabled) {
           applyEdgePreservingDenoiseParams(
             imgData,
             edit.enhanceSuite.noise.grainStrength,
             edit.enhanceSuite.noise.colorSmooth
           );
         }
+
         applyColorAdjustments(imgData, edit.adjustments);
-        applyColorGradeToImageData(
-          imgData,
-          edit.colorGrade,
-          edit.enhanceSuite.colorContrast.enabled ? edit.enhanceSuite.colorContrast : undefined
-        );
+        if (edit.adjustments.clarity !== 0) {
+          applyClarity(imgData, edit.adjustments.clarity);
+        }
+
+        if (edit.photoFilterId !== 'original' && edit.photoFilterIntensity > 0) {
+          applyPhotoFilterToImageData(
+            imgData,
+            edit.photoFilterId,
+            edit.photoFilterIntensity
+          );
+        }
+
+        if (hasActiveColorGrade(edit.colorGrade) || edit.enhanceSuite.colorContrast.enabled) {
+          applyColorGradeToImageData(
+            imgData,
+            edit.colorGrade,
+            edit.enhanceSuite.colorContrast.enabled ? edit.enhanceSuite.colorContrast : undefined
+          );
+        }
+
+        if (needsQualityModelPass) {
+          applyQualityModelPass(imgData, edit.qualityModel, upscaleRatio);
+        }
+
         applySharpen(imgData, effectiveSharpen, edit.enhanceSuite.sharpen.antiArtifact);
         ctx.putImageData(imgData, 0, 0);
       }
     }
 
     if (edit.targetSizeKB !== null && edit.outputFormat !== 'image/png') {
-      return await solveTargetSize(
+      const sizedOut = await solveTargetSize(
         currentCanvas,
         edit.outputFormat,
         edit.targetSizeKB,
         edit.quality,
         adapter
       );
+      return {
+        ...sizedOut,
+        clampedByMemoryGuard: targetPlan.clampedByMemoryGuard,
+        appliedTargetResolution: targetPlan.appliedTargetResolution,
+      };
     }
 
     const outW = currentCanvas.width;
@@ -383,6 +450,8 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
       blob,
       width: outW,
       height: outH,
+      clampedByMemoryGuard: targetPlan.clampedByMemoryGuard,
+      appliedTargetResolution: targetPlan.appliedTargetResolution,
     };
   } finally {
     releaseCanvasSurface(currentCanvas);
@@ -390,8 +459,8 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
 }
 
 /**
- * Generates ONE tiny 96px base thumbnail Blob. All 7 Color Grade cards apply GPU CSS filters
- * directly on this single shared thumbnail, avoiding 7 heavy Canvas pixel loops.
+ * Generates ONE tiny 96px base thumbnail Blob. All filter cards apply GPU CSS filters
+ * directly on this single shared thumbnail, avoiding multiple heavy Canvas pixel loops.
  */
 export async function runBaseThumbnailPipeline<TCanvas extends CanvasSurfaceLike>(
   bitmap: ImageBitmap,

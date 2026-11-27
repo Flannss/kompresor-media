@@ -178,12 +178,13 @@ describe('image pixelOps, 1080p HD Enhance Suite, Color Grades, and studio histo
     expect(formatOutputMimeShort('image/png')).toBe('PNG');
   });
 
-  it('exposes all 6 calibrated Indonesian share presets including WhatsApp HD', () => {
-    expect(MEDIA_PRESETS.length).toBe(6);
+  it('exposes all 9 calibrated Indonesian share presets including WhatsApp HD', () => {
+    expect(MEDIA_PRESETS.length).toBe(9);
     expect(getMediaPreset('whatsapp-hd').image.maxEdgePx).toBe(2560);
     expect(getMediaPreset('whatsapp-hd').image.quality).toBe(0.92);
     expect(getMediaPreset('whatsapp-fast').image.maxEdgePx).toBe(1600);
     expect(getMediaPreset('whatsapp-status').image.maxEdgePx).toBe(2160);
+    expect(getMediaPreset('archive-hd').image.qualityModel).toBe('high-quality');
     expect(getMediaPreset('web-light').image.outputFormat).toBe('image/webp');
   });
 

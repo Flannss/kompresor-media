@@ -33,9 +33,9 @@ export function SegmentedTabs<T extends string>({
             aria-selected={active}
             data-testid={`tab-${item.id}`}
             onClick={() => onChange(item.id)}
-            className={`min-h-[36px] rounded-lg px-2 text-xs font-semibold transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.98] ${
+            className={`min-h-[38px] rounded-lg px-2 text-xs font-semibold transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.98] ${
               active
-                ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs'
+                ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-[var(--glass-highlight)] ring-1 ring-[var(--border-hairline)]'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >

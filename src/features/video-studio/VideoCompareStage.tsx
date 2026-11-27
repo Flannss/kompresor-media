@@ -152,7 +152,7 @@ const VideoSyncTransportBar = memo(function VideoSyncTransportBar({
   return (
     <div
       data-testid="video-sync-transport"
-      className="flex w-full max-w-[820px] flex-wrap items-center gap-2 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3 py-2 text-xs tabular-nums"
+      className="km-glass-lite flex w-full max-w-[820px] flex-wrap items-center gap-2 rounded-2xl border px-3 py-2 text-xs tabular-nums"
     >
       <button
         type="button"
@@ -524,7 +524,7 @@ export function VideoCompareStage({
         <div
           role="group"
           aria-label="Mode Tampilan Video"
-          className="inline-flex rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-0.5 text-xs"
+          className="km-glass-lite inline-flex rounded-xl border p-0.5 text-xs"
         >
           {(
             [

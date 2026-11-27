@@ -1,9 +1,11 @@
 import { FolderOpen, Moon, Plus, Sun, X } from 'lucide-react';
 import { Button } from '../../design-system/components/Button';
+import type { MediaKind } from '../../engines/contracts';
 import type { AppTheme } from '../../shared/hooks/useTheme';
 
 export interface WorkspaceHeaderProps {
   hasMedia: boolean;
+  activeMediaKind: MediaKind | null;
   canAddMore: boolean;
   itemCount: number;
   maxTotal: number;
@@ -16,6 +18,7 @@ export interface WorkspaceHeaderProps {
 
 export function WorkspaceHeader({
   hasMedia,
+  activeMediaKind,
   canAddMore,
   itemCount,
   maxTotal,
@@ -28,7 +31,7 @@ export function WorkspaceHeader({
   const isDark = theme === 'dark';
 
   return (
-    <header className="sticky top-0 z-30 h-14 border-b border-[var(--border-hairline)] bg-[var(--surface-dock)] transition-colors">
+    <header className="km-glass-strong sticky top-0 z-30 h-14 border-b transition-colors">
       <div className="mx-auto flex h-full max-w-[1680px] items-center justify-between gap-2 px-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-2.5">
           <svg
@@ -36,7 +39,7 @@ export function WorkspaceHeader({
             height="20"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#2078CF"
+            stroke="var(--accent-highlight)"
             strokeWidth="1.75"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -49,11 +52,30 @@ export function WorkspaceHeader({
             <path d="M8 20H6a2 2 0 0 1-2-2v-2" />
             <circle cx="12" cy="12" r="3" />
           </svg>
-          <span className="truncate text-sm font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
-            Kompresor Media
-          </span>
+
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="truncate text-sm font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
+              Kompresor Media
+            </span>
+            <span
+              data-testid="brand-by-amdz"
+              className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent-highlight)]"
+            >
+              BY AMDZ
+            </span>
+          </div>
+
+          {hasMedia && activeMediaKind && (
+            <span
+              data-testid="active-studio-badge"
+              className="hidden rounded-full border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--text-primary)] sm:inline-block"
+            >
+              {activeMediaKind === 'image' ? 'Studio Foto' : 'Studio Video'}
+            </span>
+          )}
+
           {hasMedia && itemCount > 1 && (
-            <span className="hidden rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] tabular-nums sm:inline-block">
+            <span className="hidden rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] tabular-nums md:inline-block">
               {itemCount}/{maxTotal} file
             </span>
           )}
@@ -61,8 +83,8 @@ export function WorkspaceHeader({
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           {!hasMedia && (
-            <span className="hidden text-xs text-[var(--text-muted)] sm:inline">
-              Diproses langsung di perangkat Anda
+            <span className="hidden text-xs text-[var(--text-muted)] md:inline">
+              100% lokal di perangkat Anda
             </span>
           )}
 
@@ -104,9 +126,9 @@ export function WorkspaceHeader({
             type="button"
             data-testid="theme-toggle-btn"
             onClick={onToggleTheme}
-            aria-label={isDark ? 'Ganti ke tema Cobalt Terang' : 'Ganti ke tema Cobalt Gelap'}
-            title={isDark ? 'Cobalt Terang' : 'Cobalt Gelap'}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:border-[var(--border-active)] hover:text-[var(--text-primary)] active:scale-[0.97]"
+            aria-label={isDark ? 'Ganti ke tema Liquid Glass Terang' : 'Ganti ke tema Liquid Glass Gelap'}
+            title={isDark ? 'Liquid Glass Terang' : 'Liquid Glass Gelap'}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 text-xs font-medium text-[var(--text-secondary)] shadow-[var(--glass-highlight)] transition-all hover:border-[var(--border-active)] hover:text-[var(--text-primary)] active:scale-[0.97]"
           >
             {isDark ? (
               <>

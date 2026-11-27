@@ -190,8 +190,8 @@ export function QueuePanel({
       {/* Desktop Left Vertical Queue Rail */}
       <aside
         data-testid="queue-rail-desktop"
-        className={`hidden shrink-0 flex-col border-r border-[var(--border-hairline)] bg-[var(--bg-surface)] transition-all lg:flex ${
-          collapsed ? 'w-[54px]' : 'w-[228px]'
+        className={`km-glass hidden shrink-0 flex-col border-r transition-all lg:flex ${
+          collapsed ? 'w-[54px]' : 'w-[216px]'
         }`}
       >
         <div className="flex items-center justify-between border-b border-[var(--border-hairline)] px-3 py-3">

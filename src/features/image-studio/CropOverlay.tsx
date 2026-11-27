@@ -17,6 +17,7 @@ const ASPECT_OPTIONS: ReadonlyArray<{ id: CropAspectId; label: string; ratio: nu
   { id: 'free', label: 'Bebas', ratio: null },
   { id: '1:1', label: '1:1', ratio: 1 },
   { id: '4:5', label: '4:5', ratio: 4 / 5 },
+  { id: '3:4', label: '3:4', ratio: 3 / 4 },
   { id: '16:9', label: '16:9', ratio: 16 / 9 },
   { id: '9:16', label: '9:16', ratio: 9 / 16 },
 ];

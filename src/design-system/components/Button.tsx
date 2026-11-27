@@ -11,9 +11,9 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
-    'bg-[var(--accent-primary)] text-[var(--ink-on-accent)] border-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] hover:border-[var(--accent-primary-hover)]',
+    'bg-[var(--accent-primary)] text-[var(--ink-on-accent)] border-[var(--accent-primary)] shadow-[var(--glass-highlight)] hover:bg-[var(--accent-primary-hover)] hover:border-[var(--accent-primary-hover)]',
   secondary:
-    'bg-[var(--bg-surface)] text-[var(--text-primary)] border-[var(--border-hairline)] hover:bg-[var(--bg-subtle)] hover:border-[var(--border-active)]',
+    'bg-[var(--bg-elevated)] text-[var(--text-primary)] border-[var(--border-hairline)] shadow-[var(--glass-highlight)] hover:bg-[var(--bg-subtle)] hover:border-[var(--border-active)]',
   ghost:
     'bg-transparent text-[var(--text-secondary)] border-transparent hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]',
   danger:

@@ -7,6 +7,7 @@ import type {
   ImageRotation,
   MediaMetadata,
   NormalizedCropRect,
+  PhotoFilterId,
   ValidationResult,
   VideoEditState,
   VideoExecutionBackend,
@@ -153,6 +154,17 @@ function pushSnapshot(
 
 const DEFAULT_PRESET = getMediaPreset('whatsapp-hd');
 
+function shouldUsePreviewMode(edit: ImageEditState, profile: DeviceProfile): boolean {
+  if (profile.performanceTier === 'low-memory-mobile') {
+    return true;
+  }
+  return (
+    edit.targetResolution === '2k' ||
+    edit.targetResolution === '4k' ||
+    edit.targetResolution === '8k'
+  );
+}
+
 export interface MediaStoreState {
   // Adaptive queue & environment state
   items: QueueItem[];
@@ -210,6 +222,7 @@ export interface MediaStoreState {
   toggleFlipH: () => void;
   toggleFlipV: () => void;
   applyCrop: (crop: NormalizedCropRect | null) => void;
+  selectPhotoFilter: (filterId: PhotoFilterId) => void;
   selectColorGrade: (gradeId: ColorGradeState['gradeId']) => void;
   requestBaseThumbnail: (itemId?: string) => Promise<void>;
   setBaseThumbnail: (itemId: string, url: string) => void;
@@ -367,13 +380,16 @@ async function processPhotoItem(
     const latest = get().items.find((i) => i.id === itemId);
     if (!latest || latest.metadata.kind !== 'image') return;
 
-    const previewCapPx = previewOnly ? get().deviceProfile.maxPreviewEdge : undefined;
+    const profile = get().deviceProfile;
+    const previewCapPx = previewOnly ? profile.photoInteractivePreviewEdge : undefined;
     const result = await processImage({
       requestId: `img-${itemId}-${nextSeq}`,
       file: latest.file,
       sourceMetadata: latest.metadata,
       edit: cloneImageEdit(latest.imageEdit),
       ...(previewCapPx ? { previewMaxEdgePx: previewCapPx } : {}),
+      maxCanvasPixels: profile.maxPhotoCanvasPixels,
+      allow8K: profile.allow8KPhotoExport,
     });
 
     const currentAfter = get().items.find((i) => i.id === itemId);
@@ -625,6 +641,9 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
   initCapabilities: async () => {
     const profile = getDeviceProfile();
     const limits = getAdaptiveQueueLimits();
+    if (typeof document !== 'undefined') {
+      document.documentElement.dataset.glassLite = profile.useGlassLite ? 'true' : 'false';
+    }
     const avifSupported = await probeAvifEncodeSupport();
     set({ deviceProfile: profile, queueLimits: limits, avifSupported });
   },
@@ -814,10 +833,11 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       ),
     }));
 
-    // Auto-optimize newly imported photos; on low-memory mobile cap preview at 960px until export
-    const preferPreviewMode = get().deviceProfile.performanceTier === 'low-memory-mobile';
+    // Auto-optimize newly imported photos; preview-cap on low-memory mobile or 2K/4K/8K until export
+    const profile = get().deviceProfile;
     const imageAdded = addedItems.filter((it) => it.metadata.kind === 'image');
     for (const imgItem of imageAdded) {
+      const preferPreviewMode = shouldUsePreviewMode(imgItem.imageEdit, profile);
       void processPhotoItem(imgItem.id, get, set, preferPreviewMode);
     }
   },
@@ -945,7 +965,13 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     const curImg = active.imageEdit;
     const nextEdit: ImageEditState = {
       ...cloneImageEdit(presetSpec.image),
+      qualityModel:
+        presetId === 'archive-hd' ? presetSpec.image.qualityModel : curImg.qualityModel,
+      photoFilterId: curImg.photoFilterId,
+      photoFilterIntensity: curImg.photoFilterIntensity,
+      denoiseAmount: curImg.denoiseAmount,
       rotationDeg: curImg.rotationDeg,
+      straightenDeg: curImg.straightenDeg,
       flipH: curImg.flipH,
       flipV: curImg.flipV,
       crop: curImg.crop ? { ...curImg.crop } : null,
@@ -967,7 +993,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       active.id,
       get,
       set,
-      get().deviceProfile.performanceTier === 'low-memory-mobile'
+      shouldUsePreviewMode(nextEdit, get().deviceProfile)
     );
   },
 
@@ -1002,7 +1028,8 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
           queueLimitNotice: `Pengaturan foto (${sameKindTargets.length + 1} file) berhasil disamakan.`,
         };
       });
-      const preferPreviewMode = get().deviceProfile.performanceTier === 'low-memory-mobile';
+      const profile = get().deviceProfile;
+      const preferPreviewMode = shouldUsePreviewMode(template, profile);
       for (const peer of sameKindTargets) {
         void processPhotoItem(peer.id, get, set, preferPreviewMode);
       }
@@ -1036,22 +1063,33 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     const commitHistory = options.commitHistory ?? true;
     const preservePreset = options.preservePreset ?? false;
     const active = get().items.find((i) => i.id === get().activeItemId);
+    const profile = get().deviceProfile;
+
+    const sanitizedPatch =
+      patch.targetResolution === '8k' && !profile.allow8KPhotoExport
+        ? { ...patch, targetResolution: '4k' as const }
+        : patch;
 
     const buildNextEdit = (cur: ImageEditState, curPresetId: MediaPresetId) => {
       const nextPreset = preservePreset ? curPresetId : 'custom';
       const nextEdit: ImageEditState = {
         ...cur,
-        ...patch,
-        adjustments: patch.adjustments
-          ? { ...cur.adjustments, ...patch.adjustments }
+        ...sanitizedPatch,
+        adjustments: sanitizedPatch.adjustments
+          ? { ...cur.adjustments, ...sanitizedPatch.adjustments }
           : { ...cur.adjustments },
-        enhanceSuite: patch.enhanceSuite
-          ? cloneEnhanceSuite(patch.enhanceSuite)
+        enhanceSuite: sanitizedPatch.enhanceSuite
+          ? cloneEnhanceSuite(sanitizedPatch.enhanceSuite)
           : cloneEnhanceSuite(cur.enhanceSuite),
-        colorGrade: patch.colorGrade
-          ? cloneColorGrade(patch.colorGrade)
+        colorGrade: sanitizedPatch.colorGrade
+          ? cloneColorGrade(sanitizedPatch.colorGrade)
           : cloneColorGrade(cur.colorGrade),
-        crop: patch.crop !== undefined ? (patch.crop ? { ...patch.crop } : null) : cur.crop,
+        crop:
+          sanitizedPatch.crop !== undefined
+            ? sanitizedPatch.crop
+              ? { ...sanitizedPatch.crop }
+              : null
+            : cur.crop,
         presetId: nextPreset,
       };
       return { nextEdit, nextPreset };
@@ -1090,15 +1128,14 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     });
 
     clearItemTimers(active.id);
-    const lowMemMobile = get().deviceProfile.performanceTier === 'low-memory-mobile';
     if (!commitHistory) {
       const timer = setTimeout(() => {
         previewTimers.delete(active.id);
         void processPhotoItem(active.id, get, set, true);
-      }, get().deviceProfile.previewDebounceMs);
+      }, profile.previewDebounceMs);
       previewTimers.set(active.id, timer);
     } else {
-      void processPhotoItem(active.id, get, set, lowMemMobile);
+      void processPhotoItem(active.id, get, set, shouldUsePreviewMode(nextEdit, profile));
     }
   },
 
@@ -1125,8 +1162,12 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       };
     });
 
-    const lowMemMobile = get().deviceProfile.performanceTier === 'low-memory-mobile';
-    void processPhotoItem(active.id, get, set, lowMemMobile);
+    void processPhotoItem(
+      active.id,
+      get,
+      set,
+      shouldUsePreviewMode(active.imageEdit, get().deviceProfile)
+    );
   },
 
   rotatePhoto90: () => {
@@ -1153,6 +1194,13 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
 
   applyCrop: (crop) => {
     get().updateImageEdit({ crop }, { commitHistory: true, preservePreset: true });
+  },
+
+  selectPhotoFilter: (filterId) => {
+    get().updateImageEdit(
+      { photoFilterId: filterId },
+      { commitHistory: true, preservePreset: true }
+    );
   },
 
   selectColorGrade: (gradeId) => {
@@ -1281,7 +1329,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       active.id,
       get,
       set,
-      get().deviceProfile.performanceTier === 'low-memory-mobile'
+      shouldUsePreviewMode(snapshot, get().deviceProfile)
     );
   },
 
@@ -1314,7 +1362,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       active.id,
       get,
       set,
-      get().deviceProfile.performanceTier === 'low-memory-mobile'
+      shouldUsePreviewMode(snapshot, get().deviceProfile)
     );
   },
 
@@ -1352,7 +1400,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       active.id,
       get,
       set,
-      get().deviceProfile.performanceTier === 'low-memory-mobile'
+      shouldUsePreviewMode(resetEdit, get().deviceProfile)
     );
   },
 

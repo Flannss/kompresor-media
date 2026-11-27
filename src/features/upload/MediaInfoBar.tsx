@@ -173,7 +173,7 @@ export function MediaInfoBar({
 
   return (
     <div className="flex max-w-full flex-col items-center gap-2">
-      <div className="max-w-full rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-4 py-1.5 shadow-xs">
+      <div className="km-glass-lite max-w-full rounded-full border px-4 py-1.5 shadow-xs">
         {metadata.kind === 'image' ? renderPhotoSummary(metadata) : renderVideoSummary(metadata)}
       </div>
 

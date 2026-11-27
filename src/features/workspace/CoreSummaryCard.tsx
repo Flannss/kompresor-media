@@ -6,38 +6,60 @@ import type {
   VideoProcessResult,
 } from '../../engines/contracts';
 import {
+  computePhotoTargetDimensions,
   computeReductionPct,
   formatOutputMimeShort,
   getActiveImageModuleLabels,
 } from '../../engines/image/pixelOps';
 import { getActiveVideoModuleLabels } from '../../engines/video/videoFilterGraph';
 import { getMediaPreset, type MediaPresetId } from '../../presets/mediaPresets';
+import type { DeviceProfile } from '../../shared/utils/deviceCapability';
 import { formatBytes } from '../../shared/utils/formatBytes';
 
 export interface CoreSummaryCardProps {
   metadata: MediaMetadata;
+  deviceProfile?: DeviceProfile;
   selectedPresetId: MediaPresetId;
   imageEdit: ImageEditState;
   imageProcessResult: ImageProcessResult | null;
+  needsFullResExport?: boolean;
   videoEdit: VideoEditState;
   videoProcessResult: VideoProcessResult | null;
 }
 
 export function CoreSummaryCard({
   metadata,
+  deviceProfile,
   selectedPresetId,
   imageEdit,
   imageProcessResult,
+  needsFullResExport = false,
   videoEdit,
   videoProcessResult,
 }: CoreSummaryCardProps) {
   const isImage = metadata.kind === 'image';
   const presetSpec = getMediaPreset(selectedPresetId);
 
+  const plannedExportDims = isImage
+    ? computePhotoTargetDimensions(
+        metadata.width,
+        metadata.height,
+        imageEdit,
+        deviceProfile
+          ? {
+              maxCanvasPixels: deviceProfile.maxPhotoCanvasPixels,
+              allow8K: deviceProfile.allow8KPhotoExport,
+            }
+          : undefined
+      )
+    : null;
+
   const resolutionText = isImage
-    ? imageProcessResult
-      ? `${metadata.width} × ${metadata.height} → ${imageProcessResult.outputWidth} × ${imageProcessResult.outputHeight}`
-      : `${metadata.width} × ${metadata.height}`
+    ? needsFullResExport && plannedExportDims
+      ? `${metadata.width} × ${metadata.height} → ${plannedExportDims.width} × ${plannedExportDims.height} (ekspor)`
+      : imageProcessResult
+        ? `${metadata.width} × ${metadata.height} → ${imageProcessResult.outputWidth} × ${imageProcessResult.outputHeight}`
+        : `${metadata.width} × ${metadata.height}`
     : videoProcessResult
       ? `${metadata.width} × ${metadata.height} → ${videoProcessResult.outputWidth} × ${videoProcessResult.outputHeight}`
       : `${metadata.width} × ${metadata.height}`;
@@ -67,8 +89,8 @@ export function CoreSummaryCard({
     : `${videoEdit.outputFormat.toUpperCase()} · ${presetSpec.shortLabel}`;
 
   const activeModules = isImage
-    ? imageProcessResult?.activeModules ?? getActiveImageModuleLabels(imageEdit)
-    : videoProcessResult?.activeModules ?? getActiveVideoModuleLabels(videoEdit);
+    ? (imageProcessResult?.activeModules ?? getActiveImageModuleLabels(imageEdit))
+    : (videoProcessResult?.activeModules ?? getActiveVideoModuleLabels(videoEdit));
 
   const elapsedSecText = isImage
     ? imageProcessResult
@@ -77,6 +99,10 @@ export function CoreSummaryCard({
     : videoProcessResult
       ? `${(videoProcessResult.durationMs / 1000).toFixed(1).replace('.', ',')} dtk`
       : null;
+
+  const clampedGuard = Boolean(
+    isImage && (imageProcessResult?.clampedByMemoryGuard || plannedExportDims?.clampedByMemoryGuard)
+  );
 
   return (
     <section
@@ -163,6 +189,15 @@ export function CoreSummaryCard({
           </div>
         </div>
       </div>
+
+      {clampedGuard && (
+        <p
+          data-testid="memory-clamp-badge"
+          className="mt-2 rounded-lg border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-2 py-1 text-[10px] leading-snug text-[var(--status-warn-ink)]"
+        >
+          Dimensi ekspor disesuaikan aman di bawah batas memori perangkat seluler.
+        </p>
+      )}
     </section>
   );
 }

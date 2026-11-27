@@ -27,12 +27,16 @@ export interface DeviceProfile {
   hardwareConcurrency: number | null;
   performanceTier: PerformanceTier;
   maxPreviewEdge: number;
+  photoInteractivePreviewEdge: number;
   previewDebounceMs: number;
   imageWorkerPoolSize: number;
   maxQueuePhotos: number;
   maxQueueVideos: number;
   maxQueueTotal: number;
   useLightweightCssPreview: boolean;
+  useGlassLite: boolean;
+  allow8KPhotoExport: boolean;
+  maxPhotoCanvasPixels: number;
   releaseFfmpegAfterExport: boolean;
   maxDualVideoBytes: number;
 }
@@ -112,6 +116,7 @@ export function getDeviceProfile(input?: DeviceCapabilityInput): DeviceProfile {
 
   const useLightweightCssPreview =
     isIOS || isWebKitSafari || performanceTier === 'low-memory-mobile';
+  const useGlassLite = isIOS || performanceTier === 'low-memory-mobile';
 
   if (performanceTier === 'low-memory-mobile') {
     return {
@@ -124,12 +129,16 @@ export function getDeviceProfile(input?: DeviceCapabilityInput): DeviceProfile {
       hardwareConcurrency: cores,
       performanceTier,
       maxPreviewEdge: 960,
+      photoInteractivePreviewEdge: 960,
       previewDebounceMs: 140,
       imageWorkerPoolSize: 1,
       maxQueuePhotos: 6,
       maxQueueVideos: 2,
       maxQueueTotal: 6,
       useLightweightCssPreview,
+      useGlassLite,
+      allow8KPhotoExport: false,
+      maxPhotoCanvasPixels: 11_500_000,
       releaseFfmpegAfterExport: true,
       maxDualVideoBytes: LOW_MEM_DUAL_VIDEO_CAP_BYTES,
     };
@@ -146,12 +155,16 @@ export function getDeviceProfile(input?: DeviceCapabilityInput): DeviceProfile {
       hardwareConcurrency: cores,
       performanceTier,
       maxPreviewEdge: 1280,
+      photoInteractivePreviewEdge: 1280,
       previewDebounceMs: 90,
       imageWorkerPoolSize: 1,
       maxQueuePhotos: HARD_QUEUE_CAP,
       maxQueueVideos: 3,
       maxQueueTotal: HARD_QUEUE_CAP,
       useLightweightCssPreview,
+      useGlassLite,
+      allow8KPhotoExport: false,
+      maxPhotoCanvasPixels: 24_000_000,
       releaseFfmpegAfterExport: false,
       maxDualVideoBytes: Number.POSITIVE_INFINITY,
     };
@@ -167,12 +180,16 @@ export function getDeviceProfile(input?: DeviceCapabilityInput): DeviceProfile {
     hardwareConcurrency: cores,
     performanceTier: 'desktop',
     maxPreviewEdge: 1600,
+    photoInteractivePreviewEdge: 1280,
     previewDebounceMs: 60,
     imageWorkerPoolSize: 2,
     maxQueuePhotos: HARD_QUEUE_CAP,
     maxQueueVideos: 5,
     maxQueueTotal: HARD_QUEUE_CAP,
     useLightweightCssPreview,
+    useGlassLite,
+    allow8KPhotoExport: true,
+    maxPhotoCanvasPixels: 67_108_864,
     releaseFfmpegAfterExport: false,
     maxDualVideoBytes: Number.POSITIVE_INFINITY,
   };

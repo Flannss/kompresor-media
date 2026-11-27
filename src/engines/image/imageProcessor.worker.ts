@@ -1,4 +1,8 @@
-import type { ImageEditState, ImageOutputFormat } from '../contracts';
+import type {
+  ImageEditState,
+  ImageOutputFormat,
+  PhotoTargetResolution,
+} from '../contracts';
 import {
   runBaseThumbnailPipeline,
   runImagePipeline,
@@ -15,6 +19,8 @@ export type ImageWorkerRequest =
       mimeType: string;
       edit: ImageEditState;
       previewMaxEdgePx?: number;
+      maxCanvasPixels?: number;
+      allow8K?: boolean;
     }
   | {
       type: 'base-thumbnail';
@@ -44,6 +50,8 @@ export type ImageWorkerResponse =
       durationMs: number;
       solvedQuality?: number;
       targetSizeMet?: boolean;
+      clampedByMemoryGuard?: boolean;
+      appliedTargetResolution?: PhotoTargetResolution;
     }
   | {
       type: 'base-thumbnail';
@@ -157,7 +165,11 @@ workerScope.onmessage = async (event: MessageEvent<ImageWorkerRequest>) => {
         height: number;
         getContext(type: '2d'): Canvas2DContextLike | null;
       }>,
-      payload.previewMaxEdgePx
+      payload.previewMaxEdgePx,
+      {
+        maxCanvasPixels: payload.maxCanvasPixels,
+        allow8K: payload.allow8K,
+      }
     );
     const outputBuffer = await out.blob.arrayBuffer();
     const durationMs = performance.now() - t0;
@@ -176,6 +188,8 @@ workerScope.onmessage = async (event: MessageEvent<ImageWorkerRequest>) => {
         durationMs,
         solvedQuality: out.solvedQuality,
         targetSizeMet: out.targetSizeMet,
+        clampedByMemoryGuard: out.clampedByMemoryGuard,
+        appliedTargetResolution: out.appliedTargetResolution,
       },
       [outputBuffer]
     );

@@ -3,10 +3,14 @@ import { createRoot } from 'react-dom/client';
 import '@fontsource-variable/plus-jakarta-sans';
 import './index.css';
 import { initTheme } from './shared/hooks/useTheme';
+import { getDeviceProfile } from './shared/utils/deviceCapability';
 import { isStaleChunkError, recoverFromStaleChunkError } from './shared/utils/chunkRecovery';
 import { App } from './app/App';
 
 initTheme();
+if (typeof document !== 'undefined') {
+  document.documentElement.dataset.glassLite = getDeviceProfile().useGlassLite ? 'true' : 'false';
+}
 
 if (typeof window !== 'undefined') {
   window.addEventListener('vite:preloadError', (event) => {

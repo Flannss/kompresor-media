@@ -72,13 +72,14 @@ describe('video presets, trim helpers, and even scaling', () => {
     expect(buildVideoExportFileName('video.mp4', 'webm')).toBe('video-kompresor.webm');
   });
 
-  it('provides consistent video preset configurations across all 6 calibrated destinations', () => {
-    expect(MEDIA_PRESETS.length).toBe(6);
+  it('provides consistent video preset configurations across all calibrated destinations', () => {
+    expect(MEDIA_PRESETS.length).toBe(9);
     expect(getMediaPreset('whatsapp-hd').video.maxHeightPx).toBe(1080);
     expect(getMediaPreset('whatsapp-hd').video.targetBitrateBps).toBe(4_500_000);
     expect(getMediaPreset('whatsapp-fast').video.maxHeightPx).toBe(720);
     expect(getMediaPreset('whatsapp-status').video.maxHeightPx).toBe(1080);
     expect(getMediaPreset('instagram-story').video.maxHeightPx).toBe(1080);
+    expect(getMediaPreset('tiktok-hd').video.fpsCap).toBe(60);
     expect(getMediaPreset('web-light').video.maxHeightPx).toBe(480);
 
     // HD upscale capped cleanly at 1080p with even dimensions

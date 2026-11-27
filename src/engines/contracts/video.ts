@@ -6,6 +6,7 @@ export type VideoPresetId =
   | 'whatsapp-fast'
   | 'whatsapp-status'
   | 'instagram-story'
+  | 'tiktok-hd'
   | 'web-light'
   | 'custom';
 
