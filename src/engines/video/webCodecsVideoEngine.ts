@@ -1,5 +1,16 @@
-import type { VideoProcessProgress, VideoProcessRequest } from '../contracts';
-import { VideoCancelledError } from './ffmpegVideoEngine';
+import type {
+  AudioCodec,
+  ConversionVideoOptions,
+  VideoCodec,
+} from 'mediabunny';
+import type { SubtitleCue, VideoProcessProgress, VideoProcessRequest } from '../contracts';
+import { VideoCancelledError } from './videoErrors';
+import { drawHardsubCuesOnCanvas, findActiveCuesAtTime } from './subtitleParser';
+import {
+  getEffectiveAudioBitrateKbps,
+  getVideoFormatMeta,
+  isAudioMuted,
+} from './videoFilterGraph';
 import {
   buildVideoExportFileName,
   clampTrimRange,
@@ -21,10 +32,49 @@ export interface WebCodecsTranscodeOutput {
   durationSec: number;
 }
 
+function createHardsubCanvas(width: number, height: number): {
+  canvas: OffscreenCanvas | HTMLCanvasElement;
+  ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
+} {
+  if (typeof OffscreenCanvas !== 'undefined') {
+    const canvas = new OffscreenCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+    if (ctx) return { canvas, ctx };
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new VideoFallbackRequiredError('Kanvas 2D tidak tersedia untuk merender subtitle.');
+  }
+  return { canvas, ctx };
+}
+
+function buildHardsubProcessor(
+  cues: SubtitleCue[],
+  width: number,
+  height: number,
+  size: 'small' | 'medium' | 'large',
+  position: 'bottom' | 'center' | 'top'
+): ConversionVideoOptions['process'] {
+  const { canvas, ctx } = createHardsubCanvas(width, height);
+  return (sample) => {
+    ctx.clearRect(0, 0, width, height);
+    sample.draw(ctx, 0, 0, width, height);
+    const active = findActiveCuesAtTime(cues, sample.timestamp);
+    if (active.length > 0) {
+      drawHardsubCuesOnCanvas(ctx, width, height, active, size, position);
+    }
+    return canvas;
+  };
+}
+
 export async function runWebCodecsVideoTranscode(
   request: VideoProcessRequest,
   onProgress: (progress: VideoProcessProgress) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  cuesAlreadyTrimmed = false
 ): Promise<WebCodecsTranscodeOutput> {
   if (signal?.aborted) {
     throw new VideoCancelledError();
@@ -35,11 +85,14 @@ export async function runWebCodecsVideoTranscode(
     typeof VideoEncoder === 'undefined' ||
     typeof VideoFrame === 'undefined'
   ) {
-    throw new VideoFallbackRequiredError('Browser tidak mendukung WebCodecs VideoDecoder/Encoder.');
+    throw new VideoFallbackRequiredError(
+      'Browser tidak mendukung WebCodecs VideoDecoder/Encoder.'
+    );
   }
 
   const t0 = performance.now();
   const { file, sourceMetadata, edit, requestId } = request;
+  const formatMeta = getVideoFormatMeta(edit.outputFormat);
 
   onProgress({
     requestId,
@@ -62,27 +115,64 @@ export async function runWebCodecsVideoTranscode(
     Conversion,
     ConversionCanceledError,
     Input,
+    MkvOutputFormat,
+    MovOutputFormat,
     Mp4OutputFormat,
     Output,
     Quality,
-    canEncodeVideo,
+    WebMOutputFormat,
     canEncodeAudio,
+    canEncodeVideo,
   } = mediabunny;
 
   const targetDims = computeEvenScaledDimensions(
     sourceMetadata.width,
     sourceMetadata.height,
-    edit.maxHeightPx
+    edit.maxHeightPx,
+    edit.enhance.enabled ? edit.enhance.upscaleFactor : 1
   );
 
-  const canAvc = await canEncodeVideo('avc', {
-    width: targetDims.width,
-    height: targetDims.height,
-    quality: new Quality({ bitrate: edit.targetBitrateBps, bitrateMode: 'variable' }),
+  const videoQuality = new Quality({
+    bitrate: edit.targetBitrateBps,
+    bitrateMode: 'variable',
   });
 
-  if (!canAvc) {
-    throw new VideoFallbackRequiredError('Encoder H.264 WebCodecs tidak tersedia untuk resolusi target.');
+  let selectedVideoCodec: VideoCodec;
+  let selectedAudioCodec: AudioCodec;
+
+  if (edit.outputFormat === 'webm') {
+    const canVp9 = await canEncodeVideo('vp9', {
+      width: targetDims.width,
+      height: targetDims.height,
+      quality: videoQuality,
+    });
+    if (canVp9) {
+      selectedVideoCodec = 'vp9';
+    } else {
+      const canVp8 = await canEncodeVideo('vp8', {
+        width: targetDims.width,
+        height: targetDims.height,
+        quality: videoQuality,
+      });
+      if (!canVp8) {
+        throw new VideoFallbackRequiredError('Encoder WebM (VP9/VP8) tidak tersedia di WebCodecs.');
+      }
+      selectedVideoCodec = 'vp8';
+    }
+    selectedAudioCodec = 'opus';
+  } else {
+    const canAvc = await canEncodeVideo('avc', {
+      width: targetDims.width,
+      height: targetDims.height,
+      quality: videoQuality,
+    });
+    if (!canAvc) {
+      throw new VideoFallbackRequiredError(
+        'Encoder H.264 WebCodecs tidak tersedia untuk resolusi target.'
+      );
+    }
+    selectedVideoCodec = 'avc';
+    selectedAudioCodec = 'aac';
   }
 
   const input = new Input({
@@ -96,22 +186,68 @@ export async function runWebCodecsVideoTranscode(
       throw new VideoFallbackRequiredError('Trek video tidak terbaca oleh demuxer WebCodecs.');
     }
 
+    const muted = isAudioMuted(edit);
+    const audioBitrateBps = getEffectiveAudioBitrateKbps(edit) * 1000;
     const primaryAudio = await input.getPrimaryAudioTrack();
-    if (!edit.muteAudio && primaryAudio) {
-      const canAac = await canEncodeAudio('aac', {
-        quality: new Quality({ bitrate: edit.audioBitrateKbps * 1000, bitrateMode: 'variable' }),
+    if (!muted && primaryAudio) {
+      const canAud = await canEncodeAudio(selectedAudioCodec, {
+        quality: new Quality({ bitrate: audioBitrateBps, bitrateMode: 'variable' }),
       });
-      if (!canAac) {
-        throw new VideoFallbackRequiredError('Encoder AAC WebCodecs tidak tersedia.');
+      if (!canAud) {
+        throw new VideoFallbackRequiredError(`Encoder audio ${selectedAudioCodec.toUpperCase()} tidak tersedia.`);
       }
     }
 
     const trim = clampTrimRange(edit.trimStartSec, edit.trimEndSec, sourceMetadata.durationSec);
     const target = new BufferTarget();
+
+    const outputFormatObj =
+      edit.outputFormat === 'webm'
+        ? new WebMOutputFormat()
+        : edit.outputFormat === 'mov'
+          ? new MovOutputFormat({ fastStart: 'in-memory' })
+          : edit.outputFormat === 'mkv'
+            ? new MkvOutputFormat()
+            : new Mp4OutputFormat({ fastStart: 'in-memory' });
+
     const output = new Output({
-      format: new Mp4OutputFormat({ fastStart: 'in-memory' }),
+      format: outputFormatObj,
       target,
     });
+
+    const useHardsub =
+      edit.subtitle.enabled &&
+      edit.subtitle.mode === 'hardsub' &&
+      edit.subtitle.cues.length > 0;
+
+    let shiftedCues = edit.subtitle.cues;
+    if (useHardsub && !cuesAlreadyTrimmed && trim.isTrimmed) {
+      const { adjustCuesForTrim } = await import('./subtitleParser');
+      shiftedCues = adjustCuesForTrim(edit.subtitle.cues, trim.startSec, trim.endSec);
+    }
+
+    const videoOptions: ConversionVideoOptions = {
+      width: targetDims.width,
+      height: targetDims.height,
+      fit: 'contain',
+      codec: selectedVideoCodec,
+      quality: videoQuality,
+      forceTranscode: true,
+      ...(edit.fpsCap ? { frameRate: edit.fpsCap } : {}),
+      ...(useHardsub && shiftedCues.length > 0
+        ? {
+            process: buildHardsubProcessor(
+              shiftedCues,
+              targetDims.width,
+              targetDims.height,
+              edit.subtitle.size,
+              edit.subtitle.position
+            ),
+            processedWidth: targetDims.width,
+            processedHeight: targetDims.height,
+          }
+        : {}),
+    };
 
     const conversion = await Conversion.init({
       input,
@@ -120,23 +256,16 @@ export async function runWebCodecsVideoTranscode(
       copy: false,
       showWarnings: false,
       ...(trim.isTrimmed ? { trim: { start: trim.startSec, end: trim.endSec } } : {}),
-      video: {
-        width: targetDims.width,
-        height: targetDims.height,
-        fit: 'contain',
-        codec: 'avc',
-        quality: new Quality({ bitrate: edit.targetBitrateBps, bitrateMode: 'variable' }),
-        forceTranscode: true,
-      },
-      audio: edit.muteAudio
+      video: videoOptions,
+      audio: muted
         ? { discard: true }
         : {
-            codec: 'aac',
+            codec: selectedAudioCodec,
             quality: new Quality({
-              bitrate: edit.audioBitrateKbps * 1000,
+              bitrate: audioBitrateBps,
               bitrateMode: 'variable',
             }),
-            forceTranscode: true,
+            forceTranscode: edit.outputFormat === 'webm',
           },
     });
 
@@ -149,13 +278,17 @@ export async function runWebCodecsVideoTranscode(
     }
 
     conversion.onProgress = (progressRatio) => {
-      const clamped = Math.min(0.98, Math.max(0.05, Number.isFinite(progressRatio) ? progressRatio : 0));
+      const clamped = Math.min(
+        0.98,
+        Math.max(0.05, Number.isFinite(progressRatio) ? progressRatio : 0)
+      );
       onProgress({
         requestId,
         backend: 'webcodecs-mediabunny',
         stage: 'transcoding',
         ratio: clamped,
         elapsedMs: performance.now() - t0,
+        detail: useHardsub ? 'Memproses video & menanamkan subtitle…' : undefined,
       });
     };
 
@@ -190,8 +323,8 @@ export async function runWebCodecsVideoTranscode(
     });
 
     return {
-      outputBlob: new Blob([target.buffer], { type: 'video/mp4' }),
-      outputFileName: buildVideoExportFileName(file.name),
+      outputBlob: new Blob([target.buffer], { type: formatMeta.mime }),
+      outputFileName: buildVideoExportFileName(file.name, edit.outputFormat),
       outputWidth: targetDims.width,
       outputHeight: targetDims.height,
       durationSec: trim.durationSec,

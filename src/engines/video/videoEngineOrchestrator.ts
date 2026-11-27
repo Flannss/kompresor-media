@@ -1,10 +1,18 @@
 import type {
   VideoExecutionBackend,
+  VideoOutputMime,
   VideoProcessProgress,
   VideoProcessRequest,
   VideoProcessResult,
 } from '../contracts';
-import { runFfmpegVideoTranscode, VideoCancelledError } from './ffmpegVideoEngine';
+import { runFfmpegVideoTranscode } from './ffmpegVideoEngine';
+import { VideoCancelledError } from './videoErrors';
+import {
+  getActiveVideoModuleLabels,
+  getVideoFormatMeta,
+  isAudioMuted,
+  shouldUseFfmpegBackend,
+} from './videoFilterGraph';
 import {
   runWebCodecsVideoTranscode,
   VideoFallbackRequiredError,
@@ -27,7 +35,7 @@ async function inspectOutputVideo(
       const timer = setTimeout(() => {
         cleanup();
         resolve({ width: fallbackWidth, height: fallbackHeight, durationSec: fallbackDuration });
-      }, 3000);
+      }, 2500);
 
       const onLoaded = () => {
         cleanup();
@@ -63,7 +71,11 @@ async function inspectOutputVideo(
   }
 }
 
-async function checkHasDecodableAudio(blob: Blob, muted: boolean): Promise<boolean> {
+async function checkHasDecodableAudio(
+  blob: Blob,
+  muted: boolean,
+  mime: VideoOutputMime
+): Promise<boolean> {
   if (muted) {
     return false;
   }
@@ -80,7 +92,8 @@ async function checkHasDecodableAudio(blob: Blob, muted: boolean): Promise<boole
     const audioBuf = await ctx.decodeAudioData(buffer);
     return audioBuf.duration > 0 && audioBuf.numberOfChannels > 0;
   } catch {
-    return false;
+    // MKV Opus/AAC may not always decode in Chrome AudioContext.decodeAudioData even with valid track
+    return mime === 'video/x-matroska';
   } finally {
     await ctx.close().catch(() => {});
   }
@@ -92,17 +105,25 @@ export async function processVideo(
   signal?: AbortSignal
 ): Promise<VideoProcessResult> {
   const t0 = performance.now();
-  let backendUsed: VideoExecutionBackend = 'webcodecs-mediabunny';
+  const formatMeta = getVideoFormatMeta(request.edit.outputFormat);
+  const useFfmpeg =
+    request.preferredBackend === 'ffmpeg-wasm-st' ||
+    (request.preferredBackend !== 'webcodecs-mediabunny' && shouldUseFfmpegBackend(request.edit));
+
+  let backendUsed: VideoExecutionBackend = useFfmpeg
+    ? 'ffmpeg-wasm-st'
+    : 'webcodecs-mediabunny';
+
   let output: {
     outputBlob: Blob;
     outputFileName: string;
     outputWidth: number;
     outputHeight: number;
     durationSec: number;
+    notice?: string;
   };
 
-  if (request.preferredBackend === 'ffmpeg-wasm-st') {
-    backendUsed = 'ffmpeg-wasm-st';
+  if (useFfmpeg) {
     output = await runFfmpegVideoTranscode(request, onProgress, signal);
   } else {
     try {
@@ -111,7 +132,11 @@ export async function processVideo(
       if (err instanceof VideoCancelledError || signal?.aborted) {
         throw new VideoCancelledError();
       }
-      if (err instanceof VideoFallbackRequiredError || request.preferredBackend === 'auto' || !request.preferredBackend) {
+      if (
+        err instanceof VideoFallbackRequiredError ||
+        request.preferredBackend === 'auto' ||
+        !request.preferredBackend
+      ) {
         backendUsed = 'ffmpeg-wasm-st';
         output = await runFfmpegVideoTranscode(request, onProgress, signal);
       } else {
@@ -120,28 +145,41 @@ export async function processVideo(
     }
   }
 
-  const [measuredDims, hasAudio] = await Promise.all([
+  const [verifiedVideo, hasAudio] = await Promise.all([
     inspectOutputVideo(
       output.outputBlob,
       output.outputWidth,
       output.outputHeight,
       output.durationSec
     ),
-    checkHasDecodableAudio(output.outputBlob, request.edit.muteAudio),
+    checkHasDecodableAudio(output.outputBlob, isAudioMuted(request.edit), formatMeta.mime),
   ]);
 
-  return {
+  const result: VideoProcessResult = {
     requestId: request.requestId,
     backend: backendUsed,
     outputBlob: output.outputBlob,
     outputFileName: output.outputFileName,
-    outputMime: 'video/mp4',
-    outputWidth: measuredDims.width,
-    outputHeight: measuredDims.height,
-    durationSec: measuredDims.durationSec,
+    outputFormat: request.edit.outputFormat,
+    outputMime: formatMeta.mime,
+    outputWidth: verifiedVideo.width,
+    outputHeight: verifiedVideo.height,
+    durationSec: verifiedVideo.durationSec,
     hasAudio,
     inputBytes: request.file.size,
     outputBytes: output.outputBlob.size,
     durationMs: performance.now() - t0,
+    activeModules: getActiveVideoModuleLabels(request.edit),
+    ...(output.notice ? { notice: output.notice } : {}),
   };
+
+  onProgress({
+    requestId: request.requestId,
+    backend: backendUsed,
+    stage: 'finalizing',
+    ratio: 1,
+    elapsedMs: result.durationMs,
+  });
+
+  return result;
 }

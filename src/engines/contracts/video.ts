@@ -1,29 +1,96 @@
+import type { EnhanceDenoiseMode, EnhanceIntensity } from './image';
 import type { VideoMetadata } from './media';
 
 export type VideoPresetId =
-  | 'whatsapp-chat'
+  | 'whatsapp-hd'
+  | 'whatsapp-fast'
   | 'whatsapp-status'
   | 'instagram-story'
   | 'web-light'
   | 'custom';
 
+export type VideoOutputFormat = 'mp4' | 'mov' | 'webm' | 'mkv';
+export type VideoOutputMime =
+  | 'video/mp4'
+  | 'video/quicktime'
+  | 'video/webm'
+  | 'video/x-matroska';
+
 export type VideoExecutionBackend = 'webcodecs-mediabunny' | 'ffmpeg-wasm-st';
 
 export type VideoQualityTier = 'light' | 'balanced' | 'high';
 
+export type AudioBitrateKbps = 96 | 128 | 192 | 320;
+
+export type SubtitleRenderMode = 'hardsub' | 'softsub';
+export type SubtitleSize = 'small' | 'medium' | 'large';
+export type SubtitlePosition = 'bottom' | 'center' | 'top';
+
+export interface VideoEnhanceOptions {
+  enabled: boolean;
+  intensity: EnhanceIntensity;
+  denoise: EnhanceDenoiseMode;
+  /** Contrast & saturation micro-clarity enhancement (0..100). */
+  clarity: number;
+  upscaleFactor: 1 | 1.5 | 2;
+}
+
+export interface VideoStabilizeOptions {
+  enabled: boolean;
+  mode: 'light' | 'medium';
+}
+
+export interface VideoAudioOptions {
+  enabled: boolean;
+  muteAudio: boolean;
+  /** Range: -12..+12 dB */
+  volumeDb: number;
+  normalize: boolean;
+  vocalClarity: boolean;
+  /** Range: -6..+6 dB */
+  bassDb: number;
+  /** Range: -6..+6 dB */
+  trebleDb: number;
+  fadeInOut: boolean;
+  bitrateKbps: AudioBitrateKbps;
+}
+
+export interface SubtitleCue {
+  id: string;
+  startSec: number;
+  endSec: number;
+  text: string;
+}
+
+export interface VideoSubtitleOptions {
+  enabled: boolean;
+  mode: SubtitleRenderMode;
+  cues: SubtitleCue[];
+  size: SubtitleSize;
+  position: SubtitlePosition;
+  sourceFileName: string | null;
+}
+
 export interface VideoEditState {
   presetId: VideoPresetId;
+  compressEnabled: boolean;
+  outputFormat: VideoOutputFormat;
   /** Max height in pixels (null keeps original height while ensuring even dimensions). */
   maxHeightPx: number | null;
+  fpsCap: number | null;
   qualityTier: VideoQualityTier;
   targetBitrateBps: number;
   crf: number;
   maxrateKbps: number;
   bufsizeKbps: number;
-  audioBitrateKbps: number;
+  audioBitrateKbps: AudioBitrateKbps;
   trimStartSec: number;
   trimEndSec: number | null;
   muteAudio: boolean;
+  enhance: VideoEnhanceOptions;
+  stabilize: VideoStabilizeOptions;
+  audio: VideoAudioOptions;
+  subtitle: VideoSubtitleOptions;
 }
 
 export type VideoProcessStage =
@@ -57,7 +124,8 @@ export interface VideoProcessResult {
   backend: VideoExecutionBackend;
   outputBlob: Blob;
   outputFileName: string;
-  outputMime: 'video/mp4';
+  outputFormat: VideoOutputFormat;
+  outputMime: VideoOutputMime;
   outputWidth: number;
   outputHeight: number;
   durationSec: number;
@@ -65,4 +133,6 @@ export interface VideoProcessResult {
   inputBytes: number;
   outputBytes: number;
   durationMs: number;
+  activeModules: string[];
+  notice?: string;
 }

@@ -151,7 +151,7 @@ describe('scanMagicSignature & validateMediaFile', () => {
     });
   });
 
-  it('rejects HEIC/HEIF and Matroska MKV cleanly as UNSUPPORTED_TYPE', async () => {
+  it('rejects HEIC/HEIF as UNSUPPORTED_TYPE and accepts Matroska MKV cleanly', async () => {
     const heic = makeFile(
       makeBytes([0, 0, 0, 0x18, 'ftyp', 'heic', 0, 0, 0, 0, 'mif1', 'heic']),
       'iphone.heic',
@@ -165,8 +165,11 @@ describe('scanMagicSignature & validateMediaFile', () => {
     const mkvScan = scanMagicSignature(
       makeBytes([0x1a, 0x45, 0xdf, 0xa3, 0x42, 0x82, 0x88, 'matroska'])
     );
-    expect(mkvScan.signature).toBeNull();
-    expect(mkvScan.unsupportedLabel).toBe('Matroska (MKV)');
+    expect(mkvScan.signature).toMatchObject({
+      kind: 'video',
+      mimeType: 'video/x-matroska',
+      extension: 'mkv',
+    });
   });
 
   it('rejects cross-kind signature spoofing with SIGNATURE_MISMATCH', async () => {

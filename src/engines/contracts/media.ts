@@ -7,7 +7,11 @@ export type SupportedImageMime =
   | 'image/gif'
   | 'image/avif';
 
-export type SupportedVideoMime = 'video/mp4' | 'video/quicktime' | 'video/webm';
+export type SupportedVideoMime =
+  | 'video/mp4'
+  | 'video/quicktime'
+  | 'video/webm'
+  | 'video/x-matroska';
 
 export type SupportedMediaMime = SupportedImageMime | SupportedVideoMime;
 

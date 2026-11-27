@@ -1,9 +1,12 @@
 import type { ImageEditState, ImageFilterId, ImageOutputFormat } from '../contracts';
 import {
+  applyClarity,
   applyColorAdjustments,
+  applyEdgePreservingDenoise,
   applyFilterPreset,
   applySharpen,
   computeCropPixels,
+  computeEnhancedTargetDimensions,
   computeProgressiveSteps,
   computeRotatedDimensions,
   computeTargetDimensions,
@@ -86,12 +89,16 @@ function drawOrientedAndFlipped<TCanvas extends CanvasSurfaceLike>(
   return canvas;
 }
 
-function downscaleCanvas<TCanvas extends CanvasSurfaceLike>(
+function resizeCanvas<TCanvas extends CanvasSurfaceLike>(
   sourceCanvas: TCanvas,
   targetWidth: number,
   targetHeight: number,
   adapter: CanvasAdapter<TCanvas>
 ): TCanvas {
+  if (sourceCanvas.width === targetWidth && sourceCanvas.height === targetHeight) {
+    return sourceCanvas;
+  }
+
   let currentCanvas = sourceCanvas;
   const steps = computeProgressiveSteps(
     currentCanvas.width,
@@ -128,18 +135,33 @@ async function solveTargetSize<TCanvas extends CanvasSurfaceLike>(
   canvas: TCanvas,
   format: ImageOutputFormat,
   targetSizeKB: number,
+  initialQuality: number,
   adapter: CanvasAdapter<TCanvas>
 ): Promise<PipelineOutput> {
   const targetBytes = Math.max(16 * 1024, Math.round(targetSizeKB * 1024));
+  const clampedInitial = Math.min(1, Math.max(0.25, initialQuality));
+
+  // Fast path: if encoding at requested quality already fits target limit, return immediately
+  const firstCandidate = await adapter.encodeBlob(canvas, format, clampedInitial);
+  if (firstCandidate.size <= targetBytes) {
+    return {
+      blob: firstCandidate,
+      width: canvas.width,
+      height: canvas.height,
+      solvedQuality: clampedInitial,
+      targetSizeMet: true,
+    };
+  }
+
   let workingCanvas = canvas;
 
   for (let scaleAttempt = 0; scaleAttempt < 4; scaleAttempt += 1) {
     let low = 0.25;
-    let high = 0.95;
+    let high = Math.max(0.3, clampedInitial);
     let bestFittingBlob: Blob | null = null;
     let bestFittingQuality = low;
-    let smallestBlob: Blob | null = null;
-    let smallestQuality = low;
+    let smallestBlob: Blob | null = scaleAttempt === 0 ? firstCandidate : null;
+    let smallestQuality = clampedInitial;
 
     for (let iter = 0; iter < 6; iter += 1) {
       const mid = Number(((low + high) / 2).toFixed(3));
@@ -199,7 +221,7 @@ async function solveTargetSize<TCanvas extends CanvasSurfaceLike>(
 
     const nextW = Math.max(1, Math.round(workingCanvas.width * 0.85));
     const nextH = Math.max(1, Math.round(workingCanvas.height * 0.85));
-    workingCanvas = downscaleCanvas(workingCanvas, nextW, nextH, adapter);
+    workingCanvas = resizeCanvas(workingCanvas, nextW, nextH, adapter);
   }
 
   const fallbackBlob = await adapter.encodeBlob(workingCanvas, format, 0.25);
@@ -212,10 +234,24 @@ async function solveTargetSize<TCanvas extends CanvasSurfaceLike>(
   };
 }
 
+function getEffectiveSharpenAmount(edit: ImageEditState): number {
+  if (!edit.enhance.enabled) {
+    return edit.sharpenAmount;
+  }
+  const enhanceBonus =
+    edit.enhance.intensity === 'sharp'
+      ? 35
+      : edit.enhance.intensity === 'balanced'
+        ? 22
+        : 12;
+  return Math.min(100, edit.sharpenAmount + enhanceBonus);
+}
+
 export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
   bitmap: ImageBitmap,
   edit: ImageEditState,
-  adapter: CanvasAdapter<TCanvas>
+  adapter: CanvasAdapter<TCanvas>,
+  previewMaxEdgePx?: number
 ): Promise<PipelineOutput> {
   let currentCanvas = drawOrientedAndFlipped(bitmap, edit, adapter);
 
@@ -246,34 +282,58 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
     currentCanvas = croppedCanvas;
   }
 
-  const targetDims = computeTargetDimensions(
-    currentCanvas.width,
-    currentCanvas.height,
-    edit.maxEdgePx
-  );
-  currentCanvas = downscaleCanvas(currentCanvas, targetDims.width, targetDims.height, adapter);
+  let targetDims = edit.enhance.enabled
+    ? computeEnhancedTargetDimensions(
+        currentCanvas.width,
+        currentCanvas.height,
+        edit.maxEdgePx,
+        edit.enhance.upscaleFactor,
+        2560
+      )
+    : computeTargetDimensions(currentCanvas.width, currentCanvas.height, edit.maxEdgePx);
 
-  const hasColorEdits =
+  if (previewMaxEdgePx && previewMaxEdgePx > 0) {
+    targetDims = computeTargetDimensions(targetDims.width, targetDims.height, previewMaxEdgePx);
+  }
+
+  currentCanvas = resizeCanvas(currentCanvas, targetDims.width, targetDims.height, adapter);
+
+  const effectiveSharpen = getEffectiveSharpenAmount(edit);
+  const needsPixelPass =
     edit.adjustments.brightness !== 0 ||
     edit.adjustments.contrast !== 0 ||
     edit.adjustments.saturation !== 0 ||
     edit.adjustments.temperature !== 0 ||
     edit.filterId !== 'original' ||
-    edit.sharpenAmount > 0;
+    effectiveSharpen > 0 ||
+    (edit.enhance.enabled &&
+      (edit.enhance.denoise !== 'off' || edit.enhance.clarity > 0));
 
-  if (hasColorEdits) {
+  if (needsPixelPass) {
     const ctx = currentCanvas.getContext('2d');
     if (ctx) {
       const imgData = ctx.getImageData(0, 0, currentCanvas.width, currentCanvas.height);
+      if (edit.enhance.enabled && edit.enhance.denoise !== 'off') {
+        applyEdgePreservingDenoise(imgData, edit.enhance.denoise);
+      }
       applyColorAdjustments(imgData, edit.adjustments);
+      if (edit.enhance.enabled && edit.enhance.clarity > 0) {
+        applyClarity(imgData, edit.enhance.clarity);
+      }
       applyFilterPreset(imgData, edit.filterId);
-      applySharpen(imgData, edit.sharpenAmount);
+      applySharpen(imgData, effectiveSharpen);
       ctx.putImageData(imgData, 0, 0);
     }
   }
 
   if (edit.targetSizeKB !== null && edit.outputFormat !== 'image/png') {
-    return solveTargetSize(currentCanvas, edit.outputFormat, edit.targetSizeKB, adapter);
+    return solveTargetSize(
+      currentCanvas,
+      edit.outputFormat,
+      edit.targetSizeKB,
+      edit.quality,
+      adapter
+    );
   }
 
   const clampedQuality = Math.min(1, Math.max(0.1, edit.quality));

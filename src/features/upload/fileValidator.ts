@@ -118,10 +118,14 @@ export function scanMagicSignature(bytes: Uint8Array): SignatureScanResult {
     }
     if (bytesContainAscii(bytes, 'matroska')) {
       return {
-        signature: null,
-        unsupportedReason:
-          'Format video MKV belum didukung oleh browser. Ubah atau simpan ulang ke MP4 atau WebM.',
-        unsupportedLabel: 'Matroska (MKV)',
+        signature: {
+          kind: 'video',
+          mimeType: 'video/x-matroska',
+          extension: 'mkv',
+          label: 'Matroska (MKV)',
+        },
+        unsupportedReason: null,
+        unsupportedLabel: null,
       };
     }
   }
@@ -254,7 +258,7 @@ export async function validateMediaFile(
       errorCode: declaredKind ? 'CORRUPT_HEADER' : 'UNSUPPORTED_TYPE',
       reason: declaredKind
         ? `File "${file.name}" rusak atau format aslinya tidak sesuai. Pilih foto atau video lain.`
-        : `Format file "${file.name}" tidak didukung. Pilih foto JPG, PNG, WebP, GIF, AVIF atau video MP4, MOV, WebM.`,
+        : `Format file "${file.name}" tidak didukung. Pilih foto JPG, PNG, WebP, GIF, AVIF atau video MP4, MOV, WebM, MKV.`,
       declaredMime,
       detectedSignatureLabel: null,
       fileName: file.name,

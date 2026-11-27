@@ -65,17 +65,24 @@ describe('video presets, trim helpers, and even scaling', () => {
     expect(balanced.targetBitrateBps).toBeLessThan(high.targetBitrateBps);
   });
 
-  it('builds MP4 export filenames for Indonesian studio outputs', () => {
-    expect(buildVideoExportFileName('clip-liburan.MOV')).toBe('clip-liburan-kompresor.mp4');
-    expect(buildVideoExportFileName('kamera.depan.webm')).toBe('kamera.depan-kompresor.mp4');
-    expect(buildVideoExportFileName('video')).toBe('video-kompresor.mp4');
+  it('builds multi-format MP4/MOV/WebM/MKV export filenames for Indonesian studio outputs', () => {
+    expect(buildVideoExportFileName('clip-liburan.MOV', 'mp4')).toBe('clip-liburan-kompresor.mp4');
+    expect(buildVideoExportFileName('kamera.depan.webm', 'mov')).toBe('kamera.depan-kompresor.mov');
+    expect(buildVideoExportFileName('video', 'mkv')).toBe('video-kompresor.mkv');
+    expect(buildVideoExportFileName('video.mp4', 'webm')).toBe('video-kompresor.webm');
   });
 
-  it('provides consistent video preset configurations across all 5 destinations', () => {
-    expect(MEDIA_PRESETS.length).toBe(5);
-    expect(getMediaPreset('whatsapp-chat').video.maxHeightPx).toBe(720);
-    expect(getMediaPreset('whatsapp-status').video.maxHeightPx).toBe(720);
+  it('provides consistent video preset configurations across all 6 calibrated destinations', () => {
+    expect(MEDIA_PRESETS.length).toBe(6);
+    expect(getMediaPreset('whatsapp-hd').video.maxHeightPx).toBe(1080);
+    expect(getMediaPreset('whatsapp-hd').video.targetBitrateBps).toBe(4_500_000);
+    expect(getMediaPreset('whatsapp-fast').video.maxHeightPx).toBe(720);
+    expect(getMediaPreset('whatsapp-status').video.maxHeightPx).toBe(1080);
     expect(getMediaPreset('instagram-story').video.maxHeightPx).toBe(1080);
     expect(getMediaPreset('web-light').video.maxHeightPx).toBe(480);
+
+    // HD upscale capped cleanly at 1080p with even dimensions
+    expect(computeEvenScaledDimensions(854, 480, 1080, 2)).toEqual({ width: 1708, height: 960 });
+    expect(computeEvenScaledDimensions(1280, 720, 1080, 2)).toEqual({ width: 1920, height: 1080 });
   });
 });

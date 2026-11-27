@@ -2,11 +2,14 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { ImageFilterId } from '../engines/contracts';
 import {
   FILTER_PRESETS,
+  applyClarity,
   applyColorAdjustments,
+  applyEdgePreservingDenoise,
   applyFilterPreset,
   applySharpen,
   buildExportFileName,
   computeCropPixels,
+  computeEnhancedTargetDimensions,
   computeProgressiveSteps,
   computeReductionPct,
   computeRotatedDimensions,
@@ -21,7 +24,7 @@ function makeSolidImageData(r: number, g: number, b: number, a = 255): ImageData
   return { width: 2, height: 1, data } as unknown as ImageData;
 }
 
-describe('image pixelOps, presets, and studio history', () => {
+describe('image pixelOps, Jernihkan HD, WhatsApp HD presets, and studio history', () => {
   beforeEach(() => {
     useMediaStore.getState().clearMedia();
   });
@@ -43,11 +46,22 @@ describe('image pixelOps, presets, and studio history', () => {
     ).toEqual({ sx: 0, sy: 900, sw: 1000, sh: 100 });
   });
 
-  it('computes aspect-preserving target dimensions without upscaling', () => {
+  it('computes aspect-preserving target dimensions and Jernihkan HD upscale capped cleanly', () => {
     expect(computeTargetDimensions(2400, 1600, 1600)).toEqual({ width: 1600, height: 1067 });
     expect(computeTargetDimensions(1200, 2400, 1920)).toEqual({ width: 960, height: 1920 });
     expect(computeTargetDimensions(800, 600, 1600)).toEqual({ width: 800, height: 600 });
     expect(computeTargetDimensions(2400, 1600, null)).toEqual({ width: 2400, height: 1600 });
+
+    // 800x600 with 2x HD upscale -> 1600x1200
+    expect(computeEnhancedTargetDimensions(800, 600, 2560, 2, 2560)).toEqual({
+      width: 1600,
+      height: 1200,
+    });
+    // Capped at 2560 even with 2x request on 1920x1080
+    expect(computeEnhancedTargetDimensions(1920, 1080, 2560, 2, 2560)).toEqual({
+      width: 2560,
+      height: 1440,
+    });
   });
 
   it('uses progressive step-down scaling only when downscaling more than 2x', () => {
@@ -58,6 +72,30 @@ describe('image pixelOps, presets, and studio history', () => {
       { width: 2000, height: 1500 },
       { width: 1600, height: 1200 },
     ]);
+  });
+
+  it('applies edge-preserving denoise and clarity micro-contrast while preserving alpha', () => {
+    const data = new Uint8ClampedArray(3 * 3 * 4);
+    for (let i = 0; i < 9; i += 1) {
+      data[i * 4] = 100;
+      data[i * 4 + 1] = 105;
+      data[i * 4 + 2] = 110;
+      data[i * 4 + 3] = 220;
+    }
+    // Slight noise spike inside tolerance
+    data[4 * 4] = 112;
+    data[4 * 4 + 1] = 115;
+    data[4 * 4 + 2] = 118;
+    const img = { width: 3, height: 3, data } as unknown as ImageData;
+
+    applyEdgePreservingDenoise(img, 'medium');
+    expect(img.data[4 * 4]).toBeLessThan(112);
+    expect(img.data[4 * 4 + 3]).toBe(220);
+
+    const midtone = makeSolidImageData(170, 170, 170, 240);
+    applyClarity(midtone, 80);
+    expect(midtone.data[0]).toBeGreaterThan(170);
+    expect(midtone.data[3]).toBe(240);
   });
 
   it('applies color adjustments accurately with [0, 255] clamping and alpha preservation', () => {
@@ -128,31 +166,36 @@ describe('image pixelOps, presets, and studio history', () => {
     expect(fakeImageData.data[4 * 4 + 3]).toBe(123);
   });
 
-  it('builds Indonesian export filenames and reduction percentages', () => {
+  it('builds Indonesian export filenames (including AVIF) and reduction percentages', () => {
     expect(buildExportFileName('liburan.png', 'image/jpeg')).toBe('liburan-kompresor.jpg');
     expect(buildExportFileName('foto.lama.jpg', 'image/webp')).toBe('foto.lama-kompresor.webp');
+    expect(buildExportFileName('potret.png', 'image/avif')).toBe('potret-kompresor.avif');
     expect(buildExportFileName('logo', 'image/png')).toBe('logo-kompresor.png');
 
     expect(computeReductionPct(1000, 250)).toBe(75);
     expect(formatOutputMimeShort('image/jpeg')).toBe('JPG');
     expect(formatOutputMimeShort('image/webp')).toBe('WebP');
+    expect(formatOutputMimeShort('image/avif')).toBe('AVIF');
     expect(formatOutputMimeShort('image/png')).toBe('PNG');
   });
 
-  it('exposes all 5 Indonesian share presets with valid image targets', () => {
+  it('exposes all 6 calibrated Indonesian share presets including WhatsApp HD', () => {
     expect(MEDIA_PRESETS.map((p) => p.label)).toEqual([
-      'WhatsApp',
-      'Status WA',
-      'Story IG',
-      'Web & Dokumen',
+      'WhatsApp HD',
+      'WhatsApp Cepat',
+      'Status WA HD',
+      'Story IG HD',
+      'Web Ringan',
       'Atur Sendiri',
     ]);
-    expect(getMediaPreset('whatsapp-chat').image.maxEdgePx).toBe(1600);
-    expect(getMediaPreset('whatsapp-status').image.maxEdgePx).toBe(1920);
+    expect(getMediaPreset('whatsapp-hd').image.maxEdgePx).toBe(2560);
+    expect(getMediaPreset('whatsapp-hd').image.quality).toBe(0.92);
+    expect(getMediaPreset('whatsapp-fast').image.maxEdgePx).toBe(1600);
+    expect(getMediaPreset('whatsapp-status').image.maxEdgePx).toBe(2160);
     expect(getMediaPreset('web-light').image.outputFormat).toBe('image/webp');
   });
 
-  it('manages photo Undo, Redo, and Reset history snapshots without losing preset flow', () => {
+  it('manages photo Undo, Redo, and Reset history snapshots cleanly', () => {
     const store = useMediaStore.getState();
     expect(store.photoHistoryIndex).toBe(0);
 
@@ -166,7 +209,6 @@ describe('image pixelOps, presets, and studio history', () => {
     expect(next.imageEdit.flipH).toBe(true);
     expect(next.imageEdit.filterId).toBe('cinema');
 
-    // Drag slider live (no history push) then commit snapshot on release
     next.updateImageEdit(
       { adjustments: { ...next.imageEdit.adjustments, contrast: 25 } },
       { commitHistory: false, preservePreset: true }
@@ -176,7 +218,6 @@ describe('image pixelOps, presets, and studio history', () => {
     expect(useMediaStore.getState().photoHistoryIndex).toBe(4);
     expect(useMediaStore.getState().imageEdit.adjustments.contrast).toBe(25);
 
-    // Undo back 2 steps
     useMediaStore.getState().undoPhotoEdit();
     expect(useMediaStore.getState().imageEdit.adjustments.contrast).toBe(0);
     expect(useMediaStore.getState().imageEdit.filterId).toBe('cinema');
@@ -184,11 +225,9 @@ describe('image pixelOps, presets, and studio history', () => {
     useMediaStore.getState().undoPhotoEdit();
     expect(useMediaStore.getState().imageEdit.filterId).toBe('original');
 
-    // Redo forward 1 step
     useMediaStore.getState().redoPhotoEdit();
     expect(useMediaStore.getState().imageEdit.filterId).toBe('cinema');
 
-    // Reset restores preset defaults cleanly
     useMediaStore.getState().resetPhotoEdits();
     next = useMediaStore.getState();
     expect(next.imageEdit.rotationDeg).toBe(0);

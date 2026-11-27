@@ -1,13 +1,18 @@
-import { useEffect, useRef, useState, type DragEvent } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
+  AlertCircle,
   Camera,
   ChevronDown,
   Columns2,
+  Download,
   FlipHorizontal2,
+  Play,
   Redo2,
   RotateCcw,
   RotateCw,
+  Send,
   Undo2,
+  X,
 } from 'lucide-react';
 import type {
   ImageEditState,
@@ -23,26 +28,48 @@ import type {
   VideoProcessResult,
 } from '../../engines/contracts';
 import { computeRotatedDimensions } from '../../engines/image/pixelOps';
+import { findActiveCuesAtTime } from '../../engines/video/subtitleParser';
 import type { MediaPresetId } from '../../presets/mediaPresets';
 import { formatBytes } from '../../shared/utils/formatBytes';
 import { formatDuration } from '../../shared/utils/formatDuration';
-import type { ImageProcessStatus, VideoProcessStatus } from '../../store/useMediaStore';
+import type { ImageProcessStatus, QueueItem, VideoProcessStatus } from '../../store/useMediaStore';
 import { ExportSharePanel } from '../export-share/ExportSharePanel';
-import { CropOverlay } from '../image-studio/CropOverlay';
-import { PhotoControlPanel } from '../image-studio/PhotoControlPanel';
+import { executeWhatsAppShareFlow, triggerObjectUrlDownload } from '../export-share/shareHelper';
 import { MediaInfoBar } from '../upload/MediaInfoBar';
-import { VideoControlPanel, type CapturedFrameInfo } from '../video-studio/VideoControlPanel';
+import type { ZipEntryInput } from '../export-share/zipExport';
+import type { CapturedFrameInfo } from '../video-studio/VideoControlPanel';
+
+const CropOverlay = lazy(() =>
+  import('../image-studio/CropOverlay').then((m) => ({ default: m.CropOverlay }))
+);
+const PhotoControlPanel = lazy(() =>
+  import('../image-studio/PhotoControlPanel').then((m) => ({ default: m.PhotoControlPanel }))
+);
+const VideoControlPanel = lazy(() =>
+  import('../video-studio/VideoControlPanel').then((m) => ({ default: m.VideoControlPanel }))
+);
 import {
   BeforeAfterPreview,
   getBackdropClasses,
   type StageBackdrop,
 } from './BeforeAfterPreview';
+import { CoreSummaryCard } from './CoreSummaryCard';
+import { QueuePanel } from './QueuePanel';
 
 export interface WorkspaceStageProps {
+  items: QueueItem[];
+  activeItemId: string | null;
+  maxTotal: number;
+  queueLimitNotice: string | null;
+  batchRunning: boolean;
+  batchCompleted: number;
+  batchTotal: number;
+
   metadata: MediaMetadata;
   validation: Extract<ValidationResult, { valid: true }>;
   objectUrl: string;
   selectedPresetId: MediaPresetId;
+  avifSupported: boolean;
 
   imageEdit: ImageEditState;
   canUndoPhoto: boolean;
@@ -79,7 +106,14 @@ export interface WorkspaceStageProps {
   onStartVideoProcess: (preferredBackend?: VideoExecutionBackend | 'auto') => void;
   onCancelVideoProcess: () => void;
 
-  onDropReplaceFile: (file: File) => void;
+  onSelectQueueItem: (id: string) => void;
+  onRemoveQueueItem: (id: string) => void;
+  onAddMoreClick: () => void;
+  onApplyToAll: () => void;
+  onProcessAll: () => void;
+  onDismissNotice: () => void;
+  onDropAddFiles: (files: File[]) => void;
+  onLoadSingleReplacementFile: (file: File) => void;
 }
 
 function formatOrientationId(orientation: Orientation): string {
@@ -96,10 +130,18 @@ function buildCapturedFrameFileName(videoFileName: string, timeSec: number): str
 }
 
 export function WorkspaceStage({
+  items,
+  activeItemId,
+  maxTotal,
+  queueLimitNotice,
+  batchRunning,
+  batchCompleted,
+  batchTotal,
   metadata,
   validation,
   objectUrl,
   selectedPresetId,
+  avifSupported,
   imageEdit,
   canUndoPhoto,
   canRedoPhoto,
@@ -128,21 +170,28 @@ export function WorkspaceStage({
   onUpdateVideoEdit,
   onStartVideoProcess,
   onCancelVideoProcess,
-  onDropReplaceFile,
+  onSelectQueueItem,
+  onRemoveQueueItem,
+  onAddMoreClick,
+  onApplyToAll,
+  onProcessAll,
+  onDismissNotice,
+  onDropAddFiles,
+  onLoadSingleReplacementFile,
 }: WorkspaceStageProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isDraggingOverStage, setIsDraggingOverStage] = useState(false);
-  const [backdrop, setBackdrop] = useState<StageBackdrop>('light');
+  const [backdrop, setBackdrop] = useState<StageBackdrop>('dark');
 
-  // Photo stage controls
   const [isCropping, setIsCropping] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [splitPct, setSplitPct] = useState(50);
   const [showOriginalPhoto, setShowOriginalPhoto] = useState(false);
   const [orientedCropUrl, setOrientedCropUrl] = useState<string | null>(null);
 
-  // Video stage controls
   const [videoViewMode, setVideoViewMode] = useState<'original' | 'result'>('original');
+  const [videoTimeSec, setVideoTimeSec] = useState(0);
+  const [videoPreviewUnsupported, setVideoPreviewUnsupported] = useState(false);
   const [capturedFrame, setCapturedFrame] = useState<CapturedFrameInfo | null>(null);
 
   const isImage = metadata.kind === 'image';
@@ -154,12 +203,31 @@ export function WorkspaceStage({
     !imageEdit.flipV &&
     imageEdit.crop === null;
 
-  // Reset stage modes when active media file changes
+  const finishedBatchItems: ZipEntryInput[] = useMemo(() => {
+    const out: ZipEntryInput[] = [];
+    for (const item of items) {
+      if (item.imageResult) {
+        out.push({
+          fileName: item.imageResult.outputFileName,
+          blob: item.imageResult.outputBlob,
+        });
+      } else if (item.videoResult) {
+        out.push({
+          fileName: item.videoResult.outputFileName,
+          blob: item.videoResult.outputBlob,
+        });
+      }
+    }
+    return out;
+  }, [items]);
+
   useEffect(() => {
     setIsCropping(false);
     setCompareMode(false);
     setShowOriginalPhoto(false);
-    setVideoViewMode('original');
+    setVideoViewMode(processedVideoUrl ? 'result' : 'original');
+    setVideoTimeSec(0);
+    setVideoPreviewUnsupported(false);
     setCapturedFrame((prev) => {
       if (prev) {
         setTimeout(() => URL.revokeObjectURL(prev.url), 50);
@@ -168,8 +236,8 @@ export function WorkspaceStage({
     });
   }, [objectUrl]);
 
-  // Auto-switch video stage to Hasil whenever a new processed video finishes
   useEffect(() => {
+    setVideoPreviewUnsupported(false);
     if (processedVideoUrl) {
       setVideoViewMode('result');
     } else {
@@ -177,7 +245,6 @@ export function WorkspaceStage({
     }
   }, [processedVideoUrl]);
 
-  // Revoke any remaining captured frame objectURL on unmount
   useEffect(() => {
     return () => {
       setCapturedFrame((prev) => {
@@ -189,7 +256,6 @@ export function WorkspaceStage({
     };
   }, []);
 
-  // Build oriented canvas preview URL when cropping a rotated/flipped image so crop matches pixel output 1:1
   useEffect(() => {
     if (!isImage || !isCropping) {
       setOrientedCropUrl(null);
@@ -254,7 +320,6 @@ export function WorkspaceStage({
     metadata.height,
   ]);
 
-  // Detach video element cleanly on unmount or source switch
   const activeVideoSrc =
     !isImage && videoViewMode === 'result' && processedVideoUrl ? processedVideoUrl : objectUrl;
 
@@ -289,9 +354,9 @@ export function WorkspaceStage({
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingOverStage(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      onDropReplaceFile(file);
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length > 0) {
+      onDropAddFiles(files);
     }
   };
 
@@ -301,6 +366,7 @@ export function WorkspaceStage({
     if (!videoEl) return;
     if (!Number.isNaN(timeSec) && Number.isFinite(timeSec)) {
       videoEl.currentTime = Math.max(0, timeSec);
+      setVideoTimeSec(Math.max(0, timeSec));
     }
   };
 
@@ -339,7 +405,7 @@ export function WorkspaceStage({
 
   const handleEditCapturedFrameAsPhoto = () => {
     if (!capturedFrame) return;
-    onDropReplaceFile(capturedFrame.file);
+    onLoadSingleReplacementFile(capturedFrame.file);
   };
 
   const orientedDimensions = computeRotatedDimensions(
@@ -348,31 +414,87 @@ export function WorkspaceStage({
     imageEdit.rotationDeg
   );
 
+  // Live synced subtitle cues on original preview (or softsub output)
+  const showSubtitleOverlay =
+    !isImage &&
+    videoEdit.subtitle.enabled &&
+    videoEdit.subtitle.cues.length > 0 &&
+    (videoViewMode === 'original' || videoEdit.subtitle.mode === 'softsub');
+  const activeSubtitleCues = showSubtitleOverlay
+    ? findActiveCuesAtTime(videoEdit.subtitle.cues, videoTimeSec)
+    : [];
+
+  const activeExportBlob = isImage
+    ? (imageProcessResult?.outputBlob ?? null)
+    : (videoProcessResult?.outputBlob ?? null);
+  const activeExportUrl = isImage ? processedImageUrl : processedVideoUrl;
+  const activeExportName = isImage
+    ? (imageProcessResult?.outputFileName ?? null)
+    : (videoProcessResult?.outputFileName ?? null);
+  const activeExportMime = isImage
+    ? (imageProcessResult?.outputMime ?? null)
+    : (videoProcessResult?.outputMime ?? null);
+
   return (
     <div className="flex min-h-[calc(100vh-56px)] w-full flex-col lg:flex-row">
-      {/* Left Studio Preview Stage */}
+      {/* Queue Strip (Mobile/Tablet) & Collapsible Left Queue Rail (Desktop) */}
+      <QueuePanel
+        items={items}
+        activeItemId={activeItemId}
+        maxTotal={maxTotal}
+        batchRunning={batchRunning}
+        batchCompleted={batchCompleted}
+        batchTotal={batchTotal}
+        onSelectItem={onSelectQueueItem}
+        onRemoveItem={onRemoveQueueItem}
+        onAddMoreClick={onAddMoreClick}
+        onApplyToAll={onApplyToAll}
+        onProcessAll={onProcessAll}
+      />
+
+      {/* Center Studio Preview Stage */}
       <section
         data-testid="workspace-preview-stage"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`relative flex min-h-[46vh] flex-1 flex-col items-center justify-center gap-3.5 bg-[var(--bg-stage)] px-4 py-5 transition-colors sm:min-h-[52vh] sm:px-8 sm:py-6 lg:min-h-[calc(100vh-56px)] ${
-          isDraggingOverStage ? 'ring-2 ring-inset ring-[var(--accent-primary)]' : ''
+        className={`bg-cobalt-stage relative flex min-h-[44vh] flex-1 flex-col items-center justify-center gap-3.5 px-3 py-5 transition-colors sm:min-h-[50vh] sm:px-7 sm:py-6 lg:min-h-[calc(100vh-56px)] ${
+          isDraggingOverStage ? 'ring-2 ring-inset ring-[var(--border-active)]' : ''
         }`}
       >
+        {queueLimitNotice && (
+          <div
+            data-testid="queue-limit-notice"
+            className="flex max-w-xl items-center gap-2 rounded-xl border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-3 py-2 text-xs text-[var(--status-warn-ink)]"
+          >
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="flex-1">{queueLimitNotice}</span>
+            <button
+              type="button"
+              onClick={onDismissNotice}
+              aria-label="Tutup pemberitahuan"
+              className="rounded p-0.5 hover:opacity-80"
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
+        )}
+
         {isImage ? (
           isCropping && orientedCropUrl ? (
-            <CropOverlay
-              imageUrl={orientedCropUrl}
-              sourceWidth={orientedDimensions.width}
-              sourceHeight={orientedDimensions.height}
-              initialCrop={imageEdit.crop}
-              onApply={(nextCrop) => {
-                onApplyCrop(nextCrop);
-                setIsCropping(false);
-              }}
-              onCancel={() => setIsCropping(false)}
-            />
+            <Suspense fallback={<div className="h-64 w-full animate-pulse rounded-2xl bg-[var(--bg-elevated)]" />}>
+              <CropOverlay
+                imageUrl={orientedCropUrl}
+                sourceWidth={orientedDimensions.width}
+                sourceHeight={orientedDimensions.height}
+                initialCrop={imageEdit.crop}
+                onApply={(nextCrop) => {
+                  onApplyCrop(nextCrop);
+                  setIsCropping(false);
+                }}
+                onCancel={() => setIsCropping(false)}
+              />
+            </Suspense>
           ) : (
             <BeforeAfterPreview
               originalUrl={objectUrl}
@@ -388,23 +510,61 @@ export function WorkspaceStage({
           )
         ) : (
           <div
-            className={`relative flex max-h-[58vh] w-full max-w-[780px] items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-hairline)] p-1 transition-colors ${getBackdropClasses(backdrop)}`}
+            className={`relative flex max-h-[56vh] w-full max-w-[820px] items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-hairline)] p-1 transition-colors ${getBackdropClasses(backdrop)}`}
             style={{ boxShadow: 'var(--stage-shadow)' }}
           >
-            <video
-              ref={videoRef}
-              key={activeVideoSrc}
-              data-testid="preview-video"
-              src={activeVideoSrc}
-              controls
-              playsInline
-              preload="metadata"
-              className="max-h-[56vh] w-full rounded-xl object-contain"
-            />
-            {processedVideoUrl && (
-              <span className="pointer-events-none absolute left-3 top-3 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white">
+            {videoPreviewUnsupported && processedVideoUrl ? (
+              <div
+                data-testid="video-preview-fallback-box"
+                className="flex flex-col items-center gap-2 px-6 py-12 text-center text-xs text-[var(--text-secondary)]"
+              >
+                <p className="font-semibold text-[var(--text-primary)]">
+                  File {videoEdit.outputFormat.toUpperCase()} selesai diproses (
+                  {formatBytes(videoProcessResult?.outputBytes ?? 0)})
+                </p>
+                <p>
+                  Browser ini tidak memutar pratinjau {videoEdit.outputFormat.toUpperCase()} langsung
+                  di pemutar web, namun file hasil siap diunduh dan diputar di pemutar media perangkat.
+                </p>
+              </div>
+            ) : (
+              <video
+                ref={videoRef}
+                key={activeVideoSrc}
+                data-testid="preview-video"
+                src={activeVideoSrc}
+                controls
+                playsInline
+                preload="metadata"
+                onTimeUpdate={(e) => setVideoTimeSec(e.currentTarget.currentTime)}
+                onError={() => {
+                  if (videoViewMode === 'result' && processedVideoUrl) {
+                    setVideoPreviewUnsupported(true);
+                  }
+                }}
+                className="max-h-[54vh] w-full rounded-xl object-contain"
+              />
+            )}
+
+            {processedVideoUrl && !videoPreviewUnsupported && (
+              <span className="pointer-events-none absolute left-3 top-3 rounded-md bg-[#000521]/75 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-xs">
                 {videoViewMode === 'result' ? 'Hasil' : 'Asli'}
               </span>
+            )}
+
+            {activeSubtitleCues.length > 0 && !videoPreviewUnsupported && (
+              <div
+                data-testid="live-subtitle-overlay"
+                className={`pointer-events-none absolute left-1/2 -translate-x-1/2 rounded-lg bg-[#000521]/82 px-3 py-1.5 text-center text-xs font-semibold text-white shadow sm:text-sm ${
+                  videoEdit.subtitle.position === 'top'
+                    ? 'top-4'
+                    : videoEdit.subtitle.position === 'center'
+                      ? 'top-1/2 -translate-y-1/2'
+                      : 'bottom-12'
+                }`}
+              >
+                {activeSubtitleCues.map((c) => c.text).join('\n')}
+              </div>
             )}
           </div>
         )}
@@ -498,7 +658,7 @@ export function WorkspaceStage({
                   title="Balik Horizontal"
                   className={`inline-flex h-8 items-center gap-1 rounded-xl px-2.5 text-xs font-medium transition-all active:scale-[0.97] ${
                     imageEdit.flipH
-                      ? 'bg-[var(--bg-subtle)] text-[var(--accent-primary)]'
+                      ? 'bg-[var(--bg-subtle)] text-[var(--accent-highlight)]'
                       : 'text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]'
                   }`}
                 >
@@ -624,15 +784,20 @@ export function WorkspaceStage({
         )}
       </section>
 
-      {/* Right Studio Control Panel */}
-      <aside className="flex w-full shrink-0 flex-col gap-5 border-t border-[var(--border-hairline)] bg-[var(--bg-surface)] p-4 sm:p-5 lg:w-[376px] lg:border-l lg:border-t-0">
-        {isImage ? (
-          <>
+      {/* Right Inspector Panel (Responsive: Full width below on Tablet/Mobile, 392px sidebar on Desktop) */}
+      <aside className="flex w-full shrink-0 flex-col gap-4 border-t border-[var(--border-hairline)] bg-[var(--bg-surface)] p-4 pb-20 sm:p-5 md:pb-6 lg:w-[392px] lg:border-l lg:border-t-0">
+        <Suspense
+          fallback={
+            <div className="h-64 w-full animate-pulse rounded-2xl bg-[var(--bg-elevated)]" />
+          }
+        >
+          {isImage ? (
             <PhotoControlPanel
               selectedPresetId={selectedPresetId}
               imageEdit={imageEdit}
               imageProcessResult={imageProcessResult}
               filterThumbnails={filterThumbnails}
+              avifSupported={avifSupported}
               isCropping={isCropping}
               onSelectPreset={onSelectPreset}
               onUpdateImageEdit={onUpdateImageEdit}
@@ -643,55 +808,70 @@ export function WorkspaceStage({
               onFlipV={onFlipV}
               onSelectFilter={onSelectFilter}
             />
+          ) : (
+            <VideoControlPanel
+              metadata={metadata}
+              selectedPresetId={selectedPresetId}
+              videoEdit={videoEdit}
+              videoProcessStatus={videoProcessStatus}
+              videoProgress={videoProgress}
+              videoProcessResult={videoProcessResult}
+              processedVideoUrl={processedVideoUrl}
+              videoProcessError={videoProcessError}
+              capturedFrame={capturedFrame}
+              finishedBatchItems={finishedBatchItems}
+              onSelectPreset={onSelectPreset}
+              onUpdateVideoEdit={onUpdateVideoEdit}
+              onStartProcess={() => onStartVideoProcess('auto')}
+              onCancelProcess={onCancelVideoProcess}
+              onSeekPreview={handleSeekVideoPreview}
+              onCaptureFrame={handleCaptureFrame}
+              onEditCapturedFrameAsPhoto={handleEditCapturedFrameAsPhoto}
+            />
+          )}
+        </Suspense>
 
-            {imageProcessError && (
-              <p
-                role="alert"
-                className="rounded-xl border border-[var(--status-err-border)] bg-[var(--status-err-bg)] px-3 py-2 text-xs text-[var(--status-err-ink)]"
-              >
-                {imageProcessError}
-              </p>
-            )}
-
-            <div className="border-t border-[var(--border-hairline)] pt-4">
-              <ExportSharePanel
-                mediaKind="image"
-                readyBlob={imageProcessResult?.outputBlob ?? null}
-                readyUrl={processedImageUrl}
-                outputFileName={imageProcessResult?.outputFileName ?? null}
-                outputMime={imageProcessResult?.outputMime ?? null}
-                isProcessing={imageProcessStatus === 'processing'}
-              />
-            </div>
-          </>
-        ) : (
-          <VideoControlPanel
-            metadata={metadata}
-            selectedPresetId={selectedPresetId}
-            videoEdit={videoEdit}
-            videoProcessStatus={videoProcessStatus}
-            videoProgress={videoProgress}
-            videoProcessResult={videoProcessResult}
-            processedVideoUrl={processedVideoUrl}
-            videoProcessError={videoProcessError}
-            capturedFrame={capturedFrame}
-            onSelectPreset={onSelectPreset}
-            onUpdateVideoEdit={onUpdateVideoEdit}
-            onStartProcess={() => onStartVideoProcess('auto')}
-            onCancelProcess={onCancelVideoProcess}
-            onSeekPreview={handleSeekVideoPreview}
-            onCaptureFrame={handleCaptureFrame}
-            onEditCapturedFrameAsPhoto={handleEditCapturedFrameAsPhoto}
-          />
+        {imageProcessError && isImage && (
+          <p
+            role="alert"
+            className="rounded-xl border border-[var(--status-err-border)] bg-[var(--status-err-bg)] px-3 py-2 text-xs text-[var(--status-err-ink)]"
+          >
+            {imageProcessError}
+          </p>
         )}
 
-        {/* Collapsed Detail file Disclosure */}
+        {/* Always-Visible Core Summary Readout (Ringkasan Inti) */}
+        <CoreSummaryCard
+          metadata={metadata}
+          selectedPresetId={selectedPresetId}
+          imageOutputMime={imageEdit.outputFormat}
+          imageEnhanceEnabled={imageEdit.enhance.enabled}
+          imageProcessResult={imageProcessResult}
+          videoEdit={videoEdit}
+          videoProcessResult={videoProcessResult}
+        />
+
+        {isImage && (
+          <div className="border-t border-[var(--border-hairline)] pt-3">
+            <ExportSharePanel
+              mediaKind="image"
+              readyBlob={imageProcessResult?.outputBlob ?? null}
+              readyUrl={processedImageUrl}
+              outputFileName={imageProcessResult?.outputFileName ?? null}
+              outputMime={imageProcessResult?.outputMime ?? null}
+              finishedBatchItems={finishedBatchItems}
+              isProcessing={imageProcessStatus === 'processing'}
+            />
+          </div>
+        )}
+
+        {/* Collapsed Detail teknis Disclosure */}
         <details
           data-testid="file-details-accordion"
           className="group mt-auto border-t border-[var(--border-hairline)] pt-3.5"
         >
           <summary className="flex cursor-pointer list-none items-center justify-between py-1 text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] [&::-webkit-details-marker]:hidden">
-            <span>Detail file</span>
+            <span>Detail teknis</span>
             <ChevronDown
               className="h-4 w-4 transition-transform group-open:rotate-180"
               aria-hidden="true"
@@ -700,7 +880,10 @@ export function WorkspaceStage({
 
           <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs tabular-nums">
             <dt className="text-[var(--text-muted)]">Nama file</dt>
-            <dd className="truncate text-right font-medium text-[var(--text-primary)]" title={metadata.fileName}>
+            <dd
+              className="truncate text-right font-medium text-[var(--text-primary)]"
+              title={metadata.fileName}
+            >
               {metadata.fileName}
             </dd>
 
@@ -745,6 +928,52 @@ export function WorkspaceStage({
           </dl>
         </details>
       </aside>
+
+      {/* Mobile Sticky Bottom Action Bar (< 768px) */}
+      <div
+        data-testid="mobile-sticky-action-bar"
+        className="sticky bottom-0 z-20 flex items-center gap-2 border-t border-[var(--border-hairline)] bg-[var(--bg-surface)]/95 px-3 py-2.5 backdrop-blur-md md:hidden"
+      >
+        {activeExportUrl && activeExportName && activeExportBlob && activeExportMime ? (
+          <>
+            <button
+              type="button"
+              data-testid="mobile-sticky-download-btn"
+              onClick={() => triggerObjectUrlDownload(activeExportUrl, activeExportName)}
+              className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--accent-primary)] px-3 text-xs font-semibold text-[var(--ink-on-accent)]"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+              <span>{isImage ? 'Unduh Foto' : 'Unduh Video'}</span>
+            </button>
+            <button
+              type="button"
+              data-testid="mobile-sticky-whatsapp-btn"
+              onClick={() =>
+                void executeWhatsAppShareFlow({
+                  blob: activeExportBlob,
+                  objectUrl: activeExportUrl,
+                  fileName: activeExportName,
+                  mimeType: activeExportMime,
+                })
+              }
+              className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-[var(--border-active)] bg-[var(--bg-elevated)] px-3.5 text-xs font-semibold text-[var(--text-primary)]"
+            >
+              <Send className="h-4 w-4 text-[var(--accent-highlight)]" aria-hidden="true" />
+              <span>WhatsApp</span>
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            disabled={videoProcessStatus === 'processing'}
+            onClick={() => onStartVideoProcess('auto')}
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--accent-primary)] px-3 text-xs font-semibold text-[var(--ink-on-accent)] disabled:opacity-55"
+          >
+            <Play className="h-4 w-4" aria-hidden="true" />
+            <span>{videoProcessStatus === 'processing' ? 'Memproses…' : 'Proses Video'}</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 }

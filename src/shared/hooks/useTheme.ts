@@ -13,7 +13,7 @@ function readStoredTheme(): AppTheme {
   } catch {
     // Ignore storage access errors in restricted environments
   }
-  return 'light';
+  return 'dark';
 }
 
 export function applyThemeToDocument(theme: AppTheme): void {

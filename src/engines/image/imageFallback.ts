@@ -22,6 +22,10 @@ const htmlCanvasAdapter: CanvasAdapter<HTMLCanvasElement> = {
             reject(new Error('Browser gagal menyimpan hasil konversi foto.'));
             return;
           }
+          if (format === 'image/avif' && blob.type !== 'image/avif') {
+            reject(new Error('Browser tidak mendukung penyandian AVIF secara native.'));
+            return;
+          }
           resolve(blob);
         },
         format,
@@ -53,8 +57,14 @@ export async function runMainThreadImageFallback(
         width: number;
         height: number;
         getContext(type: '2d'): Canvas2DContextLike | null;
-      }>
+      }>,
+      request.previewMaxEdgePx
     );
+
+    const activeModules = ['Kompres & Format'];
+    if (request.edit.enhance.enabled) {
+      activeModules.push('Jernihkan HD');
+    }
 
     return {
       requestId: request.requestId,
@@ -69,6 +79,7 @@ export async function runMainThreadImageFallback(
       durationMs: performance.now() - t0,
       solvedQuality: out.solvedQuality,
       targetSizeMet: out.targetSizeMet,
+      activeModules,
     };
   } finally {
     bitmap.close();

@@ -14,6 +14,7 @@ export type ImageWorkerRequest =
       buffer: ArrayBuffer;
       mimeType: string;
       edit: ImageEditState;
+      previewMaxEdgePx?: number;
     }
   | {
       type: 'thumbnails';
@@ -77,10 +78,14 @@ const offscreenAdapter: CanvasAdapter<OffscreenCanvas> = {
     return new OffscreenCanvas(width, height);
   },
   async encodeBlob(canvas, format, quality) {
-    return canvas.convertToBlob({
+    const blob = await canvas.convertToBlob({
       type: format,
       ...(quality === undefined ? {} : { quality }),
     });
+    if (format === 'image/avif' && blob.type !== 'image/avif') {
+      throw new Error('Browser tidak mendukung penyandian AVIF secara native.');
+    }
+    return blob;
   },
 };
 
@@ -158,7 +163,8 @@ workerScope.onmessage = async (event: MessageEvent<ImageWorkerRequest>) => {
         width: number;
         height: number;
         getContext(type: '2d'): Canvas2DContextLike | null;
-      }>
+      }>,
+      payload.previewMaxEdgePx
     );
     const outputBuffer = await out.blob.arrayBuffer();
     const durationMs = performance.now() - t0;

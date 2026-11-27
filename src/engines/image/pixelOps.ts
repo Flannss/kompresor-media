@@ -1,4 +1,5 @@
 import type {
+  EnhanceDenoiseMode,
   ImageColorAdjustments,
   ImageFilterId,
   ImageOutputFormat,
@@ -84,6 +85,33 @@ export function computeTargetDimensions(
 }
 
 /**
+ * Computes output dimensions accounting for optional Jernihkan HD upscale (capped at maxCapPx).
+ */
+export function computeEnhancedTargetDimensions(
+  srcWidth: number,
+  srcHeight: number,
+  maxEdgePx: number | null,
+  upscaleFactor: 1 | 1.5 | 2,
+  maxCapPx = 2560
+): Dimensions {
+  if (upscaleFactor <= 1) {
+    return computeTargetDimensions(srcWidth, srcHeight, maxEdgePx);
+  }
+  const longest = Math.max(srcWidth, srcHeight);
+  const desiredLongest = Math.round(longest * upscaleFactor);
+  const effectiveCap = maxEdgePx !== null ? Math.min(maxEdgePx, maxCapPx) : maxCapPx;
+  const targetLongest = Math.min(effectiveCap, desiredLongest);
+  if (targetLongest <= longest) {
+    return computeTargetDimensions(srcWidth, srcHeight, maxEdgePx);
+  }
+  const scale = targetLongest / longest;
+  return {
+    width: Math.max(1, Math.round(srcWidth * scale)),
+    height: Math.max(1, Math.round(srcHeight * scale)),
+  };
+}
+
+/**
  * Generates progressive halving dimensions when downscaling more than 2x to reduce aliasing.
  */
 export function computeProgressiveSteps(
@@ -120,6 +148,99 @@ export function computeProgressiveSteps(
 
 function clampByte(v: number): number {
   return v < 0 ? 0 : v > 255 ? 255 : Math.round(v);
+}
+
+/**
+ * Fast 3x3 edge-preserving denoise smoothing flat noise while protecting strong contours.
+ */
+export function applyEdgePreservingDenoise(
+  imageData: ImageData,
+  mode: EnhanceDenoiseMode
+): void {
+  if (mode === 'off') {
+    return;
+  }
+  const { width, height, data } = imageData;
+  if (width < 3 || height < 3) {
+    return;
+  }
+
+  const threshold = mode === 'medium' ? 28 : 16;
+  const blend = mode === 'medium' ? 0.58 : 0.36;
+  const src = new Uint8ClampedArray(data);
+  const stride = width * 4;
+
+  for (let y = 1; y < height - 1; y += 1) {
+    const row = y * stride;
+    for (let x = 1; x < width - 1; x += 1) {
+      const idx = row + x * 4;
+      const cr = src[idx];
+      const cg = src[idx + 1];
+      const cb = src[idx + 2];
+
+      let sumR = 0;
+      let sumG = 0;
+      let sumB = 0;
+      let count = 0;
+
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const nRow = (y + dy) * stride;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const nIdx = nRow + (x + dx) * 4;
+          const nr = src[nIdx];
+          const ng = src[nIdx + 1];
+          const nb = src[nIdx + 2];
+          const diff =
+            (Math.abs(nr - cr) + Math.abs(ng - cg) + Math.abs(nb - cb)) / 3;
+          if (diff <= threshold) {
+            sumR += nr;
+            sumG += ng;
+            sumB += nb;
+            count += 1;
+          }
+        }
+      }
+
+      if (count > 1) {
+        const avgR = sumR / count;
+        const avgG = sumG / count;
+        const avgB = sumB / count;
+        data[idx] = clampByte(cr + (avgR - cr) * blend);
+        data[idx + 1] = clampByte(cg + (avgG - cg) * blend);
+        data[idx + 2] = clampByte(cb + (avgB - cb) * blend);
+      }
+      data[idx + 3] = src[idx + 3];
+    }
+  }
+}
+
+/**
+ * Applies micro-contrast luminance clarity enhancement (0..100) while preserving alpha.
+ */
+export function applyClarity(imageData: ImageData, clarityAmount: number): void {
+  const level = Math.min(100, Math.max(0, clarityAmount));
+  if (level <= 0) {
+    return;
+  }
+
+  const data = imageData.data;
+  const boost = (level / 100) * 0.28;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+
+    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const norm = luma / 255;
+    // Gentle midtone S-curve contrast push
+    const midWeight = 4 * norm * (1 - norm);
+    const delta = (norm - 0.5) * boost * midWeight * 255;
+
+    data[i] = clampByte(r + delta);
+    data[i + 1] = clampByte(g + delta);
+    data[i + 2] = clampByte(b + delta);
+  }
 }
 
 /**
@@ -204,7 +325,6 @@ export function applyFilterPreset(imageData: ImageData, filterId: ImageFilterId)
         break;
       }
       case 'film': {
-        // Lifted shadows with soft desaturated highlights
         const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
         r = luma + (r - luma) * 0.86;
         g = luma + (g - luma) * 0.86;
@@ -215,7 +335,6 @@ export function applyFilterPreset(imageData: ImageData, filterId: ImageFilterId)
         break;
       }
       case 'cinema': {
-        // Cool teal shadow push with warmer highlights & higher contrast
         const luma = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
         r = (r - 128) * 1.15 + 128 + (luma > 0.5 ? 10 : -8);
         g = (g - 128) * 1.12 + 128 + (luma <= 0.5 ? 4 : 0);
@@ -286,7 +405,13 @@ export function buildExportFileName(
   const rawBase = dotIdx > 0 ? originalName.slice(0, dotIdx) : originalName;
   const cleanBase = rawBase.trim() || 'foto';
   const ext =
-    outputFormat === 'image/webp' ? 'webp' : outputFormat === 'image/png' ? 'png' : 'jpg';
+    outputFormat === 'image/webp'
+      ? 'webp'
+      : outputFormat === 'image/png'
+        ? 'png'
+        : outputFormat === 'image/avif'
+          ? 'avif'
+          : 'jpg';
   return `${cleanBase}-kompresor.${ext}`;
 }
 
@@ -300,5 +425,6 @@ export function computeReductionPct(inputBytes: number, outputBytes: number): nu
 export function formatOutputMimeShort(mime: ImageOutputFormat): string {
   if (mime === 'image/webp') return 'WebP';
   if (mime === 'image/png') return 'PNG';
+  if (mime === 'image/avif') return 'AVIF';
   return 'JPG';
 }

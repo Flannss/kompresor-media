@@ -25,13 +25,17 @@
   }
 
   :focus-visible {
-    outline: 2px solid var(--accent-primary);
+    outline: 2px solid var(--border-active);
     outline-offset: 2px;
   }
 }
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+.bg-cobalt-stage {
+  background: radial-gradient(circle at 50% 28%, var(--bg-stage-glow) 0%, var(--bg-stage) 58%, var(--bg-app) 100%);
 }
 
 .bg-checkerboard {
@@ -60,8 +64,8 @@
   width: 16px;
   border-radius: 9999px;
   background: var(--bg-surface);
-  border: 2px solid var(--accent-primary);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  border: 2px solid var(--border-active);
+  box-shadow: 0 1px 4px rgba(0, 5, 33, 0.32);
   transition: transform 140ms ease;
 }
 
@@ -74,6 +78,6 @@
   width: 16px;
   border-radius: 9999px;
   background: var(--bg-surface);
-  border: 2px solid var(--accent-primary);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  border: 2px solid var(--border-active);
+  box-shadow: 0 1px 4px rgba(0, 5, 33, 0.32);
 }
