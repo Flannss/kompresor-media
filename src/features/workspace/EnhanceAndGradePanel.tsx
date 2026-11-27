@@ -626,7 +626,7 @@ export function EnhanceAndGradePanel({
                   ) : (
                     <div
                       style={{ filter: cssFilter === 'none' ? undefined : cssFilter }}
-                      className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#020C47] via-[#011F65] to-[#2078CF]/50 text-[10px] font-semibold text-white/80"
+                      className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#3B2A1F] via-[#6F4E37] to-[#B08968]/75 text-[10px] font-semibold text-[#FFF9F0]/90"
                     >
                       {look.badge}
                     </div>

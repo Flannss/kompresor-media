@@ -219,7 +219,7 @@ export function CropOverlay({
         <div
           data-testid="crop-selection-box"
           onPointerDown={startDrag('move')}
-          className="absolute cursor-move border-2 border-white shadow-[0_0_0_9999px_rgba(10,20,24,0.52)]"
+          className="absolute cursor-move border-2 border-[#FFF9F0] shadow-[0_0_0_9999px_rgba(26,18,13,0.58)]"
           style={{
             left: `${rect.x * 100}%`,
             top: `${rect.y * 100}%`,

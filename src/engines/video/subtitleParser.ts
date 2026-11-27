@@ -233,7 +233,7 @@ export function drawHardsubCuesOnCanvas(
   }
   boxTop = Math.max(10, Math.min(height - boxHeight - 10, boxTop));
 
-  ctx.fillStyle = 'rgba(0, 5, 33, 0.72)';
+  ctx.fillStyle = 'rgba(26, 18, 13, 0.78)';
   const radius = Math.min(12, Math.round(fontPx * 0.35));
   const x = centerX - boxWidth / 2;
   ctx.beginPath();

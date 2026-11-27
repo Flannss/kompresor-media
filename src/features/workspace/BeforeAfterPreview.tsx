@@ -20,10 +20,10 @@ export function getBackdropClasses(backdrop: StageBackdrop): string {
     return 'bg-checkerboard';
   }
   if (backdrop === 'dark') {
-    return 'bg-[#0E234B]';
+    return 'bg-[#2A1E17]';
   }
   if (backdrop === 'light') {
-    return 'bg-[#FFFFFF]';
+    return 'bg-[#FFF9F0]';
   }
   return 'bg-[var(--bg-stage-media)]';
 }

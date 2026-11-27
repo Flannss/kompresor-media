@@ -57,9 +57,9 @@ export interface PhotoControlPanelProps {
 }
 
 const PHOTO_TABS = [
-  { id: 'utama' as const, label: 'Tujuan & Format' },
+  { id: 'utama' as const, label: 'Tujuan' },
   { id: 'tampilan' as const, label: 'Kualitas & Filter' },
-  { id: 'edit' as const, label: 'Edit & Bingkai' },
+  { id: 'edit' as const, label: 'Edit' },
 ];
 
 const QUALITY_MODELS: ReadonlyArray<{
@@ -607,7 +607,7 @@ export function PhotoControlPanel({
                       ) : (
                         <div
                           style={{ filter: cssFilter === 'none' ? undefined : cssFilter }}
-                          className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#061433] via-[#0F5CD6]/60 to-[#59B8FF]/45 text-[9px] font-semibold text-white/90"
+                          className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#3B2A1F] via-[#6F4E37] to-[#B08968]/80 text-[9px] font-semibold text-[#FFF9F0]/90"
                         >
                           {look.badge}
                         </div>

@@ -1,8 +1,8 @@
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import {
   AlertCircle,
+  Camera,
   Film,
-  Image as ImageIcon,
   Loader2,
   Upload,
 } from 'lucide-react';
@@ -77,8 +77,8 @@ export function UploadZone({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`bg-liquid-stage relative flex min-h-[calc(100vh-56px)] w-full flex-col items-center justify-between px-4 py-8 transition-all sm:px-6 sm:py-12 ${
-        isDragging ? 'ring-2 ring-inset ring-[var(--border-active)]' : ''
+      className={`bg-warm-stage relative flex min-h-[calc(100vh-60px)] w-full flex-col items-center justify-between px-4 py-10 transition-colors sm:px-6 lg:px-10 lg:py-14 ${
+        isDragging ? 'ring-2 ring-inset ring-[var(--border-strong)]' : ''
       }`}
     >
       {/* Hidden File Inputs */}
@@ -114,33 +114,67 @@ export function UploadZone({
       />
 
       {isDragging && (
-        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-[var(--bg-app)]/70">
-          <div className="km-glass-strong flex items-center gap-3 rounded-2xl border px-6 py-4 text-sm font-semibold text-[var(--text-primary)]">
-            <Upload className="h-5 w-5 text-[var(--accent-highlight)]" aria-hidden="true" />
-            <span>Lepas foto atau video di sini untuk langsung dioptimalkan</span>
+        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-[var(--bg-app)]/78 p-4">
+          <div className="km-glass-strong flex items-center gap-3 rounded-2xl border-2 border-dashed border-[var(--border-strong)] px-7 py-5 text-sm font-semibold text-[var(--text-primary)]">
+            <Upload className="h-5 w-5 text-[var(--accent-gold)]" aria-hidden="true" />
+            <span>Lepas file di sini untuk mulai mengedit</span>
           </div>
         </div>
       )}
 
-      <div className="mx-auto flex w-full max-w-[880px] flex-1 flex-col items-center justify-center gap-7">
-        {/* Hero Headline & Concise Explanation */}
-        <div className="max-w-2xl text-center">
-          <h1 className="text-[24px] font-semibold leading-tight text-[var(--text-primary)] sm:text-[32px]">
-            {isAnalyzing ? 'Memeriksa file Anda…' : 'Optimalkan Foto & Video Tanpa Ribet'}
-          </h1>
-          <p className="mt-2.5 text-sm leading-relaxed text-[var(--text-secondary)] sm:text-[15px]">
-            {isAnalyzing
-              ? 'Membaca resolusi, durasi, dan format media langsung di perangkat Anda.'
-              : 'Kompres hemat kuota, pertegas detail foto hingga 2K/4K/8K, koreksi warna, serta rapikan video untuk WhatsApp, Instagram, dan TikTok.'}
-          </p>
-        </div>
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-center gap-8 sm:gap-10">
+        {/* Editorial Hero Header */}
+        <header className="flex max-w-2xl flex-col items-center text-center">
+          <div className="mb-4 flex items-center gap-3">
+            <span className="h-px w-7 bg-[var(--border-strong)]" aria-hidden="true" />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+              STUDIO MEDIA LOKAL · BY AMDZ
+            </span>
+            <span className="h-px w-7 bg-[var(--border-strong)]" aria-hidden="true" />
+          </div>
 
-        {/* Error Banner */}
+          <h1
+            className="font-semibold tracking-[-0.03em] text-[var(--text-primary)]"
+            style={{
+              fontSize: 'clamp(1.85rem, 3.6vw, 2.75rem)',
+              lineHeight: 1.14,
+            }}
+          >
+            {isAnalyzing ? (
+              'Memeriksa file Anda…'
+            ) : (
+              <>
+                Optimalkan Foto &amp; Video{' '}
+                <span className="text-[var(--accent-primary)]">Tanpa Ribet</span>
+              </>
+            )}
+          </h1>
+
+          <p className="mt-3.5 max-w-xl text-sm leading-relaxed text-[var(--text-secondary)] sm:text-[15px]">
+            {isAnalyzing
+              ? 'Membaca resolusi, durasi, dan kesiapan media langsung di perangkat Anda.'
+              : 'Kompres, jernihkan hingga kualitas HD, dan ubah format media langsung di perangkat Anda. Cepat, tetap bening, dan file tidak pernah diunggah ke server.'}
+          </p>
+
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-[11px] font-medium text-[var(--text-secondary)] tabular-nums">
+            <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-1">
+              100% Lokal di Perangkat
+            </span>
+            <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-1">
+              Hingga {queueLimits.maxTotal} File Sekaligus
+            </span>
+            <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-1">
+              Siap WhatsApp, IG &amp; TikTok
+            </span>
+          </div>
+        </header>
+
+        {/* Validation Error Banner */}
         {status === 'error' && errorMessage && (
           <div
             role="alert"
             data-testid="upload-error-banner"
-            className="flex w-full max-w-xl items-start gap-2.5 rounded-2xl border border-[var(--status-err-border)] bg-[var(--status-err-bg)] px-4 py-3 text-sm text-[var(--status-err-ink)]"
+            className="flex w-full max-w-xl items-start gap-3 rounded-2xl border border-[var(--status-err-border)] bg-[var(--status-err-bg)] px-4 py-3.5 text-sm text-[var(--status-err-ink)]"
           >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <div className="min-w-0 flex-1">
@@ -150,138 +184,169 @@ export function UploadZone({
           </div>
         )}
 
-        {/* Dual Interactive Liquid Glass Studio Entry Cards */}
-        <div className="grid w-full grid-cols-1 gap-4 md:grid-cols-2">
-          {/* Card 1: Studio Foto */}
+        {/* Dual Elevated Interactive Studio Entry Cards */}
+        <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-2">
+          {/* Card 1: Studio Foto (Muted Olive accent harmony) */}
           <section
             data-testid="entry-photo-card"
             aria-label="Studio Foto"
-            className="km-glass group flex flex-col justify-between gap-5 rounded-[24px] border p-6 transition-colors duration-200 hover:border-[var(--border-active)] sm:p-7"
+            className="km-glass-strong group relative flex flex-col justify-between gap-6 rounded-[24px] border p-7 transition-all duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1 hover:border-[var(--border-strong)] md:p-8"
           >
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="flex items-center justify-between gap-2">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--glass-border-strong)] bg-[var(--bg-subtle)] text-[var(--accent-highlight)]">
+                <div
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl border"
+                  style={{
+                    backgroundColor: 'var(--accent-olive-soft)',
+                    borderColor: 'var(--status-ok-border)',
+                    color: 'var(--accent-olive)',
+                  }}
+                >
                   {isAnalyzing ? (
                     <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
                   ) : (
-                    <ImageIcon className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+                    <Camera className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
                   )}
                 </div>
-                <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--text-secondary)]">
-                  Hingga {queueLimits.maxPhotos} foto
+
+                <span
+                  className="rounded-full border px-3 py-1 text-[11px] font-semibold tabular-nums"
+                  style={{
+                    backgroundColor: 'var(--accent-gold-soft)',
+                    borderColor: 'var(--border-hairline)',
+                    color: 'var(--accent-gold)',
+                  }}
+                >
+                  RealPhoto · 2K–8K
                 </span>
               </div>
 
               <div>
-                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Studio Foto</h2>
-                <p className="mt-1.5 text-xs leading-relaxed text-[var(--text-secondary)] sm:text-[13px]">
-                  Kompres tajam tanpa buram, model RealPhoto &amp; High Quality hingga 2K/4K/8K, 12
-                  filter warna, serta potong dan koreksi lengkap.
+                <h2 className="text-xl font-semibold text-[var(--text-primary)]">Studio Foto</h2>
+                <p className="mt-2 text-[13px] leading-relaxed text-[var(--text-secondary)] sm:text-sm">
+                  Kompres presisi, jernihkan hingga 2K–8K tanpa ubah gaya asli, 12 filter warna,
+                  dan potong rasio.
                 </p>
               </div>
             </div>
 
-            <div className="space-y-3 pt-1">
+            <div className="space-y-3 border-t border-[var(--border-hairline)] pt-5">
               <Button
                 variant="primary"
                 size="lg"
                 disabled={isAnalyzing}
                 data-testid="choose-photo-btn"
                 onClick={() => photoInputRef.current?.click()}
-                className="min-h-[44px] w-full font-semibold"
+                className="min-h-[46px] w-full text-sm font-semibold"
               >
                 Pilih Foto
               </Button>
-              <p className="text-center text-[11px] font-medium text-[var(--text-muted)]">
-                JPG · PNG · WebP · AVIF
-              </p>
+              <div className="flex items-center justify-between text-[11px] font-medium text-[var(--text-muted)] tabular-nums">
+                <span>JPG · PNG · WebP · AVIF</span>
+                <span>Maks. {queueLimits.maxPhotos} foto</span>
+              </div>
             </div>
           </section>
 
-          {/* Card 2: Studio Video */}
+          {/* Card 2: Studio Video (Dusty Terracotta accent harmony) */}
           <section
             data-testid="entry-video-card"
             aria-label="Studio Video"
-            className="km-glass group flex flex-col justify-between gap-5 rounded-[24px] border p-6 transition-colors duration-200 hover:border-[var(--border-active)] sm:p-7"
+            className="km-glass-strong group relative flex flex-col justify-between gap-6 rounded-[24px] border p-7 transition-all duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1 hover:border-[var(--border-strong)] md:p-8"
           >
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="flex items-center justify-between gap-2">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--glass-border-strong)] bg-[var(--bg-subtle)] text-[var(--accent-highlight)]">
+                <div
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl border"
+                  style={{
+                    backgroundColor: 'var(--accent-terracotta-soft)',
+                    borderColor: 'var(--status-err-border)',
+                    color: 'var(--accent-terracotta)',
+                  }}
+                >
                   {isAnalyzing ? (
                     <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
                   ) : (
                     <Film className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
                   )}
                 </div>
-                <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--text-secondary)]">
-                  Hingga {queueLimits.maxVideos} video
+
+                <span
+                  className="rounded-full border px-3 py-1 text-[11px] font-semibold tabular-nums"
+                  style={{
+                    backgroundColor: 'var(--accent-gold-soft)',
+                    borderColor: 'var(--border-hairline)',
+                    color: 'var(--accent-gold)',
+                  }}
+                >
+                  1080p HD · Color Grade
                 </span>
               </div>
 
               <div>
-                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Studio Video</h2>
-                <p className="mt-1.5 text-xs leading-relaxed text-[var(--text-secondary)] sm:text-[13px]">
-                  Kompres hemat kuota, jernihkan ke 1080p HD, 7 filter warna langsung, potong durasi,
-                  stabilkan rekaman, atur audio, dan tanam subtitle.
+                <h2 className="text-xl font-semibold text-[var(--text-primary)]">Studio Video</h2>
+                <p className="mt-2 text-[13px] leading-relaxed text-[var(--text-secondary)] sm:text-sm">
+                  Kompres HD, penjernihan 1080p, 7 color grading langsung, bandingkan
+                  sebelum–sesudah, potong durasi, audio, &amp; subtitle.
                 </p>
               </div>
             </div>
 
-            <div className="space-y-3 pt-1">
+            <div className="space-y-3 border-t border-[var(--border-hairline)] pt-5">
               <Button
                 variant="primary"
                 size="lg"
                 disabled={isAnalyzing}
                 data-testid="choose-video-btn"
                 onClick={() => videoInputRef.current?.click()}
-                className="min-h-[44px] w-full font-semibold"
+                className="min-h-[46px] w-full text-sm font-semibold"
               >
                 Pilih Video
               </Button>
-              <p className="text-center text-[11px] font-medium text-[var(--text-muted)]">
-                MP4 · MOV · WebM · MKV
-              </p>
+              <div className="flex items-center justify-between text-[11px] font-medium text-[var(--text-muted)] tabular-nums">
+                <span>MP4 · MOV · WebM · MKV</span>
+                <span>Maks. {queueLimits.maxVideos} video</span>
+              </div>
             </div>
           </section>
         </div>
 
         {/* Quiet 3-Step Flow Strip & Drag Hint */}
-        <div className="flex w-full flex-col items-center gap-2.5">
+        <div className="flex w-full flex-col items-center gap-3">
           <div
             data-testid="landing-flow-strip"
-            className="km-glass flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 rounded-2xl border px-4 py-2.5 text-xs text-[var(--text-secondary)] tabular-nums"
+            className="km-glass flex flex-wrap items-center justify-center gap-x-5 gap-y-2 rounded-2xl border px-5 py-3 text-xs text-[var(--text-secondary)] tabular-nums"
           >
-            <span>
-              <strong className="font-semibold text-[var(--text-primary)]">1.</strong> Pilih foto
-              atau video
+            <span className="flex items-center gap-1.5">
+              <span className="font-semibold text-[var(--accent-gold)]">01</span>
+              <span>Pilih foto atau video</span>
             </span>
-            <span aria-hidden="true" className="text-[var(--text-muted)]">
-              →
+            <span aria-hidden="true" className="text-[var(--border-strong)]">
+              ·
             </span>
-            <span>
-              <strong className="font-semibold text-[var(--text-primary)]">2.</strong> Atur kualitas
-              &amp; tampilan
+            <span className="flex items-center gap-1.5">
+              <span className="font-semibold text-[var(--accent-gold)]">02</span>
+              <span>Atur kualitas &amp; tampilan</span>
             </span>
-            <span aria-hidden="true" className="text-[var(--text-muted)]">
-              →
+            <span aria-hidden="true" className="text-[var(--border-strong)]">
+              ·
             </span>
-            <span>
-              <strong className="font-semibold text-[var(--text-primary)]">3.</strong> Unduh atau
-              kirim
+            <span className="flex items-center gap-1.5">
+              <span className="font-semibold text-[var(--accent-gold)]">03</span>
+              <span>Unduh atau kirim</span>
             </span>
           </div>
 
           <p className="text-center text-[11px] text-[var(--text-muted)] tabular-nums">
-            Atau tarik &amp; lepas campuran foto/video ke layar ini (maksimal {queueLimits.maxTotal}{' '}
-            file · {queueLimits.label}).
+            Atau tarik &amp; lepas campuran foto dan video langsung ke layar ini ({queueLimits.label}).
           </p>
         </div>
       </div>
 
-      {/* Quiet Landing Footer */}
+      {/* Quiet Editorial Landing Footer */}
       <footer
         data-testid="landing-footer"
-        className="pt-6 text-center text-[11px] text-[var(--text-muted)]"
+        className="pt-8 text-center text-[11px] text-[var(--text-muted)]"
       >
         Kompresor Media · BY AMDZ · Diproses 100% lokal di perangkat Anda
       </footer>

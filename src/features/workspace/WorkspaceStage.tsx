@@ -488,7 +488,7 @@ export function WorkspaceStage({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`bg-liquid-stage relative flex min-h-[42vh] w-full min-w-0 flex-1 flex-col items-center justify-center gap-3 px-3 py-4 transition-colors sm:min-h-[50vh] sm:px-6 sm:py-6 lg:min-h-[calc(100vh-56px)] ${
+        className={`bg-warm-stage relative flex min-h-[44vh] w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 px-4 py-5 transition-colors sm:min-h-[52vh] sm:px-7 sm:py-6 lg:min-h-[calc(100vh-60px)] lg:px-8 lg:py-7 ${
           isDraggingOverStage ? 'ring-2 ring-inset ring-[var(--border-active)]' : ''
         }`}
       >
@@ -809,7 +809,7 @@ export function WorkspaceStage({
       </section>
 
       {/* Right Inspector Panel */}
-      <aside className="km-glass flex w-full shrink-0 flex-col gap-4 border-t p-4 pb-24 sm:p-5 md:pb-6 lg:w-[380px] lg:border-l lg:border-t-0">
+      <aside className="km-glass flex w-full shrink-0 flex-col gap-5 border-t p-5 pb-24 sm:p-6 md:px-7 md:pb-8 lg:w-[404px] xl:w-[424px] lg:border-l lg:border-t-0 lg:p-6">
         {isImage ? (
           <PhotoControlPanel
             selectedPresetId={selectedPresetId}

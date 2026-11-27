@@ -31,15 +31,15 @@ export function WorkspaceHeader({
   const isDark = theme === 'dark';
 
   return (
-    <header className="km-glass-strong sticky top-0 z-30 h-14 border-b transition-colors">
-      <div className="mx-auto flex h-full max-w-[1680px] items-center justify-between gap-2 px-3 sm:px-6">
+    <header className="km-glass-strong sticky top-0 z-30 h-[60px] border-b transition-colors">
+      <div className="mx-auto flex h-full max-w-[1720px] items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-2.5">
           <svg
             width="20"
             height="20"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="var(--accent-highlight)"
+            stroke="var(--accent-gold)"
             strokeWidth="1.75"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -53,13 +53,13 @@ export function WorkspaceHeader({
             <circle cx="12" cy="12" r="3" />
           </svg>
 
-          <div className="flex min-w-0 items-baseline gap-2">
-            <span className="truncate text-sm font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-[15px] font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
               Kompresor Media
             </span>
             <span
               data-testid="brand-by-amdz"
-              className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent-highlight)]"
+              className="shrink-0 rounded-full border border-[var(--border-hairline)] bg-[var(--accent-gold-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--accent-gold)]"
             >
               BY AMDZ
             </span>
@@ -68,20 +68,24 @@ export function WorkspaceHeader({
           {hasMedia && activeMediaKind && (
             <span
               data-testid="active-studio-badge"
-              className="hidden rounded-full border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--text-primary)] sm:inline-block"
+              className={`hidden rounded-full border px-2.5 py-0.5 text-[11px] font-semibold sm:inline-block ${
+                activeMediaKind === 'image'
+                  ? 'border-[var(--status-ok-border)] bg-[var(--accent-olive-soft)] text-[var(--accent-olive)]'
+                  : 'border-[var(--status-err-border)] bg-[var(--accent-terracotta-soft)] text-[var(--accent-terracotta)]'
+              }`}
             >
               {activeMediaKind === 'image' ? 'Studio Foto' : 'Studio Video'}
             </span>
           )}
 
           {hasMedia && itemCount > 1 && (
-            <span className="hidden rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] tabular-nums md:inline-block">
+            <span className="hidden rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] tabular-nums md:inline-block">
               {itemCount}/{maxTotal} file
             </span>
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
           {!hasMedia && (
             <span className="hidden text-xs text-[var(--text-muted)] md:inline">
               100% lokal di perangkat Anda
@@ -126,23 +130,19 @@ export function WorkspaceHeader({
             type="button"
             data-testid="theme-toggle-btn"
             onClick={onToggleTheme}
-            aria-label={
-              isDark
-                ? 'Ganti ke tema Liquid Glass Biru Cerah'
-                : 'Ganti ke tema Liquid Glass Biru Malam'
-            }
-            title={isDark ? 'Liquid Glass Biru Cerah' : 'Liquid Glass Biru Malam'}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 text-xs font-medium text-[var(--text-secondary)] shadow-[var(--glass-highlight)] transition-all hover:border-[var(--border-active)] hover:text-[var(--text-primary)] active:scale-[0.97]"
+            aria-label={isDark ? 'Ganti ke tema Ivory Hangat' : 'Ganti ke tema Espresso Malam'}
+            title={isDark ? 'Ivory Hangat' : 'Espresso Malam'}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 text-xs font-medium text-[var(--text-secondary)] shadow-[var(--glass-highlight)] transition-all duration-200 hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] active:scale-[0.97]"
           >
             {isDark ? (
               <>
-                <Sun className="h-3.5 w-3.5 text-[var(--accent-highlight)]" aria-hidden="true" />
-                <span className="hidden sm:inline">Terang</span>
+                <Sun className="h-3.5 w-3.5 text-[var(--accent-gold)]" aria-hidden="true" />
+                <span className="hidden sm:inline">Espresso Malam</span>
               </>
             ) : (
               <>
                 <Moon className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden="true" />
-                <span className="hidden sm:inline">Gelap</span>
+                <span className="hidden sm:inline">Ivory Hangat</span>
               </>
             )}
           </button>

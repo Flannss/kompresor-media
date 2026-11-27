@@ -89,9 +89,9 @@ export interface VideoControlPanelProps {
 }
 
 const VIDEO_TABS = [
-  { id: 'utama' as const, label: 'Tujuan & Format' },
+  { id: 'utama' as const, label: 'Tujuan' },
   { id: 'tampilan' as const, label: 'Jernihkan & Warna' },
-  { id: 'lanjutan' as const, label: 'Potong & Lanjutan' },
+  { id: 'lanjutan' as const, label: 'Lanjutan' },
 ];
 
 const VIDEO_FORMAT_OPTIONS: ReadonlyArray<{ value: VideoOutputFormat; label: string }> = [

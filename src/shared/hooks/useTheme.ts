@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 export type AppTheme = 'light' | 'dark';
 
-export const THEME_STORAGE_KEY = 'km-theme-v2';
+export const THEME_STORAGE_KEY = 'km-theme-v3';
 
 function readStoredTheme(): AppTheme {
   try {
