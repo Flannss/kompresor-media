@@ -83,9 +83,16 @@ export function MediaInfoBar({
         imageEdit && imageEdit.targetResolution !== 'original'
           ? ` · ${imageEdit.targetResolution.toUpperCase()}`
           : '';
-      const dimsLabel = plannedTarget
-        ? `${imageMeta.width} × ${imageMeta.height} → ${plannedTarget.width} × ${plannedTarget.height} px${targetTag}`
-        : `${imageProcessResult.outputWidth} × ${imageProcessResult.outputHeight} px${targetTag}`;
+      const dimsMismatch = Boolean(
+        plannedTarget &&
+          (imageProcessResult.outputWidth !== plannedTarget.width ||
+            imageProcessResult.outputHeight !== plannedTarget.height)
+      );
+      const isPreviewOnly = needsFullResExport || dimsMismatch;
+      const dimsLabel =
+        isPreviewOnly && plannedTarget
+          ? `Target ${plannedTarget.width} × ${plannedTarget.height} px${targetTag}`
+          : `${imageProcessResult.outputWidth} × ${imageProcessResult.outputHeight} px${targetTag}`;
 
       return (
         <div
@@ -96,14 +103,31 @@ export function MediaInfoBar({
           <span aria-hidden="true" className="text-[var(--text-muted)]">
             ·
           </span>
-          <span data-testid="media-size-comparison">
-            {formatBytes(imageProcessResult.inputBytes)} →{' '}
-            {formatBytes(imageProcessResult.outputBytes)}
-          </span>
-          <span aria-hidden="true" className="text-[var(--text-muted)]">
-            ·
-          </span>
-          {renderDeltaBadge(imageProcessResult.inputBytes, imageProcessResult.outputBytes)}
+          {isPreviewOnly ? (
+            <>
+              <span data-testid="media-size-comparison">
+                Pratinjau {imageProcessResult.outputWidth}×{imageProcessResult.outputHeight} (
+                {formatBytes(imageProcessResult.outputBytes)})
+              </span>
+              <span aria-hidden="true" className="text-[var(--text-muted)]">
+                ·
+              </span>
+              <span data-testid="media-savings" className="text-[var(--text-secondary)]">
+                Penuh saat simpan
+              </span>
+            </>
+          ) : (
+            <>
+              <span data-testid="media-size-comparison">
+                {formatBytes(imageProcessResult.inputBytes)} →{' '}
+                {formatBytes(imageProcessResult.outputBytes)}
+              </span>
+              <span aria-hidden="true" className="text-[var(--text-muted)]">
+                ·
+              </span>
+              {renderDeltaBadge(imageProcessResult.inputBytes, imageProcessResult.outputBytes)}
+            </>
+          )}
           {imageProcessStatus === 'processing' && (
             <>
               <span aria-hidden="true" className="text-[var(--text-muted)]">

@@ -9,6 +9,7 @@ import type {
 } from '../contracts';
 import { applyPhotoFilterToImageData } from '../grading/photoFilters';
 import { compute1080pTargetDimensions, hasActiveColorGrade } from '../shared/colorGrades';
+import { PRO_PHOTO_TOOL_LABELS } from './proTools';
 
 export interface Dimensions {
   width: number;
@@ -822,6 +823,11 @@ export function formatOutputMimeShort(mime: ImageOutputFormat): string {
 
 export function getActiveImageModuleLabels(edit: ImageEditState): string[] {
   const labels = ['Kompres', PHOTO_QUALITY_MODEL_LABELS[edit.qualityModel] ?? 'RealPhoto'];
+  if (edit.proTools?.length && (edit.proToolStrength ?? 80) > 0) {
+    for (const toolId of edit.proTools) {
+      labels.push(PRO_PHOTO_TOOL_LABELS[toolId] ?? toolId);
+    }
+  }
   if (edit.targetResolution !== 'original') {
     labels.push(edit.targetResolution.toUpperCase());
   }

@@ -6,24 +6,31 @@ import {
   FlipHorizontal2,
   FlipVertical2,
   Lock,
+  RotateCcw,
   RotateCw,
 } from 'lucide-react';
 import { Button } from '../../design-system/components/Button';
 import { SegmentedTabs } from '../../design-system/components/SegmentedTabs';
 import { Slider } from '../../design-system/components/Slider';
 import type {
+  ColouriseToneProfile,
   ImageEditState,
   ImageOutputFormat,
   ImageProcessResult,
   PhotoFilterId,
   PhotoQualityModel,
   PhotoTargetResolution,
+  ProPhotoToolId,
 } from '../../engines/contracts';
 import {
   getPhotoFilterCssPreview,
   PHOTO_FILTER_PRESETS,
 } from '../../engines/grading/photoFilters';
 import { PHOTO_QUALITY_MODEL_LABELS } from '../../engines/image/pixelOps';
+import {
+  COLOURISE_PROFILE_OPTIONS,
+  PRO_PHOTO_TOOL_META,
+} from '../../engines/image/proTools';
 import {
   getMediaPreset,
   PHOTO_PRESET_IDS,
@@ -59,7 +66,7 @@ export interface PhotoControlPanelProps {
 
 const PHOTO_TABS = [
   { id: 'utama' as const, label: 'Tujuan' },
-  { id: 'tampilan' as const, label: 'Kualitas & Filter' },
+  { id: 'tampilan' as const, label: 'Kualitas & Alat' },
   { id: 'edit' as const, label: 'Edit' },
 ];
 
@@ -159,11 +166,24 @@ export function PhotoControlPanel({
   const isLosslessPng = imageEdit.outputFormat === 'image/png';
   const hasTargetSize = !isLosslessPng && imageEdit.targetSizeKB !== null;
   const filterActive = imageEdit.photoFilterId !== 'original';
+  const activeTools = imageEdit.proTools ?? [];
+  const colouriseActive = activeTools.includes('colourise');
   const hasHighTarget =
     imageEdit.targetResolution === '2k' ||
     imageEdit.targetResolution === '3k' ||
     imageEdit.targetResolution === '4k' ||
     imageEdit.targetResolution === '8k';
+
+  const toggleProTool = (toolId: ProPhotoToolId) => {
+    const exists = activeTools.includes(toolId);
+    const nextTools = exists
+      ? activeTools.filter((id) => id !== toolId)
+      : [...activeTools, toolId];
+    onUpdateImageEdit(
+      { proTools: nextTools },
+      { commitHistory: true, preservePreset: true }
+    );
+  };
 
   const formatOptions: ReadonlyArray<{ value: ImageOutputFormat; label: string }> = avifSupported
     ? [
@@ -187,15 +207,24 @@ export function PhotoControlPanel({
         <button
           type="button"
           onClick={() => setActiveTab('tampilan')}
-          className="rounded-lg border border-[var(--border-active)] bg-[var(--bg-subtle)] px-2 py-0.5 font-semibold text-[var(--text-primary)]"
+          className="rounded-full border border-[var(--border-active)] bg-[var(--bg-subtle)] px-2.5 py-0.5 font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--border-strong)]"
         >
           {PHOTO_QUALITY_MODEL_LABELS[imageEdit.qualityModel] ?? 'RealPhoto'}
         </button>
+        {activeTools.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('tampilan')}
+            className="rounded-full border border-[var(--border-active)] bg-[var(--accent-gold-soft)] px-2.5 py-0.5 font-semibold text-[var(--accent-gold)]"
+          >
+            {activeTools.length} Alat Foto
+          </button>
+        )}
         {imageEdit.targetResolution !== 'original' && (
           <button
             type="button"
             onClick={() => setActiveTab('tampilan')}
-            className="rounded-lg border border-[var(--border-active)] bg-[var(--accent-primary)]/20 px-2 py-0.5 font-semibold text-[var(--accent-highlight)]"
+            className="rounded-full border border-[var(--border-active)] bg-[var(--accent-primary)]/18 px-2.5 py-0.5 font-semibold text-[var(--accent-highlight)]"
           >
             {imageEdit.targetResolution.toUpperCase()}
           </button>
@@ -204,7 +233,7 @@ export function PhotoControlPanel({
           <button
             type="button"
             onClick={() => setActiveTab('tampilan')}
-            className="rounded-lg border border-[var(--border-active)] bg-[var(--accent-primary)]/20 px-2 py-0.5 font-semibold text-[var(--accent-highlight)]"
+            className="rounded-full border border-[var(--border-active)] bg-[var(--accent-primary)]/18 px-2.5 py-0.5 font-semibold text-[var(--accent-highlight)]"
           >
             Filter Aktif
           </button>
@@ -213,7 +242,7 @@ export function PhotoControlPanel({
           <button
             type="button"
             onClick={() => setActiveTab('edit')}
-            className="rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2 py-0.5 font-medium text-[var(--text-secondary)]"
+            className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 py-0.5 font-medium text-[var(--text-secondary)]"
           >
             Bingkai Diubah
           </button>
@@ -349,8 +378,8 @@ export function PhotoControlPanel({
                 />
               </button>
 
-              {advancedOpen && (
-                <div className="mt-3 space-y-3">
+              <div className={`km-accordion-grid ${advancedOpen ? 'mt-3' : ''}`} data-open={advancedOpen ? 'true' : 'false'}>
+                <div className={`km-accordion-inner space-y-3 ${advancedOpen ? '' : 'pointer-events-none invisible'}`}>
                   <div>
                     <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                       Batas Sisi Panjang (saat Resolusi Asli)
@@ -372,7 +401,7 @@ export function PhotoControlPanel({
                                 maxEdgePx: opt.value,
                               })
                             }
-                            className={`min-h-[36px] rounded-lg border text-xs font-medium tabular-nums transition-all ${
+                            className={`min-h-[36px] rounded-full border text-xs font-medium tabular-nums transition-all ${
                               active
                                 ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                                 : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
@@ -405,7 +434,7 @@ export function PhotoControlPanel({
                                   { commitHistory: true, preservePreset: true }
                                 )
                               }
-                              className={`min-h-[34px] rounded-lg border px-2.5 text-[11px] font-medium tabular-nums transition-all ${
+                              className={`min-h-[34px] rounded-full border px-2.5 text-[11px] font-medium tabular-nums transition-all ${
                                 active
                                   ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                                   : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
@@ -419,15 +448,145 @@ export function PhotoControlPanel({
                     </div>
                   )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB 2: KUALITAS & FILTER */}
+      {/* TAB 2: KUALITAS & ALAT */}
       {activeTab === 'tampilan' && (
         <div className="space-y-4">
+          {/* 9 Real Pixel-Level Pro Photo Tools */}
+          <section className="space-y-2.5 rounded-[22px] border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5 shadow-[var(--glass-highlight)]">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h3 className="font-editorial text-[14px] font-semibold text-[var(--text-primary)]">
+                  Alat Sempurnakan Foto
+                </h3>
+                <span className="text-[10.5px] text-[var(--text-muted)]">
+                  Pemrosesan piksel lokal langsung di perangkat
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {activeTools.length > 0 && (
+                  <button
+                    type="button"
+                    data-testid="reset-pro-tools-btn"
+                    onClick={() =>
+                      onUpdateImageEdit(
+                        { proTools: [] },
+                        { commitHistory: true, preservePreset: true }
+                      )
+                    }
+                    className="inline-flex min-h-[30px] items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 text-[10.5px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+                  >
+                    <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                    <span>Reset</span>
+                  </button>
+                )}
+                <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-0.5 text-[10.5px] font-semibold text-[var(--accent-gold)] tabular-nums">
+                  {activeTools.length > 0 ? `${activeTools.length} aktif` : '9 alat'}
+                </span>
+              </div>
+            </div>
+
+            <div
+              className="grid grid-cols-2 gap-2"
+              role="group"
+              aria-label="Alat sempurnakan foto"
+            >
+              {PRO_PHOTO_TOOL_META.map((tool, idx) => {
+                const active = activeTools.includes(tool.id);
+                return (
+                  <button
+                    key={tool.id}
+                    type="button"
+                    data-testid={`pro-tool-${tool.id}`}
+                    aria-pressed={active}
+                    title={tool.desc}
+                    onClick={() => toggleProTool(tool.id)}
+                    className={`flex min-h-[50px] flex-col items-start justify-center rounded-2xl border px-3 py-2 text-left transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.985] ${
+                      idx === 8 ? 'col-span-2' : ''
+                    } ${
+                      active
+                        ? 'border-[var(--border-active)] bg-[var(--accent-gold-soft)] text-[var(--text-primary)] ring-1 ring-[var(--border-active)]'
+                        : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    <span
+                      className={`text-[11.5px] font-semibold ${
+                        active ? 'text-[var(--accent-highlight)]' : 'text-[var(--text-primary)]'
+                      }`}
+                    >
+                      {tool.title}
+                    </span>
+                    <span className="mt-0.5 line-clamp-1 text-[10px] leading-snug text-[var(--text-muted)]">
+                      {tool.desc}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {colouriseActive && (
+              <div className="space-y-1.5 border-t border-[var(--border-hairline)] pt-2.5">
+                <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
+                  Profil Warna (Warnai Foto)
+                </span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {COLOURISE_PROFILE_OPTIONS.map((opt) => {
+                    const selected =
+                      (imageEdit.colouriseProfile ?? 'warm-portrait') === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        data-testid={`colourise-profile-${opt.id}`}
+                        aria-pressed={selected}
+                        onClick={() =>
+                          onUpdateImageEdit(
+                            { colouriseProfile: opt.id as ColouriseToneProfile },
+                            { commitHistory: true, preservePreset: true }
+                          )
+                        }
+                        className={`min-h-[36px] rounded-full border px-2 text-[10.5px] font-semibold transition-all ${
+                          selected
+                            ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                            : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {activeTools.length > 0 && (
+              <div className="border-t border-[var(--border-hairline)] pt-2.5">
+                <Slider
+                  label="Kekuatan Alat"
+                  testId="slider-pro-tool-strength"
+                  min={0}
+                  max={100}
+                  step={5}
+                  defaultValue={80}
+                  value={imageEdit.proToolStrength ?? 80}
+                  valueLabel={`${imageEdit.proToolStrength ?? 80}%`}
+                  onChange={(val) =>
+                    onUpdateImageEdit(
+                      { proToolStrength: val },
+                      { commitHistory: false, preservePreset: true }
+                    )
+                  }
+                  onCommit={() => onCommitSnapshot()}
+                />
+              </div>
+            )}
+          </section>
+
           {/* Quality Model Selector */}
           <section className="space-y-2">
             <h3 className="text-xs font-semibold text-[var(--text-primary)]">
@@ -756,24 +915,32 @@ export function PhotoControlPanel({
           </div>
 
           {/* Drawer 1: Cahaya & Detail */}
-          <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5">
+          <div className="rounded-[22px] border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5 shadow-[var(--glass-highlight)]">
             <button
               type="button"
               data-testid="drawer-light-detail-btn"
+              aria-expanded={lightDrawerOpen}
               onClick={() => setLightDrawerOpen((v) => !v)}
               className="flex min-h-[34px] w-full items-center justify-between text-xs font-semibold text-[var(--text-primary)]"
             >
               <span>Cahaya &amp; Detail</span>
               <ChevronDown
-                className={`h-4 w-4 text-[var(--text-muted)] transition-transform ${
+                className={`h-4 w-4 text-[var(--text-muted)] transition-transform duration-200 ${
                   lightDrawerOpen ? 'rotate-180' : ''
                 }`}
                 aria-hidden="true"
               />
             </button>
 
-            {lightDrawerOpen && (
-              <div data-testid="drawer-light-detail" className="mt-3 space-y-3 border-t border-[var(--border-hairline)] pt-3">
+            <div
+              className={`km-accordion-grid ${lightDrawerOpen ? 'mt-3 border-t border-[var(--border-hairline)] pt-3' : ''}`}
+              data-open={lightDrawerOpen ? 'true' : 'false'}
+            >
+              <div
+                data-testid="drawer-light-detail"
+                aria-hidden={!lightDrawerOpen}
+                className={`km-accordion-inner space-y-3 ${lightDrawerOpen ? '' : 'pointer-events-none invisible'}`}
+              >
                 <Slider
                   label="Kecerahan"
                   testId="slider-brightness"
@@ -865,28 +1032,36 @@ export function PhotoControlPanel({
                   onCommit={() => onCommitSnapshot()}
                 />
               </div>
-            )}
+            </div>
           </div>
 
           {/* Drawer 2: Warna */}
-          <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5">
+          <div className="rounded-[22px] border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5 shadow-[var(--glass-highlight)]">
             <button
               type="button"
               data-testid="drawer-color-btn"
+              aria-expanded={colorDrawerOpen}
               onClick={() => setColorDrawerOpen((v) => !v)}
               className="flex min-h-[34px] w-full items-center justify-between text-xs font-semibold text-[var(--text-primary)]"
             >
               <span>Warna</span>
               <ChevronDown
-                className={`h-4 w-4 text-[var(--text-muted)] transition-transform ${
+                className={`h-4 w-4 text-[var(--text-muted)] transition-transform duration-200 ${
                   colorDrawerOpen ? 'rotate-180' : ''
                 }`}
                 aria-hidden="true"
               />
             </button>
 
-            {colorDrawerOpen && (
-              <div data-testid="drawer-color" className="mt-3 space-y-3 border-t border-[var(--border-hairline)] pt-3">
+            <div
+              className={`km-accordion-grid ${colorDrawerOpen ? 'mt-3 border-t border-[var(--border-hairline)] pt-3' : ''}`}
+              data-open={colorDrawerOpen ? 'true' : 'false'}
+            >
+              <div
+                data-testid="drawer-color"
+                aria-hidden={!colorDrawerOpen}
+                className={`km-accordion-inner space-y-3 ${colorDrawerOpen ? '' : 'pointer-events-none invisible'}`}
+              >
                 <Slider
                   label="Saturasi"
                   testId="slider-saturation"
@@ -948,7 +1123,7 @@ export function PhotoControlPanel({
                   onCommit={() => onCommitSnapshot()}
                 />
               </div>
-            )}
+            </div>
           </div>
         </div>
       )}

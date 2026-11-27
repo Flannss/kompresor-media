@@ -1,15 +1,16 @@
 :root,
 [data-theme='light'] {
+  --font-editorial: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
   /* Ivory Hangat — Sunlit Warm Ivory Editorial Default */
   --bg-app: #fff9f0;
   --bg-app-gradient:
-    radial-gradient(ellipse 80% 55% at 14% 0%, rgba(212, 185, 150, 0.28), transparent 58%),
-    radial-gradient(ellipse 65% 50% at 88% 95%, rgba(181, 101, 77, 0.09), transparent 56%),
-    radial-gradient(ellipse 52% 44% at 78% 12%, rgba(96, 108, 82, 0.08), transparent 54%),
+    radial-gradient(ellipse 84% 58% at 12% -2%, rgba(212, 185, 150, 0.34), transparent 60%),
+    radial-gradient(ellipse 68% 54% at 88% 96%, rgba(181, 101, 77, 0.11), transparent 58%),
+    radial-gradient(ellipse 56% 48% at 82% 10%, rgba(96, 108, 82, 0.10), transparent 56%),
     #fff9f0;
   --bg-stage: #f3ebe0;
   --bg-stage-media: #ebe1d3;
-  --bg-surface: rgba(255, 252, 247, 0.86);
+  --bg-surface: rgba(255, 252, 247, 0.88);
   --bg-surface-strong: rgba(255, 252, 247, 0.96);
   --bg-surface-mobile: rgba(255, 251, 245, 0.98);
   --bg-elevated: #f6efe5;
@@ -17,13 +18,17 @@
   --surface-dock: rgba(255, 252, 247, 0.96);
   --surface-badge: rgba(26, 18, 13, 0.86);
 
-  --border-hairline: rgba(111, 78, 55, 0.16);
-  --border-strong: rgba(158, 123, 65, 0.46);
+  --border-hairline: rgba(111, 78, 55, 0.14);
+  --border-strong: rgba(158, 123, 65, 0.48);
   --border-active: #947036;
   --glass-highlight: inset 0 1px 0 rgba(255, 253, 248, 0.96);
   --shadow-soft:
-    0 12px 32px -16px rgba(26, 18, 13, 0.12),
-    0 2px 6px rgba(59, 42, 31, 0.05);
+    0 12px 32px -16px rgba(26, 18, 13, 0.11),
+    0 2px 6px rgba(59, 42, 31, 0.04);
+  --shadow-card-hover:
+    0 22px 44px -18px rgba(26, 18, 13, 0.16),
+    0 4px 12px rgba(59, 42, 31, 0.06);
+  --grain-opacity: 0.025;
 
   --text-primary: #1a120d;
   --text-secondary: #544237;
@@ -74,9 +79,9 @@
   /* Espresso Malam — Rich Velvety Cocoa Toggle (Warm & Luminous, Never Pitch-Black) */
   --bg-app: #211712;
   --bg-app-gradient:
-    radial-gradient(ellipse 80% 55% at 16% 0%, rgba(176, 137, 104, 0.22), transparent 60%),
-    radial-gradient(ellipse 65% 50% at 86% 96%, rgba(181, 101, 77, 0.13), transparent 58%),
-    radial-gradient(ellipse 52% 44% at 78% 12%, rgba(158, 176, 140, 0.09), transparent 54%),
+    radial-gradient(ellipse 84% 58% at 14% -2%, rgba(176, 137, 104, 0.24), transparent 60%),
+    radial-gradient(ellipse 68% 54% at 86% 96%, rgba(181, 101, 77, 0.15), transparent 58%),
+    radial-gradient(ellipse 56% 48% at 80% 10%, rgba(158, 176, 140, 0.11), transparent 56%),
     #211712;
   --bg-stage: #2a1e17;
   --bg-stage-media: #2f221b;
@@ -88,13 +93,17 @@
   --surface-dock: rgba(52, 37, 28, 0.95);
   --surface-badge: rgba(26, 18, 13, 0.88);
 
-  --border-hairline: rgba(212, 185, 150, 0.18);
+  --border-hairline: rgba(212, 185, 150, 0.16);
   --border-strong: rgba(212, 178, 117, 0.48);
   --border-active: #d7b578;
   --glass-highlight: inset 0 1px 0 rgba(255, 249, 240, 0.1);
   --shadow-soft:
     0 16px 40px -18px rgba(10, 6, 4, 0.55),
     0 2px 8px rgba(10, 6, 4, 0.28);
+  --shadow-card-hover:
+    0 24px 48px -18px rgba(8, 5, 3, 0.68),
+    0 4px 14px rgba(8, 5, 3, 0.34);
+  --grain-opacity: 0.032;
 
   --text-primary: #fff9f0;
   --text-secondary: #dfcebc;

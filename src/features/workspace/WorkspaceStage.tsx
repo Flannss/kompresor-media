@@ -582,14 +582,14 @@ export function WorkspaceStage({
         {!isCropping && (
           <div
             data-testid="studio-stage-dock"
-            className="km-glass-lite flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-2xl border p-1.5"
+            className="km-glass-lite flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-[22px] border px-2 py-1.5 sm:rounded-full"
           >
             {isImage ? (
               <>
                 <div
                   role="group"
                   aria-label="Zoom Detail"
-                  className="inline-flex items-center gap-0.5 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-[11px]"
+                  className="inline-flex items-center gap-0.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-[11px]"
                 >
                   {(
                     [
@@ -604,7 +604,7 @@ export function WorkspaceStage({
                       data-testid={`photo-zoom-${z.id}-btn`}
                       aria-pressed={photoZoom === z.id}
                       onClick={() => setPhotoZoom(z.id)}
-                      className={`min-h-[34px] rounded-lg px-2 py-1 font-medium tabular-nums transition-colors ${
+                      className={`min-h-[34px] rounded-full px-2.5 py-1 font-medium tabular-nums transition-colors ${
                         photoZoom === z.id
                           ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -618,7 +618,7 @@ export function WorkspaceStage({
                   <div
                     role="group"
                     aria-label="Mode Pratinjau Foto"
-                    className="inline-flex items-center gap-0.5 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-[11px]"
+                    className="inline-flex items-center gap-0.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-[11px]"
                   >
                     <button
                       type="button"
@@ -628,7 +628,7 @@ export function WorkspaceStage({
                         setShowOriginalPhoto(false);
                         setPhotoViewMode('single');
                       }}
-                      className={`inline-flex min-h-[34px] items-center gap-1 rounded-lg px-2 py-1 font-medium transition-colors ${
+                      className={`inline-flex min-h-[34px] items-center gap-1 rounded-full px-2.5 py-1 font-medium transition-colors ${
                         photoViewMode === 'single'
                           ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -647,7 +647,7 @@ export function WorkspaceStage({
                           setShowOriginalPhoto(false);
                           setPhotoViewMode((v) => (v === 'split' ? 'single' : 'split'));
                         }}
-                        className={`inline-flex min-h-[34px] items-center gap-1 rounded-lg px-2 py-1 font-medium transition-colors ${
+                        className={`inline-flex min-h-[34px] items-center gap-1 rounded-full px-2.5 py-1 font-medium transition-colors ${
                           photoViewMode === 'split'
                             ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                             : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -668,7 +668,7 @@ export function WorkspaceStage({
                           v === 'side-by-side' ? 'single' : 'side-by-side'
                         );
                       }}
-                      className={`inline-flex min-h-[34px] items-center gap-1 rounded-lg px-2 py-1 font-medium transition-colors ${
+                      className={`inline-flex min-h-[34px] items-center gap-1 rounded-full px-2.5 py-1 font-medium transition-colors ${
                         photoViewMode === 'side-by-side'
                           ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -808,7 +808,7 @@ export function WorkspaceStage({
             <div
               role="group"
               aria-label="Latar Kanvas"
-              className="inline-flex flex-wrap items-center gap-0.5 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-[11px]"
+              className="inline-flex flex-wrap items-center gap-0.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-[11px]"
             >
               {(isImage
                 ? ([
@@ -829,7 +829,7 @@ export function WorkspaceStage({
                   data-testid={`backdrop-${bg.id}-btn`}
                   aria-pressed={backdrop === bg.id}
                   onClick={() => setBackdrop(bg.id)}
-                  className={`min-h-[32px] rounded-lg px-2 py-1 font-medium transition-colors ${
+                  className={`min-h-[32px] rounded-full px-2.5 py-1 font-medium transition-colors ${
                     backdrop === bg.id
                       ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'

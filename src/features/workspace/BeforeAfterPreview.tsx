@@ -94,7 +94,7 @@ export function BeforeAfterPreview({
       <div
         data-testid="photo-stage-frame"
         data-zoom={zoomLevel}
-        className={`relative flex max-h-[58vh] w-full max-w-[820px] items-center justify-center overflow-hidden rounded-2xl border border-[var(--glass-border)] transition-colors ${getBackdropClasses(backdrop)} ${
+        className={`relative flex max-h-[58vh] w-full max-w-[820px] items-center justify-center overflow-hidden rounded-[22px] border border-[var(--border-hairline)] transition-colors ${getBackdropClasses(backdrop)} ${
           isSideBySideActive ? 'p-2.5' : ''
         }`}
         style={{ boxShadow: 'var(--stage-shadow)' }}

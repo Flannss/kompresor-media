@@ -16,13 +16,27 @@ export function SegmentedTabs<T extends string>({
   onChange,
   ariaLabel,
 }: SegmentedTabsProps<T>) {
+  const activeIndex = Math.max(
+    0,
+    items.findIndex((item) => item.id === value)
+  );
+
   return (
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className="grid gap-1.5 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-subtle)] p-1.5"
+      className="relative grid rounded-full border border-[var(--border-hairline)] bg-[var(--bg-subtle)] p-1 shadow-[inset_0_1px_2px_rgba(26,18,13,0.06)]"
       style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
     >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-1 left-1 rounded-full bg-[var(--bg-surface-strong)] shadow-[var(--shadow-soft)] ring-1 ring-[var(--accent-gold)]/40 transition-transform duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+        style={{
+          width: `calc((100% - 8px) / ${items.length})`,
+          transform: `translateX(${activeIndex * 100}%)`,
+        }}
+      />
+
       {items.map((item) => {
         const active = item.id === value;
         return (
@@ -33,10 +47,10 @@ export function SegmentedTabs<T extends string>({
             aria-selected={active}
             data-testid={`tab-${item.id}`}
             onClick={() => onChange(item.id)}
-            className={`min-h-[42px] rounded-xl px-3 py-2 text-[12.5px] font-semibold leading-tight transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.98] ${
+            className={`relative z-10 min-h-[40px] rounded-full px-3 py-1.5 text-[12px] font-semibold leading-tight transition-colors duration-200 active:scale-[0.985] ${
               active
-                ? 'bg-[var(--bg-surface-strong)] text-[var(--text-primary)] shadow-[var(--shadow-soft)] ring-1 ring-[var(--accent-gold)]/45'
-                : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]/55 hover:text-[var(--text-primary)]'
+                ? 'text-[var(--text-primary)]'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
             {item.label}

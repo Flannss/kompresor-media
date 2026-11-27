@@ -106,6 +106,7 @@ export function cloneColorGrade(grade: ColorGradeState): ColorGradeState {
 export function cloneImageEdit(edit: ImageEditState): ImageEditState {
   return {
     ...edit,
+    proTools: [...(edit.proTools ?? [])],
     adjustments: { ...edit.adjustments },
     enhanceSuite: cloneEnhanceSuite(edit.enhanceSuite),
     colorGrade: cloneColorGrade(edit.colorGrade),
@@ -408,14 +409,14 @@ async function processPhotoItem(
       const items = state.items.map((it) =>
         it.id === itemId
           ? {
-              ...it,
-              status: 'done' as const,
-              progress: 100,
-              imageResult: result,
-              outputUrl: nextUrl,
-              errorMessage: null,
-              needsFullResExport: previewOnly,
-            }
+            ...it,
+            status: 'done' as const,
+            progress: 100,
+            imageResult: result,
+            outputUrl: nextUrl,
+            errorMessage: null,
+            needsFullResExport: previewOnly,
+          }
           : it
       );
       return {
@@ -475,25 +476,25 @@ async function processVideoItem(
     const items = state.items.map((it) =>
       it.id === itemId
         ? {
-            ...it,
-            status: 'processing' as const,
-            progress: 2,
-            videoProgress: {
-              requestId: `vid-${itemId}-${seq}`,
-              backend:
-                preferredBackend === 'ffmpeg-wasm-st'
-                  ? ('ffmpeg-wasm-st' as const)
-                  : ('webcodecs-mediabunny' as const),
-              stage: 'probing' as const,
-              ratio: 0.02,
-              elapsedMs: 0,
-              detail: 'Menyiapkan pemrosesan video…',
-            },
-            videoResult: null,
-            outputUrl: null,
-            errorMessage: null,
-            processSeq: seq,
-          }
+          ...it,
+          status: 'processing' as const,
+          progress: 2,
+          videoProgress: {
+            requestId: `vid-${itemId}-${seq}`,
+            backend:
+              preferredBackend === 'ffmpeg-wasm-st'
+                ? ('ffmpeg-wasm-st' as const)
+                : ('webcodecs-mediabunny' as const),
+            stage: 'probing' as const,
+            ratio: 0.02,
+            elapsedMs: 0,
+            detail: 'Menyiapkan pemrosesan video…',
+          },
+          videoResult: null,
+          outputUrl: null,
+          errorMessage: null,
+          processSeq: seq,
+        }
         : it
     );
     return {
@@ -928,7 +929,13 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     const active = get().items.find((i) => i.id === get().activeItemId);
 
     if (!active) {
-      const nextImg = cloneImageEdit(presetSpec.image);
+      const curImg = get().imageEdit;
+      const nextImg: ImageEditState = {
+        ...cloneImageEdit(presetSpec.image),
+        proTools: [...(curImg.proTools ?? [])],
+        proToolStrength: curImg.proToolStrength,
+        colouriseProfile: curImg.colouriseProfile,
+      };
       const nextVid = cloneVideoEdit(presetSpec.video);
       set((state) => {
         const pushed = pushSnapshot(state.photoHistory, state.photoHistoryIndex, nextImg);
@@ -980,6 +987,9 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       qualityModel:
         presetId === 'archive-hd' ? presetSpec.image.qualityModel : curImg.qualityModel,
       qualityModelStrength: curImg.qualityModelStrength,
+      proTools: [...(curImg.proTools ?? [])],
+      proToolStrength: curImg.proToolStrength,
+      colouriseProfile: curImg.colouriseProfile,
       photoFilterId: curImg.photoFilterId,
       photoFilterIntensity: curImg.photoFilterIntensity,
       denoiseAmount: curImg.denoiseAmount,
@@ -994,6 +1004,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     };
 
     const pushed = pushSnapshot(active.photoHistory, active.photoHistoryIndex, nextEdit);
+    const preferPreview = shouldUsePreviewMode(nextEdit, get().deviceProfile);
     clearItemTimers(active.id);
     updateItemInStore(get, set, active.id, (it) => ({
       ...it,
@@ -1001,13 +1012,9 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       imageEdit: nextEdit,
       photoHistory: pushed.history,
       photoHistoryIndex: pushed.index,
+      needsFullResExport: preferPreview,
     }));
-    void processPhotoItem(
-      active.id,
-      get,
-      set,
-      shouldUsePreviewMode(nextEdit, get().deviceProfile)
-    );
+    void processPhotoItem(active.id, get, set, preferPreview);
   },
 
   applySettingsToAll: () => {
@@ -1088,6 +1095,9 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       const nextEdit: ImageEditState = {
         ...cur,
         ...sanitizedPatch,
+        proTools: sanitizedPatch.proTools
+          ? [...sanitizedPatch.proTools]
+          : [...(cur.proTools ?? [])],
         adjustments: sanitizedPatch.adjustments
           ? { ...cur.adjustments, ...sanitizedPatch.adjustments }
           : { ...cur.adjustments },
@@ -1126,6 +1136,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     }
 
     const { nextEdit, nextPreset } = buildNextEdit(active.imageEdit, active.selectedPresetId);
+    const preferPreview = !commitHistory || shouldUsePreviewMode(nextEdit, profile);
     updateItemInStore(get, set, active.id, (it) => {
       if (!commitHistory) {
         return {
@@ -1142,6 +1153,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
         imageEdit: nextEdit,
         photoHistory: pushed.history,
         photoHistoryIndex: pushed.index,
+        needsFullResExport: preferPreview,
       };
     });
 
@@ -1491,12 +1503,12 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
         : { ...cur.audio },
       subtitle: sanitizedPatch.subtitle
         ? {
-            ...cur.subtitle,
-            ...sanitizedPatch.subtitle,
-            cues: sanitizedPatch.subtitle.cues
-              ? sanitizedPatch.subtitle.cues.map((c) => ({ ...c }))
-              : cur.subtitle.cues.map((c) => ({ ...c })),
-          }
+          ...cur.subtitle,
+          ...sanitizedPatch.subtitle,
+          cues: sanitizedPatch.subtitle.cues
+            ? sanitizedPatch.subtitle.cues.map((c) => ({ ...c }))
+            : cur.subtitle.cues.map((c) => ({ ...c })),
+        }
         : { ...cur.subtitle, cues: cur.subtitle.cues.map((c) => ({ ...c })) },
       muteAudio:
         sanitizedPatch.muteAudio !== undefined

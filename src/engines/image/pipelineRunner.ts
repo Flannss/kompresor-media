@@ -22,6 +22,7 @@ import {
   computeTargetDimensions,
   type PhotoCanvasGuardrails,
 } from './pixelOps';
+import { applyProPhotoToolsPass } from './proTools';
 
 export interface Canvas2DContextLike {
   imageSmoothingEnabled: boolean;
@@ -365,6 +366,7 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
       edit.adjustments.tint !== 0;
 
     const modelStrength = edit.qualityModelStrength ?? 80;
+    const hasProTools = (edit.proTools?.length ?? 0) > 0 && (edit.proToolStrength ?? 80) > 0;
     const needsQualityModelPass =
       modelStrength > 0 ||
       intendedUpscaleRatio > 1.05 ||
@@ -372,6 +374,7 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
 
     const needsPixelPass =
       hasAdjustments ||
+      hasProTools ||
       (edit.photoFilterId !== 'original' && edit.photoFilterIntensity > 0) ||
       hasActiveColorGrade(edit.colorGrade) ||
       edit.denoiseAmount > 0 ||
@@ -394,6 +397,15 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
             imgData,
             edit.enhanceSuite.noise.grainStrength,
             edit.enhanceSuite.noise.colorSmooth
+          );
+        }
+
+        if (hasProTools) {
+          applyProPhotoToolsPass(
+            imgData,
+            edit.proTools,
+            edit.proToolStrength ?? 80,
+            edit.colouriseProfile ?? 'warm-portrait'
           );
         }
 

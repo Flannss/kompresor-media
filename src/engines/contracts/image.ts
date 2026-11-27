@@ -27,6 +27,19 @@ export type PhotoQualityModel =
 
 export type PhotoTargetResolution = 'original' | 'hd' | '2k' | '3k' | '4k' | '8k';
 
+export type ProPhotoToolId =
+  | 'sharpen'
+  | 'retouch'
+  | 'enhance-face'
+  | 'deblur'
+  | 'dehaze'
+  | 'remove-motion-blur'
+  | 'restore'
+  | 'colourise'
+  | 'face-restoration';
+
+export type ColouriseToneProfile = 'warm-portrait' | 'nature-sky' | 'classic-natural';
+
 export type PhotoFilterId =
   | 'original'
   | 'realphoto'
@@ -79,6 +92,12 @@ export interface ImageEditState {
   qualityModel: PhotoQualityModel;
   /** Model strength 0..100 (default 80). */
   qualityModelStrength: number;
+  /** Real pixel-level computational photography tools applied in pipeline order. */
+  proTools: ProPhotoToolId[];
+  /** Unified strength for activated Pro Photo tools (0..100, default 80). */
+  proToolStrength: number;
+  /** Selectable natural colorization tone profile for 'colourise' tool. */
+  colouriseProfile: ColouriseToneProfile;
   outputFormat: ImageOutputFormat;
   /** Normalized quality between 0.1 and 1.0 (ignored for lossless PNG). */
   quality: number;

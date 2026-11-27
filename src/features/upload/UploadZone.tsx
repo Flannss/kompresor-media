@@ -145,7 +145,9 @@ export function UploadZone({
             ) : (
               <>
                 Optimalkan Foto &amp; Video{' '}
-                <span className="text-[var(--accent-primary)]">Tanpa Ribet</span>
+                <span className="font-editorial italic font-normal text-[var(--accent-primary)]">
+                  Tanpa Ribet
+                </span>
               </>
             )}
           </h1>
@@ -190,8 +192,19 @@ export function UploadZone({
           <section
             data-testid="entry-photo-card"
             aria-label="Studio Foto"
-            className="km-glass-strong group relative flex flex-col justify-between gap-6 rounded-[24px] border p-7 transition-all duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1 hover:border-[var(--border-strong)] md:p-8"
+            className="km-glass-strong group relative flex flex-col justify-between gap-6 overflow-hidden rounded-[26px] border p-7 transition-all duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-[var(--border-strong)] md:p-8"
+            style={{ boxShadow: 'var(--shadow-soft)' }}
           >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 120 120"
+              fill="none"
+              className="pointer-events-none absolute -right-5 -top-5 h-28 w-28 opacity-[0.18] transition-transform duration-300 group-hover:scale-105"
+            >
+              <circle cx="60" cy="60" r="46" stroke="var(--accent-olive)" strokeWidth="1.2" />
+              <circle cx="60" cy="60" r="28" stroke="var(--accent-gold)" strokeWidth="1" strokeDasharray="4 4" />
+              <path d="M22 60 A38 38 0 0 1 60 22" stroke="var(--accent-olive)" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <div
@@ -222,10 +235,12 @@ export function UploadZone({
               </div>
 
               <div>
-                <h2 className="text-xl font-semibold text-[var(--text-primary)]">Studio Foto</h2>
+                <h2 className="font-editorial text-[22px] font-semibold text-[var(--text-primary)]">
+                  Studio Foto
+                </h2>
                 <p className="mt-2 text-[13px] leading-relaxed text-[var(--text-secondary)] sm:text-sm">
-                  Kompres presisi, jernihkan hingga 2K–8K tanpa ubah gaya asli, 12 filter warna,
-                  dan potong rasio.
+                  Kompres presisi, jernihkan 2K–8K, 9 alat sempurnakan foto (pertajam, anti-blur,
+                  hapus kabut, warnai foto), dan 12 filter warna.
                 </p>
               </div>
             </div>
@@ -237,7 +252,7 @@ export function UploadZone({
                 disabled={isAnalyzing}
                 data-testid="choose-photo-btn"
                 onClick={() => photoInputRef.current?.click()}
-                className="min-h-[46px] w-full text-sm font-semibold"
+                className="min-h-[46px] w-full rounded-full text-sm font-semibold"
               >
                 Pilih Foto
               </Button>
@@ -252,8 +267,19 @@ export function UploadZone({
           <section
             data-testid="entry-video-card"
             aria-label="Studio Video"
-            className="km-glass-strong group relative flex flex-col justify-between gap-6 rounded-[24px] border p-7 transition-all duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1 hover:border-[var(--border-strong)] md:p-8"
+            className="km-glass-strong group relative flex flex-col justify-between gap-6 overflow-hidden rounded-[26px] border p-7 transition-all duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-[var(--border-strong)] md:p-8"
+            style={{ boxShadow: 'var(--shadow-soft)' }}
           >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 120 120"
+              fill="none"
+              className="pointer-events-none absolute -right-5 -top-5 h-28 w-28 opacity-[0.18] transition-transform duration-300 group-hover:scale-105"
+            >
+              <rect x="24" y="30" width="72" height="60" rx="14" stroke="var(--accent-terracotta)" strokeWidth="1.2" />
+              <path d="M52 49 L72 60 L52 71 Z" stroke="var(--accent-gold)" strokeWidth="1.2" strokeLinejoin="round" />
+              <line x1="34" y1="22" x2="86" y2="22" stroke="var(--accent-terracotta)" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <div
@@ -279,15 +305,17 @@ export function UploadZone({
                     color: 'var(--accent-gold)',
                   }}
                 >
-                  1080p HD · Color Grade
+                  1080p HD · BT.709
                 </span>
               </div>
 
               <div>
-                <h2 className="text-xl font-semibold text-[var(--text-primary)]">Studio Video</h2>
+                <h2 className="font-editorial text-[22px] font-semibold text-[var(--text-primary)]">
+                  Studio Video
+                </h2>
                 <p className="mt-2 text-[13px] leading-relaxed text-[var(--text-secondary)] sm:text-sm">
-                  Kompres HD, penjernihan 1080p, 7 color grading langsung, bandingkan
-                  sebelum–sesudah, potong durasi, audio, &amp; subtitle.
+                  Kompres HD 1080p BT.709, 4 model penjernih video, 7 color grading langsung,
+                  bandingkan sebelum–sesudah, potong durasi, audio, &amp; subtitle.
                 </p>
               </div>
             </div>
@@ -299,7 +327,7 @@ export function UploadZone({
                 disabled={isAnalyzing}
                 data-testid="choose-video-btn"
                 onClick={() => videoInputRef.current?.click()}
-                className="min-h-[46px] w-full text-sm font-semibold"
+                className="min-h-[46px] w-full rounded-full text-sm font-semibold"
               >
                 Pilih Video
               </Button>
@@ -315,24 +343,30 @@ export function UploadZone({
         <div className="flex w-full flex-col items-center gap-3">
           <div
             data-testid="landing-flow-strip"
-            className="km-glass flex flex-wrap items-center justify-center gap-x-5 gap-y-2 rounded-2xl border px-5 py-3 text-xs text-[var(--text-secondary)] tabular-nums"
+            className="km-glass flex flex-wrap items-center justify-center gap-x-5 gap-y-2 rounded-full border px-6 py-3 text-xs text-[var(--text-secondary)] tabular-nums"
           >
             <span className="flex items-center gap-1.5">
-              <span className="font-semibold text-[var(--accent-gold)]">01</span>
+              <span className="font-editorial text-[13px] font-semibold text-[var(--accent-gold)]">
+                01
+              </span>
               <span>Pilih foto atau video</span>
             </span>
             <span aria-hidden="true" className="text-[var(--border-strong)]">
               ·
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="font-semibold text-[var(--accent-gold)]">02</span>
-              <span>Atur kualitas &amp; tampilan</span>
+              <span className="font-editorial text-[13px] font-semibold text-[var(--accent-gold)]">
+                02
+              </span>
+              <span>Atur kualitas &amp; alat</span>
             </span>
             <span aria-hidden="true" className="text-[var(--border-strong)]">
               ·
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="font-semibold text-[var(--accent-gold)]">03</span>
+              <span className="font-editorial text-[13px] font-semibold text-[var(--accent-gold)]">
+                03
+              </span>
               <span>Unduh atau kirim</span>
             </span>
           </div>

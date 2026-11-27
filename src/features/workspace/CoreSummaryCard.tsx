@@ -59,8 +59,17 @@ export function CoreSummaryCard({
       ? ` · ${imageEdit.targetResolution.toUpperCase()}`
       : '';
 
+  const dimsMismatch = Boolean(
+    isImage &&
+      plannedExportDims &&
+      imageProcessResult &&
+      (imageProcessResult.outputWidth !== plannedExportDims.width ||
+        imageProcessResult.outputHeight !== plannedExportDims.height)
+  );
+  const isPreviewPhotoResult = Boolean(isImage && (needsFullResExport || dimsMismatch));
+
   const resolutionText = isImage
-    ? (needsFullResExport || imageEdit.targetResolution !== 'original') && plannedExportDims
+    ? (isPreviewPhotoResult || imageEdit.targetResolution !== 'original') && plannedExportDims
       ? `${metadata.width} × ${metadata.height} → ${plannedExportDims.width} × ${plannedExportDims.height} px${resBadge}`
       : imageProcessResult
         ? `${metadata.width} × ${metadata.height} → ${imageProcessResult.outputWidth} × ${imageProcessResult.outputHeight} px`
@@ -76,7 +85,7 @@ export function CoreSummaryCard({
 
   let savingsBadge: string | null = null;
   let savingsPositive = false;
-  if (outputBytes !== null) {
+  if (outputBytes !== null && !isPreviewPhotoResult) {
     const pct = computeReductionPct(inputBytes, outputBytes);
     const absPct = Math.round(Math.abs(pct));
     if (pct >= 1) {
@@ -113,7 +122,7 @@ export function CoreSummaryCard({
     <section
       data-testid="core-summary-card"
       aria-label="Ringkasan Inti"
-      className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3"
+      className="rounded-[22px] border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5 shadow-[var(--glass-highlight)]"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
@@ -148,9 +157,13 @@ export function CoreSummaryCard({
               data-testid="core-summary-size"
               className="font-semibold text-[var(--text-primary)]"
             >
-              {outputBytes !== null
-                ? `${formatBytes(inputBytes)} → ${formatBytes(outputBytes)}`
-                : `${formatBytes(inputBytes)} · Siap diproses`}
+              {isPreviewPhotoResult
+                ? outputBytes !== null
+                  ? `Pratinjau ${formatBytes(outputBytes)} · Penuh saat unduh`
+                  : `${formatBytes(inputBytes)} · Penuh saat unduh`
+                : outputBytes !== null
+                  ? `${formatBytes(inputBytes)} → ${formatBytes(outputBytes)}`
+                  : `${formatBytes(inputBytes)} · Siap diproses`}
             </span>
             {savingsBadge && (
               <span
