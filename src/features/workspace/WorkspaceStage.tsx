@@ -52,6 +52,7 @@ import { VideoControlPanel, type CapturedFrameInfo } from '../video-studio/Video
 import {
   BeforeAfterPreview,
   type PhotoCompareViewMode,
+  type PhotoZoomLevel,
   type StageBackdrop,
 } from './BeforeAfterPreview';
 import { CoreSummaryCard } from './CoreSummaryCard';
@@ -201,6 +202,7 @@ export function WorkspaceStage({
 
   const [isCropping, setIsCropping] = useState(false);
   const [photoViewMode, setPhotoViewMode] = useState<PhotoCompareViewMode>('single');
+  const [photoZoom, setPhotoZoom] = useState<PhotoZoomLevel>('fit');
   const [splitPct, setSplitPct] = useState(50);
   const [showOriginalPhoto, setShowOriginalPhoto] = useState(false);
   const [holdOriginalMedia, setHoldOriginalMedia] = useState(false);
@@ -246,6 +248,7 @@ export function WorkspaceStage({
   useEffect(() => {
     setIsCropping(false);
     setPhotoViewMode('single');
+    setPhotoZoom('fit');
     setShowOriginalPhoto(false);
     setHoldOriginalMedia(false);
     setVideoCompareViewMode('single');
@@ -488,7 +491,7 @@ export function WorkspaceStage({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`bg-warm-stage relative flex min-h-[44vh] w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 px-4 py-5 transition-colors sm:min-h-[52vh] sm:px-7 sm:py-6 lg:min-h-[calc(100vh-60px)] lg:px-8 lg:py-7 ${
+        className={`bg-warm-stage relative flex min-h-[44vh] w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 px-4 py-5 transition-colors sm:min-h-[50vh] md:min-h-[46vh] sm:px-7 sm:py-6 lg:min-h-[calc(100vh-60px)] lg:px-8 lg:py-7 ${
           isDraggingOverStage ? 'ring-2 ring-inset ring-[var(--border-active)]' : ''
         }`}
       >
@@ -530,6 +533,7 @@ export function WorkspaceStage({
               fileName={metadata.fileName}
               canSplitCompare={canSplitCompare}
               viewMode={photoViewMode}
+              zoomLevel={photoZoom}
               splitPct={splitPct}
               onSplitPctChange={setSplitPct}
               showOriginalOnly={showOriginalPhoto || holdOriginalMedia}
@@ -565,6 +569,9 @@ export function WorkspaceStage({
         <MediaInfoBar
           metadata={metadata}
           validation={validation}
+          deviceProfile={deviceProfile}
+          imageEdit={imageEdit}
+          needsFullResExport={needsFullResExport}
           imageProcessStatus={imageProcessStatus}
           imageProcessResult={imageProcessResult}
           videoProcessStatus={videoProcessStatus}
@@ -579,6 +586,34 @@ export function WorkspaceStage({
           >
             {isImage ? (
               <>
+                <div
+                  role="group"
+                  aria-label="Zoom Detail"
+                  className="inline-flex items-center gap-0.5 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-[11px]"
+                >
+                  {(
+                    [
+                      { id: 'fit', label: 'Fit' },
+                      { id: '100', label: '100%' },
+                      { id: '200', label: '200%' },
+                    ] as const
+                  ).map((z) => (
+                    <button
+                      key={z.id}
+                      type="button"
+                      data-testid={`photo-zoom-${z.id}-btn`}
+                      aria-pressed={photoZoom === z.id}
+                      onClick={() => setPhotoZoom(z.id)}
+                      className={`min-h-[34px] rounded-lg px-2 py-1 font-medium tabular-nums transition-colors ${
+                        photoZoom === z.id
+                          ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      {z.label}
+                    </button>
+                  ))}
+                </div>
                 {processedImageUrl && (
                   <div
                     role="group"
@@ -808,103 +843,106 @@ export function WorkspaceStage({
         )}
       </section>
 
-      {/* Right Inspector Panel */}
-      <aside className="km-glass flex w-full shrink-0 flex-col gap-5 border-t p-5 pb-24 sm:p-6 md:px-7 md:pb-8 lg:w-[404px] xl:w-[424px] lg:border-l lg:border-t-0 lg:p-6">
-        {isImage ? (
-          <PhotoControlPanel
-            selectedPresetId={selectedPresetId}
-            deviceProfile={deviceProfile}
-            imageEdit={imageEdit}
-            imageProcessResult={imageProcessResult}
-            baseThumbnailUrl={baseThumbnailUrl}
-            avifSupported={avifSupported}
-            isCropping={isCropping}
-            holdOriginalActive={holdOriginalMedia}
-            onHoldOriginalChange={setHoldOriginalMedia}
-            onSelectPreset={onSelectPreset}
-            onUpdateImageEdit={onUpdateImageEdit}
-            onCommitSnapshot={onCommitPhotoSnapshot}
-            onToggleCrop={() => setIsCropping((v) => !v)}
-            onRotate90={onRotatePhoto90}
-            onFlipH={onFlipH}
-            onFlipV={onFlipV}
-            onSelectPhotoFilter={onSelectPhotoFilter}
-            onRequestThumbnail={onRequestPhotoThumbnail}
-          />
-        ) : (
-          <VideoControlPanel
+      {/* Right Inspector Panel (2-column balanced grid on Tablet md..lg-1, single rail on Mobile & Desktop) */}
+      <aside className="km-glass flex w-full shrink-0 flex-col gap-5 border-t p-5 pb-24 sm:p-6 md:grid md:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.9fr)] md:items-start md:gap-6 md:px-7 md:pb-8 lg:flex lg:w-[404px] xl:w-[424px] lg:flex-col lg:items-stretch lg:gap-5 lg:border-l lg:border-t-0 lg:p-6">
+        <div className="min-w-0">
+          {isImage ? (
+            <PhotoControlPanel
+              selectedPresetId={selectedPresetId}
+              deviceProfile={deviceProfile}
+              imageEdit={imageEdit}
+              imageProcessResult={imageProcessResult}
+              baseThumbnailUrl={baseThumbnailUrl}
+              avifSupported={avifSupported}
+              isCropping={isCropping}
+              holdOriginalActive={holdOriginalMedia}
+              onHoldOriginalChange={setHoldOriginalMedia}
+              onSelectPreset={onSelectPreset}
+              onUpdateImageEdit={onUpdateImageEdit}
+              onCommitSnapshot={onCommitPhotoSnapshot}
+              onToggleCrop={() => setIsCropping((v) => !v)}
+              onRotate90={onRotatePhoto90}
+              onFlipH={onFlipH}
+              onFlipV={onFlipV}
+              onSelectPhotoFilter={onSelectPhotoFilter}
+              onRequestThumbnail={onRequestPhotoThumbnail}
+            />
+          ) : (
+            <VideoControlPanel
+              metadata={metadata}
+              deviceProfile={deviceProfile}
+              selectedPresetId={selectedPresetId}
+              videoEdit={videoEdit}
+              baseThumbnailUrl={baseThumbnailUrl}
+              onRequestThumbnail={() => setVideoThumbRequested(true)}
+              holdOriginalActive={holdOriginalMedia}
+              onHoldOriginalChange={setHoldOriginalMedia}
+              videoProcessStatus={videoProcessStatus}
+              videoProgress={videoProgress}
+              videoProcessResult={videoProcessResult}
+              processedVideoUrl={processedVideoUrl}
+              videoProcessError={videoProcessError}
+              capturedFrame={capturedFrame}
+              finishedBatchItems={finishedBatchItems}
+              onSelectPreset={onSelectPreset}
+              onUpdateVideoEdit={onUpdateVideoEdit}
+              onSelectColorGrade={onSelectColorGrade}
+              onStartProcess={() => onStartVideoProcess('auto')}
+              onCancelProcess={onCancelVideoProcess}
+              onSeekPreview={handleSeekVideoPreview}
+              onCaptureFrame={handleCaptureFrame}
+              onEditCapturedFrameAsPhoto={handleEditCapturedFrameAsPhoto}
+            />
+          )}
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-5 lg:flex-1">
+          {imageProcessError && isImage && (
+            <p
+              role="alert"
+              className="rounded-xl border border-[var(--status-err-border)] bg-[var(--status-err-bg)] px-3 py-2 text-xs text-[var(--status-err-ink)]"
+            >
+              {imageProcessError}
+            </p>
+          )}
+
+          <CoreSummaryCard
             metadata={metadata}
             deviceProfile={deviceProfile}
             selectedPresetId={selectedPresetId}
+            imageEdit={imageEdit}
+            imageProcessResult={imageProcessResult}
+            needsFullResExport={needsFullResExport}
             videoEdit={videoEdit}
-            baseThumbnailUrl={baseThumbnailUrl}
-            onRequestThumbnail={() => setVideoThumbRequested(true)}
-            holdOriginalActive={holdOriginalMedia}
-            onHoldOriginalChange={setHoldOriginalMedia}
-            videoProcessStatus={videoProcessStatus}
-            videoProgress={videoProgress}
             videoProcessResult={videoProcessResult}
-            processedVideoUrl={processedVideoUrl}
-            videoProcessError={videoProcessError}
-            capturedFrame={capturedFrame}
-            finishedBatchItems={finishedBatchItems}
-            onSelectPreset={onSelectPreset}
-            onUpdateVideoEdit={onUpdateVideoEdit}
-            onSelectColorGrade={onSelectColorGrade}
-            onStartProcess={() => onStartVideoProcess('auto')}
-            onCancelProcess={onCancelVideoProcess}
-            onSeekPreview={handleSeekVideoPreview}
-            onCaptureFrame={handleCaptureFrame}
-            onEditCapturedFrameAsPhoto={handleEditCapturedFrameAsPhoto}
           />
-        )}
 
-        {imageProcessError && isImage && (
-          <p
-            role="alert"
-            className="rounded-xl border border-[var(--status-err-border)] bg-[var(--status-err-bg)] px-3 py-2 text-xs text-[var(--status-err-ink)]"
+          {isImage && (
+            <div className="border-t border-[var(--border-hairline)] pt-3">
+              <ExportSharePanel
+                mediaKind="image"
+                readyBlob={imageProcessResult?.outputBlob ?? null}
+                readyUrl={processedImageUrl}
+                outputFileName={imageProcessResult?.outputFileName ?? null}
+                outputMime={imageProcessResult?.outputMime ?? null}
+                exportedWidth={imageProcessResult?.outputWidth ?? null}
+                exportedHeight={imageProcessResult?.outputHeight ?? null}
+                exportedBytes={imageProcessResult?.outputBytes ?? null}
+                selectedPresetId={selectedPresetId}
+                targetResolution={imageEdit.targetResolution}
+                finishedBatchItems={finishedBatchItems}
+                needsFullResPreparation={needsFullResExport}
+                onPrepareFullResExport={handlePreparePhotoFullRes}
+                onPrepareAllZipItems={handlePrepareAllZipItems}
+                isProcessing={imageProcessStatus === 'processing'}
+              />
+            </div>
+          )}
+
+          <details
+            data-testid="file-details-accordion"
+            className="group border-t border-[var(--border-hairline)] pt-3.5 lg:mt-auto"
           >
-            {imageProcessError}
-          </p>
-        )}
-
-        <CoreSummaryCard
-          metadata={metadata}
-          deviceProfile={deviceProfile}
-          selectedPresetId={selectedPresetId}
-          imageEdit={imageEdit}
-          imageProcessResult={imageProcessResult}
-          needsFullResExport={needsFullResExport}
-          videoEdit={videoEdit}
-          videoProcessResult={videoProcessResult}
-        />
-
-        {isImage && (
-          <div className="border-t border-[var(--border-hairline)] pt-3">
-            <ExportSharePanel
-              mediaKind="image"
-              readyBlob={imageProcessResult?.outputBlob ?? null}
-              readyUrl={processedImageUrl}
-              outputFileName={imageProcessResult?.outputFileName ?? null}
-              outputMime={imageProcessResult?.outputMime ?? null}
-              exportedWidth={imageProcessResult?.outputWidth ?? null}
-              exportedHeight={imageProcessResult?.outputHeight ?? null}
-              exportedBytes={imageProcessResult?.outputBytes ?? null}
-              selectedPresetId={selectedPresetId}
-              targetResolution={imageEdit.targetResolution}
-              finishedBatchItems={finishedBatchItems}
-              needsFullResPreparation={needsFullResExport}
-              onPrepareFullResExport={handlePreparePhotoFullRes}
-              onPrepareAllZipItems={handlePrepareAllZipItems}
-              isProcessing={imageProcessStatus === 'processing'}
-            />
-          </div>
-        )}
-
-        <details
-          data-testid="file-details-accordion"
-          className="group mt-auto border-t border-[var(--border-hairline)] pt-3.5"
-        >
           <summary className="flex min-h-[38px] cursor-pointer list-none items-center justify-between py-1 text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] [&::-webkit-details-marker]:hidden">
             <span>Detail teknis</span>
             <ChevronDown
@@ -994,6 +1032,7 @@ export function WorkspaceStage({
             )}
           </dl>
         </details>
+        </div>
       </aside>
 
       {/* Mobile Sticky Bottom Action Bar (< 768px) with safe-area padding & km-glass-lite surface */}

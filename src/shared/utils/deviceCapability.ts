@@ -145,6 +145,7 @@ export function getDeviceProfile(input?: DeviceCapabilityInput): DeviceProfile {
   }
 
   if (performanceTier === 'standard-mobile') {
+    const isHighRamNonIos = !isIOS && memoryGB !== null && memoryGB >= 6;
     return {
       isIOS,
       isWebKitSafari,
@@ -163,8 +164,8 @@ export function getDeviceProfile(input?: DeviceCapabilityInput): DeviceProfile {
       maxQueueTotal: HARD_QUEUE_CAP,
       useLightweightCssPreview,
       useGlassLite,
-      allow8KPhotoExport: false,
-      maxPhotoCanvasPixels: 24_000_000,
+      allow8KPhotoExport: isHighRamNonIos,
+      maxPhotoCanvasPixels: isHighRamNonIos ? 48_000_000 : 24_000_000,
       releaseFfmpegAfterExport: false,
       maxDualVideoBytes: Number.POSITIVE_INFINITY,
     };
@@ -180,7 +181,7 @@ export function getDeviceProfile(input?: DeviceCapabilityInput): DeviceProfile {
     hardwareConcurrency: cores,
     performanceTier: 'desktop',
     maxPreviewEdge: 1600,
-    photoInteractivePreviewEdge: 1280,
+    photoInteractivePreviewEdge: 1600,
     previewDebounceMs: 60,
     imageWorkerPoolSize: 2,
     maxQueuePhotos: HARD_QUEUE_CAP,

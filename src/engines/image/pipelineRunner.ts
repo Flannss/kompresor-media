@@ -172,7 +172,8 @@ async function solveTargetSize<TCanvas extends CanvasSurfaceLike>(
   format: ImageOutputFormat,
   targetSizeKB: number,
   initialQuality: number,
-  adapter: CanvasAdapter<TCanvas>
+  adapter: CanvasAdapter<TCanvas>,
+  allowDimensionShrink = true
 ): Promise<PipelineOutput> {
   const targetBytes = Math.max(16 * 1024, Math.round(targetSizeKB * 1024));
   const clampedInitial = Math.min(1, Math.max(0.25, initialQuality));
@@ -191,7 +192,8 @@ async function solveTargetSize<TCanvas extends CanvasSurfaceLike>(
       };
     }
 
-    for (let scaleAttempt = 0; scaleAttempt < 4; scaleAttempt += 1) {
+    const maxScaleAttempts = allowDimensionShrink ? 4 : 1;
+    for (let scaleAttempt = 0; scaleAttempt < maxScaleAttempts; scaleAttempt += 1) {
       let low = 0.25;
       let high = Math.max(0.3, clampedInitial);
       let bestFittingBlob: Blob | null = null;
@@ -243,7 +245,7 @@ async function solveTargetSize<TCanvas extends CanvasSurfaceLike>(
       }
 
       const longest = Math.max(workingCanvas.width, workingCanvas.height);
-      if (longest <= 320 || scaleAttempt === 3) {
+      if (!allowDimensionShrink || longest <= 320 || scaleAttempt === maxScaleAttempts - 1) {
         const chosen =
           minQualityBlob.size <= (smallestBlob?.size ?? Infinity) ? minQualityBlob : smallestBlob!;
         const chosenQ =
@@ -336,12 +338,12 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
       guard
     );
 
+    const intendedUpscaleRatio = targetPlan.width / Math.max(1, preResizeW);
+
     let targetDims = { width: targetPlan.width, height: targetPlan.height };
     if (previewMaxEdgePx && previewMaxEdgePx > 0) {
       targetDims = computeTargetDimensions(targetDims.width, targetDims.height, previewMaxEdgePx);
     }
-
-    const upscaleRatio = targetDims.width / Math.max(1, preResizeW);
 
     const resized = resizeCanvas(currentCanvas, targetDims.width, targetDims.height, adapter);
     if (resized !== currentCanvas) {
@@ -362,8 +364,11 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
       edit.adjustments.temperature !== 0 ||
       edit.adjustments.tint !== 0;
 
+    const modelStrength = edit.qualityModelStrength ?? 80;
     const needsQualityModelPass =
-      edit.qualityModel === 'high-quality' || upscaleRatio > 1.05;
+      modelStrength > 0 ||
+      intendedUpscaleRatio > 1.05 ||
+      targetPlan.appliedTargetResolution !== 'original';
 
     const needsPixelPass =
       hasAdjustments ||
@@ -414,7 +419,13 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
         }
 
         if (needsQualityModelPass) {
-          applyQualityModelPass(imgData, edit.qualityModel, upscaleRatio);
+          applyQualityModelPass(
+            imgData,
+            edit.qualityModel,
+            intendedUpscaleRatio,
+            modelStrength,
+            targetPlan.appliedTargetResolution
+          );
         }
 
         applySharpen(imgData, effectiveSharpen, edit.enhanceSuite.sharpen.antiArtifact);
@@ -423,12 +434,14 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
     }
 
     if (edit.targetSizeKB !== null && edit.outputFormat !== 'image/png') {
+      const allowShrink = targetPlan.appliedTargetResolution === 'original';
       const sizedOut = await solveTargetSize(
         currentCanvas,
         edit.outputFormat,
         edit.targetSizeKB,
         edit.quality,
-        adapter
+        adapter,
+        allowShrink
       );
       return {
         ...sizedOut,

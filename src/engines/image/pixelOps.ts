@@ -36,8 +36,17 @@ export const PHOTO_TARGET_LONG_EDGE: Record<PhotoTargetResolution, number | null
   original: null,
   hd: 1920,
   '2k': 2560,
+  '3k': 3072,
   '4k': 3840,
   '8k': 7680,
+};
+
+export const PHOTO_QUALITY_MODEL_LABELS: Record<PhotoQualityModel, string> = {
+  realphoto: 'RealPhoto',
+  'high-quality': 'High Quality',
+  'ultra-detail': 'Ultra Detail',
+  'studio-portrait': 'Studio Potret',
+  'hdr-dynamic': 'HDR Dinamis',
 };
 
 export function computeRotatedDimensions(
@@ -585,28 +594,195 @@ export function applySharpen(
 }
 
 /**
- * Style-preserving image quality refinement model:
- * - 'realphoto': gentle natural tone/clarity preservation without artificial edge halos.
- * - 'high-quality': chroma noise smoothing (when upscaled) + crisp micro-contrast + fine detail recovery.
+ * Selective skin-tone smoothing + eye/hair anti-halo micro-crispness using 3-row rolling buffers.
+ */
+function applyStudioPortraitPass(
+  imageData: ImageData,
+  strength: number,
+  resBoost: number
+): void {
+  const { width, height, data } = imageData;
+  if (width < 3 || height < 3 || (strength <= 0 && resBoost <= 0)) {
+    return;
+  }
+
+  const rowStride = width * 4;
+  let prevRow = new Uint8ClampedArray(rowStride);
+  let currRow = new Uint8ClampedArray(rowStride);
+  let nextRow = new Uint8ClampedArray(rowStride);
+  prevRow.set(data.subarray(0, rowStride));
+  currRow.set(data.subarray(rowStride, rowStride * 2));
+  nextRow.set(data.subarray(rowStride * 2, rowStride * 3));
+
+  const lumaBlend = Math.min(0.45, 0.36 * strength);
+  const chromaBlend = Math.min(0.6, 0.52 * strength);
+  const crispGain = (((24 + resBoost * 18) * strength) / 100) * 1.35;
+
+  for (let y = 1; y < height - 1; y += 1) {
+    const outRow = y * rowStride;
+    for (let x = 1; x < width - 1; x += 1) {
+      const col = x * 4;
+      const outIdx = outRow + col;
+      const cr = currRow[col];
+      const cg = currRow[col + 1];
+      const cb = currRow[col + 2];
+      const lCenter = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb;
+
+      const leftCol = col - 4;
+      const rightCol = col + 4;
+      const lNeighbors =
+        (0.2126 * (prevRow[col] + nextRow[col] + currRow[leftCol] + currRow[rightCol]) +
+          0.7152 *
+            (prevRow[col + 1] + nextRow[col + 1] + currRow[leftCol + 1] + currRow[rightCol + 1]) +
+          0.0722 *
+            (prevRow[col + 2] + nextRow[col + 2] + currRow[leftCol + 2] + currRow[rightCol + 2])) /
+        4;
+      const edgeDiff = Math.abs(lCenter - lNeighbors);
+      const isWarmSkin = cr > cg && cg > cb && cr - cb > 14 && lCenter > 65 && lCenter < 230;
+
+      if (isWarmSkin && edgeDiff <= 14) {
+        let sumR = 0;
+        let sumG = 0;
+        let sumB = 0;
+        let count = 0;
+        const rows = [prevRow, currRow, nextRow];
+        for (let rIdx = 0; rIdx < 3; rIdx += 1) {
+          const srcRow = rows[rIdx];
+          for (let cOff = leftCol; cOff <= rightCol; cOff += 4) {
+            const nr = srcRow[cOff];
+            const ng = srcRow[cOff + 1];
+            const nb = srcRow[cOff + 2];
+            const diff = (Math.abs(nr - cr) + Math.abs(ng - cg) + Math.abs(nb - cb)) / 3;
+            if (diff <= 26) {
+              sumR += nr;
+              sumG += ng;
+              sumB += nb;
+              count += 1;
+            }
+          }
+        }
+        if (count > 1) {
+          const avgR = sumR / count;
+          const avgG = sumG / count;
+          const avgB = sumB / count;
+          const avgLuma = 0.2126 * avgR + 0.7152 * avgG + 0.0722 * avgB;
+          const outLuma = lCenter + (avgLuma - lCenter) * lumaBlend;
+          const dr = (avgR - avgLuma - (cr - lCenter)) * chromaBlend;
+          const dg = (avgG - avgLuma - (cg - lCenter)) * chromaBlend;
+          const db = (avgB - avgLuma - (cb - lCenter)) * chromaBlend;
+          data[outIdx] = clampByte(outLuma + (cr - lCenter) + dr);
+          data[outIdx + 1] = clampByte(outLuma + (cg - lCenter) + dg);
+          data[outIdx + 2] = clampByte(outLuma + (cb - lCenter) + db);
+        }
+      } else if (edgeDiff > 10 && crispGain > 0) {
+        const delta = (lCenter - lNeighbors) * crispGain;
+        data[outIdx] = clampByte(cr + delta);
+        data[outIdx + 1] = clampByte(cg + delta);
+        data[outIdx + 2] = clampByte(cb + delta);
+      }
+      data[outIdx + 3] = currRow[col + 3];
+    }
+
+    if (y + 1 < height - 1) {
+      const recycled = prevRow;
+      prevRow = currRow;
+      currRow = nextRow;
+      nextRow = recycled;
+      const aheadOffset = (y + 2) * rowStride;
+      nextRow.set(data.subarray(aheadOffset, aheadOffset + rowStride));
+    }
+  }
+}
+
+/**
+ * 5 distinct, style-preserving Photo Quality Models + resolution-scaled clarity recovery.
  */
 export function applyQualityModelPass(
   imageData: ImageData,
   qualityModel: PhotoQualityModel,
-  upscaleRatio: number
+  upscaleRatio: number,
+  modelStrength = 80,
+  targetResolution: PhotoTargetResolution = 'original'
 ): void {
-  if (qualityModel === 'high-quality') {
-    if (upscaleRatio > 1.05) {
-      applyEdgePreservingDenoiseParams(imageData, Math.min(3.5, upscaleRatio * 1.35), 4);
+  const s = Math.min(1, Math.max(0, modelStrength / 100));
+  const tierBonus =
+    targetResolution === '8k'
+      ? 0.72
+      : targetResolution === '4k'
+        ? 0.56
+        : targetResolution === '3k'
+          ? 0.42
+          : targetResolution === '2k'
+            ? 0.28
+            : targetResolution === 'hd'
+              ? 0.14
+              : 0;
+  const resBoost = tierBonus + Math.max(0, Math.min(0.6, (upscaleRatio - 1) * 0.35));
+
+  if (s <= 0.001) {
+    if (resBoost > 0.01) {
+      applySharpen(imageData, Math.round(resBoost * 18), true);
     }
-    applyClarity(imageData, upscaleRatio > 1.05 ? 16 : 10);
-    applySharpen(imageData, upscaleRatio > 1.05 ? 24 : 14, true);
     return;
   }
 
-  // RealPhoto (Natural): preserves natural photo style cleanly
-  if (upscaleRatio > 1.05) {
-    applyClarity(imageData, 8);
-    applySharpen(imageData, 14, true);
+  switch (qualityModel) {
+    case 'high-quality': {
+      applyEdgePreservingDenoiseParams(
+        imageData,
+        Math.max(1.2, (2.2 + resBoost * 1.4) * s),
+        Math.max(2, Math.round(3.5 * s))
+      );
+      applyColorAdjustments(imageData, {
+        contrast: Math.round(6 * s),
+        vibrance: Math.round(5 * s),
+      });
+      applyClarity(imageData, Math.round((22 + resBoost * 12) * s));
+      applySharpen(imageData, Math.round((32 + resBoost * 20) * s), true);
+      return;
+    }
+    case 'ultra-detail': {
+      applyEdgePreservingDenoiseParams(
+        imageData,
+        Math.min(2.4, (1.4 + resBoost) * s),
+        2
+      );
+      applyColorAdjustments(imageData, { contrast: Math.round(9 * s) });
+      applyClarity(imageData, Math.round((34 + resBoost * 18) * s));
+      applySharpen(imageData, Math.round((52 + resBoost * 24) * s), true);
+      applySharpen(imageData, Math.round((18 + resBoost * 10) * s), true);
+      return;
+    }
+    case 'studio-portrait': {
+      applyStudioPortraitPass(imageData, s, resBoost);
+      applyColorAdjustments(imageData, {
+        highlights: Math.round(-10 * s),
+        shadows: Math.round(10 * s),
+        temperature: Math.round(4 * s),
+      });
+      return;
+    }
+    case 'hdr-dynamic': {
+      applyColorAdjustments(imageData, {
+        shadows: Math.round(28 * s),
+        highlights: Math.round(-22 * s),
+        contrast: Math.round(10 * s),
+        vibrance: Math.round(18 * s),
+      });
+      applyClarity(imageData, Math.round((26 + resBoost * 12) * s));
+      applySharpen(imageData, Math.round((20 + resBoost * 16) * s), true);
+      return;
+    }
+    case 'realphoto':
+    default: {
+      applyColorAdjustments(imageData, {
+        shadows: Math.round(6 * s),
+        highlights: Math.round(-4 * s),
+        contrast: Math.round(3 * s),
+      });
+      applyClarity(imageData, Math.round((12 + resBoost * 8) * s));
+      applySharpen(imageData, Math.round((10 + resBoost * 16) * s), true);
+    }
   }
 }
 
@@ -645,12 +821,7 @@ export function formatOutputMimeShort(mime: ImageOutputFormat): string {
 }
 
 export function getActiveImageModuleLabels(edit: ImageEditState): string[] {
-  const labels = ['Kompres'];
-  if (edit.qualityModel === 'high-quality') {
-    labels.push('High Quality');
-  } else {
-    labels.push('RealPhoto');
-  }
+  const labels = ['Kompres', PHOTO_QUALITY_MODEL_LABELS[edit.qualityModel] ?? 'RealPhoto'];
   if (edit.targetResolution !== 'original') {
     labels.push(edit.targetResolution.toUpperCase());
   }

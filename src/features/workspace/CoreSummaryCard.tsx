@@ -54,11 +54,16 @@ export function CoreSummaryCard({
       )
     : null;
 
+  const resBadge =
+    isImage && imageEdit.targetResolution !== 'original'
+      ? ` · ${imageEdit.targetResolution.toUpperCase()}`
+      : '';
+
   const resolutionText = isImage
-    ? needsFullResExport && plannedExportDims
-      ? `${metadata.width} × ${metadata.height} → ${plannedExportDims.width} × ${plannedExportDims.height} (ekspor)`
+    ? (needsFullResExport || imageEdit.targetResolution !== 'original') && plannedExportDims
+      ? `${metadata.width} × ${metadata.height} → ${plannedExportDims.width} × ${plannedExportDims.height} px${resBadge}`
       : imageProcessResult
-        ? `${metadata.width} × ${metadata.height} → ${imageProcessResult.outputWidth} × ${imageProcessResult.outputHeight}`
+        ? `${metadata.width} × ${metadata.height} → ${imageProcessResult.outputWidth} × ${imageProcessResult.outputHeight} px`
         : `${metadata.width} × ${metadata.height}`
     : videoProcessResult
       ? `${metadata.width} × ${metadata.height} → ${videoProcessResult.outputWidth} × ${videoProcessResult.outputHeight}`

@@ -46,7 +46,7 @@ describe('KM-T008 Pro Photo Studio (2K-8K RealPhoto, 12 Filters, Adjustments, Ec
     vi.restoreAllMocks();
   });
 
-  it('computes progressive 1.5x upscale steps and enforces mobile 8K & <12 MP memory guardrails', () => {
+  it('computes progressive 1.5x upscale steps across HD/2K/3K/4K/8K, overrides preset caps, and enforces device guardrails', () => {
     const upSteps = computeProgressiveSteps(1000, 750, 3840, 2880);
     expect(upSteps.length).toBeGreaterThanOrEqual(3);
     expect(upSteps[upSteps.length - 1]).toEqual({ width: 3840, height: 2880 });
@@ -61,23 +61,51 @@ describe('KM-T008 Pro Photo Studio (2K-8K RealPhoto, 12 Filters, Adjustments, Ec
     });
     expect(desktopProfile.useGlassLite).toBe(false);
     expect(desktopProfile.allow8KPhotoExport).toBe(true);
+    expect(desktopProfile.photoInteractivePreviewEdge).toBe(1600);
 
     const basePreset = getMediaPreset('whatsapp-hd').image;
-    const desktop8k = computePhotoTargetDimensions(
-      1200,
-      800,
-      { ...basePreset, targetResolution: '8k' },
-      {
-        maxCanvasPixels: desktopProfile.maxPhotoCanvasPixels,
-        allow8K: desktopProfile.allow8KPhotoExport,
-      }
-    );
-    expect(desktop8k).toEqual({
-      width: 7680,
-      height: 5120,
-      clampedByMemoryGuard: false,
-      appliedTargetResolution: '8k',
+    for (const [resId, expectedW, expectedH] of [
+      ['hd', 1920, 1280],
+      ['2k', 2560, 1707],
+      ['3k', 3072, 2048],
+      ['4k', 3840, 2560],
+      ['8k', 7680, 5120],
+    ] as const) {
+      const dims = computePhotoTargetDimensions(
+        1200,
+        800,
+        { ...basePreset, maxEdgePx: 1600, targetResolution: resId },
+        {
+          maxCanvasPixels: desktopProfile.maxPhotoCanvasPixels,
+          allow8K: desktopProfile.allow8KPhotoExport,
+        }
+      );
+      expect(dims).toEqual({
+        width: expectedW,
+        height: expectedH,
+        clampedByMemoryGuard: false,
+        appliedTargetResolution: resId,
+      });
+    }
+
+    const highTablet = getDeviceProfile({
+      userAgent: 'Mozilla/5.0 (Linux; Android 14; Tablet) Chrome/130.0.0.0',
+      viewportWidth: 820,
+      deviceMemoryGB: 8,
+      hardwareConcurrency: 8,
+      maxTouchPoints: 5,
     });
+    expect(highTablet.photoInteractivePreviewEdge).toBe(1280);
+    expect(highTablet.allow8KPhotoExport).toBe(true);
+
+    const lowTabletIpad = getDeviceProfile({
+      userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+      viewportWidth: 820,
+      deviceMemoryGB: null,
+      hardwareConcurrency: 6,
+      maxTouchPoints: 5,
+    });
+    expect(lowTabletIpad.allow8KPhotoExport).toBe(false);
 
     const iphoneX = getDeviceProfile({
       userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) Safari/604.1',
@@ -88,10 +116,34 @@ describe('KM-T008 Pro Photo Studio (2K-8K RealPhoto, 12 Filters, Adjustments, Ec
     });
     expect(iphoneX.useGlassLite).toBe(true);
     expect(iphoneX.allow8KPhotoExport).toBe(false);
+    expect(iphoneX.photoInteractivePreviewEdge).toBe(960);
+    expect(iphoneX.releaseFfmpegAfterExport).toBe(true);
     expect(iphoneX.maxPhotoCanvasPixels).toBe(15_000_000);
     expect(iphoneX.maxPhotoCanvasPixels).toBeLessThan(16_700_000);
 
-    // 8K requested on mobile/iPhone X safely downgrades to 4K and clamps >15 MP squares cleanly
+    // 8K requested on iPhone X downgrades safely to 4K; 2K/3K/4K (3:2) stay native without clamping!
+    for (const [resId, expectedW, expectedH] of [
+      ['2k', 2560, 1707],
+      ['3k', 3072, 2048],
+      ['4k', 3840, 2560],
+    ] as const) {
+      const mobileNative = computePhotoTargetDimensions(
+        1200,
+        800,
+        { ...basePreset, targetResolution: resId },
+        {
+          maxCanvasPixels: iphoneX.maxPhotoCanvasPixels,
+          allow8K: iphoneX.allow8KPhotoExport,
+        }
+      );
+      expect(mobileNative).toEqual({
+        width: expectedW,
+        height: expectedH,
+        clampedByMemoryGuard: false,
+        appliedTargetResolution: resId,
+      });
+    }
+
     const mobileGuarded = computePhotoTargetDimensions(
       2000,
       2000,
@@ -131,26 +183,82 @@ describe('KM-T008 Pro Photo Studio (2K-8K RealPhoto, 12 Filters, Adjustments, Ec
     expect(mobileWaStatus.height).toBe(1920);
   });
 
-  it('produces distinct pixel outputs for RealPhoto vs High Quality quality models', () => {
-    const imgReal = makePatternImageData();
-    const imgHq = makePatternImageData();
-
-    applyQualityModelPass(imgReal, 'realphoto', 1.6);
-    applyQualityModelPass(imgHq, 'high-quality', 1.6);
-
-    let diffs = 0;
-    for (let i = 0; i < imgReal.data.length; i += 4) {
-      if (
-        imgReal.data[i] !== imgHq.data[i] ||
-        imgReal.data[i + 1] !== imgHq.data[i + 1] ||
-        imgReal.data[i + 2] !== imgHq.data[i + 2]
-      ) {
-        diffs += 1;
+  it('produces pairwise distinct RGB outputs for all 5 Photo Quality Models and scales with modelStrength', () => {
+    const baseImg = makePatternImageData(8, 8);
+    // Inject warm skin-tone pixels + crisp edge variation
+    for (let y = 0; y < 4; y += 1) {
+      for (let x = 0; x < 4; x += 1) {
+        const idx = (y * 8 + x) * 4;
+        baseImg.data[idx] = 205;
+        baseImg.data[idx + 1] = 165;
+        baseImg.data[idx + 2] = 135;
       }
-      expect(imgReal.data[i + 3]).toBe(240);
-      expect(imgHq.data[i + 3]).toBe(240);
     }
-    expect(diffs).toBeGreaterThan(0);
+
+    const clonePattern = () =>
+      ({ width: 8, height: 8, data: new Uint8ClampedArray(baseImg.data) }) as unknown as ImageData;
+
+    const modelIds = [
+      'realphoto',
+      'high-quality',
+      'ultra-detail',
+      'studio-portrait',
+      'hdr-dynamic',
+    ] as const;
+
+    const outputs = new Map<string, Uint8ClampedArray>();
+    for (const id of modelIds) {
+      const copy = clonePattern();
+      applyQualityModelPass(copy, id, 1.6, 80, '2k');
+      let deltaVsOrig = 0;
+      for (let i = 0; i < copy.data.length; i += 4) {
+        deltaVsOrig +=
+          Math.abs(copy.data[i] - baseImg.data[i]) +
+          Math.abs(copy.data[i + 1] - baseImg.data[i + 1]) +
+          Math.abs(copy.data[i + 2] - baseImg.data[i + 2]);
+        expect(copy.data[i + 3]).toBe(240);
+      }
+      expect(deltaVsOrig).toBeGreaterThan(0);
+      outputs.set(id, copy.data);
+    }
+
+    // Verify every pair of models differs measurably
+    for (let a = 0; a < modelIds.length; a += 1) {
+      for (let b = a + 1; b < modelIds.length; b += 1) {
+        const d1 = outputs.get(modelIds[a])!;
+        const d2 = outputs.get(modelIds[b])!;
+        let pairDiff = 0;
+        for (let i = 0; i < d1.length; i += 4) {
+          pairDiff +=
+            Math.abs(d1[i] - d2[i]) +
+            Math.abs(d1[i + 1] - d2[i + 1]) +
+            Math.abs(d1[i + 2] - d2[i + 2]);
+        }
+        expect(pairDiff).toBeGreaterThan(0);
+      }
+    }
+
+    // Verify strength scaling (0% vs 50% vs 100%)
+    const img0 = clonePattern();
+    const img50 = clonePattern();
+    const img100 = clonePattern();
+    applyQualityModelPass(img0, 'hdr-dynamic', 1.0, 0, 'original');
+    applyQualityModelPass(img50, 'hdr-dynamic', 1.0, 50, 'original');
+    applyQualityModelPass(img100, 'hdr-dynamic', 1.0, 100, 'original');
+    let diff0_50 = 0;
+    let diff50_100 = 0;
+    for (let i = 0; i < img0.data.length; i += 4) {
+      diff0_50 +=
+        Math.abs(img0.data[i] - img50.data[i]) +
+        Math.abs(img0.data[i + 1] - img50.data[i + 1]) +
+        Math.abs(img0.data[i + 2] - img50.data[i + 2]);
+      diff50_100 +=
+        Math.abs(img100.data[i] - img50.data[i]) +
+        Math.abs(img100.data[i + 1] - img50.data[i + 1]) +
+        Math.abs(img100.data[i + 2] - img50.data[i + 2]);
+    }
+    expect(diff0_50).toBeGreaterThan(0);
+    expect(diff50_100).toBeGreaterThan(0);
   });
 
   it('applies all 12 photo filters with distinct pixels, exact intensity scaling, Noir B&W parity, and CSS previews', () => {

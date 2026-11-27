@@ -1,5 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 import type {
+  ImageEditState,
   ImageMetadata,
   ImageProcessResult,
   MediaMetadata,
@@ -7,7 +8,8 @@ import type {
   VideoMetadata,
   VideoProcessResult,
 } from '../../engines/contracts';
-import { computeReductionPct } from '../../engines/image/pixelOps';
+import { computePhotoTargetDimensions, computeReductionPct } from '../../engines/image/pixelOps';
+import type { DeviceProfile } from '../../shared/utils/deviceCapability';
 import type { ImageProcessStatus, VideoProcessStatus } from '../../store/useMediaStore';
 import { formatBytes } from '../../shared/utils/formatBytes';
 import { formatDuration } from '../../shared/utils/formatDuration';
@@ -15,6 +17,9 @@ import { formatDuration } from '../../shared/utils/formatDuration';
 export interface MediaInfoBarProps {
   metadata: MediaMetadata;
   validation: Extract<ValidationResult, { valid: true }>;
+  deviceProfile?: DeviceProfile;
+  imageEdit?: ImageEditState;
+  needsFullResExport?: boolean;
   imageProcessStatus: ImageProcessStatus;
   imageProcessResult: ImageProcessResult | null;
   videoProcessStatus?: VideoProcessStatus;
@@ -48,21 +53,46 @@ function renderDeltaBadge(inputBytes: number, outputBytes: number) {
 export function MediaInfoBar({
   metadata,
   validation,
+  deviceProfile,
+  imageEdit,
+  needsFullResExport = false,
   imageProcessStatus,
   imageProcessResult,
   videoProcessStatus = 'idle',
   videoProcessResult = null,
 }: MediaInfoBarProps) {
   const renderPhotoSummary = (imageMeta: ImageMetadata) => {
+    const plannedTarget =
+      imageEdit &&
+      (needsFullResExport || imageEdit.targetResolution !== 'original')
+        ? computePhotoTargetDimensions(
+            imageMeta.width,
+            imageMeta.height,
+            imageEdit,
+            deviceProfile
+              ? {
+                  maxCanvasPixels: deviceProfile.maxPhotoCanvasPixels,
+                  allow8K: deviceProfile.allow8KPhotoExport,
+                }
+              : undefined
+          )
+        : null;
+
     if (imageProcessResult) {
+      const targetTag =
+        imageEdit && imageEdit.targetResolution !== 'original'
+          ? ` · ${imageEdit.targetResolution.toUpperCase()}`
+          : '';
+      const dimsLabel = plannedTarget
+        ? `${imageMeta.width} × ${imageMeta.height} → ${plannedTarget.width} × ${plannedTarget.height} px${targetTag}`
+        : `${imageProcessResult.outputWidth} × ${imageProcessResult.outputHeight} px${targetTag}`;
+
       return (
         <div
           data-testid="media-summary-strip"
           className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs font-medium text-[var(--text-primary)] tabular-nums"
         >
-          <span data-testid="media-dimensions">
-            {imageProcessResult.outputWidth} × {imageProcessResult.outputHeight}
-          </span>
+          <span data-testid="media-dimensions">{dimsLabel}</span>
           <span aria-hidden="true" className="text-[var(--text-muted)]">
             ·
           </span>

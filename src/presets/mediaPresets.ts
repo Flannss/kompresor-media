@@ -97,6 +97,7 @@ function makeBaseImageEdit(
     maxEdgePx: 2560,
     targetResolution: 'original',
     qualityModel: 'realphoto',
+    qualityModelStrength: 80,
     outputFormat: 'image/jpeg',
     quality: 0.92,
     targetSizeKB: null,

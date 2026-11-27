@@ -2,6 +2,13 @@ import { useRef, type PointerEvent } from 'react';
 
 export type StageBackdrop = 'studio' | 'light' | 'dark' | 'checker';
 export type PhotoCompareViewMode = 'single' | 'split' | 'side-by-side';
+export type PhotoZoomLevel = 'fit' | '100' | '200';
+
+const ZOOM_SCALE: Record<PhotoZoomLevel, number> = {
+  fit: 1,
+  '100': 1.65,
+  '200': 2.4,
+};
 
 export interface BeforeAfterPreviewProps {
   originalUrl: string;
@@ -9,6 +16,7 @@ export interface BeforeAfterPreviewProps {
   fileName: string;
   canSplitCompare: boolean;
   viewMode: PhotoCompareViewMode;
+  zoomLevel?: PhotoZoomLevel;
   splitPct: number;
   onSplitPctChange: (pct: number) => void;
   showOriginalOnly: boolean;
@@ -34,6 +42,7 @@ export function BeforeAfterPreview({
   fileName,
   canSplitCompare,
   viewMode,
+  zoomLevel = 'fit',
   splitPct,
   onSplitPctChange,
   showOriginalOnly,
@@ -45,6 +54,11 @@ export function BeforeAfterPreview({
   const displayUrl = showOriginalOnly || !processedUrl ? originalUrl : processedUrl;
   const isSplitActive = viewMode === 'split' && canSplitCompare && processedUrl !== null;
   const isSideBySideActive = viewMode === 'side-by-side' && processedUrl !== null;
+  const zoomScale = ZOOM_SCALE[zoomLevel] ?? 1;
+  const zoomStyle =
+    zoomScale > 1
+      ? { transform: `scale(${zoomScale})`, transformOrigin: 'center center' as const }
+      : undefined;
 
   const updateSplitFromClientX = (clientX: number) => {
     const el = stageRef.current;
@@ -78,6 +92,8 @@ export function BeforeAfterPreview({
   return (
     <div className="flex w-full min-w-0 flex-col items-center gap-2.5">
       <div
+        data-testid="photo-stage-frame"
+        data-zoom={zoomLevel}
         className={`relative flex max-h-[58vh] w-full max-w-[820px] items-center justify-center overflow-hidden rounded-2xl border border-[var(--glass-border)] transition-colors ${getBackdropClasses(backdrop)} ${
           isSideBySideActive ? 'p-2.5' : ''
         }`}
@@ -93,7 +109,8 @@ export function BeforeAfterPreview({
                 data-testid="photo-sbs-original"
                 src={originalUrl}
                 alt={`${fileName} (Asli)`}
-                className="block max-h-[42vh] w-full object-contain sm:max-h-[52vh]"
+                style={zoomStyle}
+                className="block max-h-[42vh] w-full object-contain transition-transform duration-200 sm:max-h-[52vh]"
                 draggable={false}
               />
               <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-[var(--surface-badge)] px-2 py-0.5 text-[11px] font-medium text-white">
@@ -106,7 +123,8 @@ export function BeforeAfterPreview({
                 data-testid="preview-image"
                 src={showOriginalOnly ? originalUrl : processedUrl}
                 alt={`${fileName} (Hasil)`}
-                className="block max-h-[42vh] w-full object-contain sm:max-h-[52vh]"
+                style={zoomStyle}
+                className="block max-h-[42vh] w-full object-contain transition-transform duration-200 sm:max-h-[52vh]"
                 draggable={false}
               />
               <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-medium text-white">
@@ -121,7 +139,8 @@ export function BeforeAfterPreview({
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            className="relative cursor-ew-resize touch-none select-none"
+            style={zoomStyle}
+            className="relative cursor-ew-resize touch-none select-none transition-transform duration-200"
           >
             <img
               data-testid="preview-image"
@@ -154,12 +173,13 @@ export function BeforeAfterPreview({
             </span>
           </div>
         ) : (
-          <div className="relative">
+          <div className="relative overflow-hidden">
             <img
               data-testid="preview-image"
               src={displayUrl}
               alt={fileName}
-              className="block max-h-[58vh] w-auto max-w-full object-contain"
+              style={zoomStyle}
+              className="block max-h-[58vh] w-auto max-w-full object-contain transition-transform duration-200"
             />
             {processedUrl && (
               <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-[var(--surface-badge)] px-2 py-0.5 text-[11px] font-medium text-white">

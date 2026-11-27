@@ -18,9 +18,14 @@ export type ImageRotation = 0 | 90 | 180 | 270;
 
 export type CropAspectId = 'free' | '1:1' | '4:5' | '3:4' | '16:9' | '9:16';
 
-export type PhotoQualityModel = 'realphoto' | 'high-quality';
+export type PhotoQualityModel =
+  | 'realphoto'
+  | 'high-quality'
+  | 'ultra-detail'
+  | 'studio-portrait'
+  | 'hdr-dynamic';
 
-export type PhotoTargetResolution = 'original' | 'hd' | '2k' | '4k' | '8k';
+export type PhotoTargetResolution = 'original' | 'hd' | '2k' | '3k' | '4k' | '8k';
 
 export type PhotoFilterId =
   | 'original'
@@ -72,6 +77,8 @@ export interface ImageEditState {
   maxEdgePx: number | null;
   targetResolution: PhotoTargetResolution;
   qualityModel: PhotoQualityModel;
+  /** Model strength 0..100 (default 80). */
+  qualityModelStrength: number;
   outputFormat: ImageOutputFormat;
   /** Normalized quality between 0.1 and 1.0 (ignored for lossless PNG). */
   quality: number;

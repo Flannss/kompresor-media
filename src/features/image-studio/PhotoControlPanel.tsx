@@ -23,6 +23,7 @@ import {
   getPhotoFilterCssPreview,
   PHOTO_FILTER_PRESETS,
 } from '../../engines/grading/photoFilters';
+import { PHOTO_QUALITY_MODEL_LABELS } from '../../engines/image/pixelOps';
 import {
   getMediaPreset,
   PHOTO_PRESET_IDS,
@@ -70,12 +71,27 @@ const QUALITY_MODELS: ReadonlyArray<{
   {
     id: 'realphoto',
     title: 'RealPhoto',
-    desc: 'Natural & detail seimbang',
+    desc: 'Natural & detail autentik',
   },
   {
     id: 'high-quality',
     title: 'High Quality',
     desc: 'Bening maksimal & tegas',
+  },
+  {
+    id: 'ultra-detail',
+    title: 'Ultra Detail',
+    desc: 'Tajam maksimal & mikro-tekstur',
+  },
+  {
+    id: 'studio-portrait',
+    title: 'Studio Potret',
+    desc: 'Kulit halus, mata & rambut tajam',
+  },
+  {
+    id: 'hdr-dynamic',
+    title: 'HDR Dinamis',
+    desc: 'Bayangan terang & kontras hidup',
   },
 ];
 
@@ -87,6 +103,7 @@ const TARGET_RESOLUTION_OPTIONS: ReadonlyArray<{
   { id: 'original', label: 'Asli', sub: 'Sesuai asal' },
   { id: 'hd', label: 'HD', sub: '1920 px' },
   { id: '2k', label: '2K', sub: '2560 px' },
+  { id: '3k', label: '3K', sub: '3072 px' },
   { id: '4k', label: '4K', sub: '3840 px' },
   { id: '8k', label: '8K', sub: '7680 px' },
 ];
@@ -144,6 +161,7 @@ export function PhotoControlPanel({
   const filterActive = imageEdit.photoFilterId !== 'original';
   const hasHighTarget =
     imageEdit.targetResolution === '2k' ||
+    imageEdit.targetResolution === '3k' ||
     imageEdit.targetResolution === '4k' ||
     imageEdit.targetResolution === '8k';
 
@@ -171,7 +189,7 @@ export function PhotoControlPanel({
           onClick={() => setActiveTab('tampilan')}
           className="rounded-lg border border-[var(--border-active)] bg-[var(--bg-subtle)] px-2 py-0.5 font-semibold text-[var(--text-primary)]"
         >
-          {imageEdit.qualityModel === 'high-quality' ? 'High Quality' : 'RealPhoto'}
+          {PHOTO_QUALITY_MODEL_LABELS[imageEdit.qualityModel] ?? 'RealPhoto'}
         </button>
         {imageEdit.targetResolution !== 'original' && (
           <button
@@ -420,7 +438,7 @@ export function PhotoControlPanel({
               role="radiogroup"
               aria-label="Model kualitas foto"
             >
-              {QUALITY_MODELS.map((model) => {
+              {QUALITY_MODELS.map((model, idx) => {
                 const selected = imageEdit.qualityModel === model.id;
                 return (
                   <button
@@ -435,7 +453,9 @@ export function PhotoControlPanel({
                         { commitHistory: true, preservePreset: true }
                       )
                     }
-                    className={`flex min-h-[54px] flex-col items-start justify-center rounded-xl border px-3 py-2 text-left transition-all ${
+                    className={`flex min-h-[56px] flex-col items-start justify-center rounded-xl border px-3 py-2 text-left transition-all ${
+                      idx === 4 ? 'col-span-2' : ''
+                    } ${
                       selected
                         ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] ring-1 ring-[var(--border-active)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] hover:border-[var(--border-active)]'
@@ -444,12 +464,31 @@ export function PhotoControlPanel({
                     <span className="text-xs font-semibold text-[var(--text-primary)]">
                       {model.title}
                     </span>
-                    <span className="mt-0.5 text-[10px] leading-snug text-[var(--text-muted)]">
+                    <span className="mt-0.5 text-[10.5px] leading-snug text-[var(--text-muted)]">
                       {model.desc}
                     </span>
                   </button>
                 );
               })}
+            </div>
+
+            <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5">
+              <Slider
+                label="Kekuatan Model"
+                testId="slider-quality-model-strength"
+                min={0}
+                max={100}
+                defaultValue={80}
+                value={imageEdit.qualityModelStrength}
+                valueLabel={`${imageEdit.qualityModelStrength}%`}
+                onChange={(val) =>
+                  onUpdateImageEdit(
+                    { qualityModelStrength: val },
+                    { commitHistory: false, preservePreset: true }
+                  )
+                }
+                onCommit={() => onCommitSnapshot()}
+              />
             </div>
           </section>
 
@@ -460,7 +499,7 @@ export function PhotoControlPanel({
               <span className="text-[10px] text-[var(--text-muted)]">Perjelas bertahap</span>
             </div>
 
-            <div className="grid grid-cols-5 gap-1">
+            <div className="grid grid-cols-3 gap-1.5">
               {TARGET_RESOLUTION_OPTIONS.map((opt) => {
                 const isLocked8k = opt.id === '8k' && !deviceProfile.allow8KPhotoExport;
                 const active = imageEdit.targetResolution === opt.id;
@@ -478,11 +517,14 @@ export function PhotoControlPanel({
                     }
                     onClick={() =>
                       onUpdateImageEdit(
-                        { targetResolution: opt.id },
+                        {
+                          targetResolution: opt.id,
+                          ...(opt.id !== 'original' ? { targetSizeKB: null } : {}),
+                        },
                         { commitHistory: true, preservePreset: true }
                       )
                     }
-                    className={`flex min-h-[46px] flex-col items-center justify-center rounded-lg border px-1 py-1 text-center transition-all tabular-nums disabled:cursor-not-allowed disabled:opacity-45 ${
+                    className={`flex min-h-[46px] flex-col items-center justify-center rounded-lg border px-1.5 py-1 text-center transition-all tabular-nums disabled:cursor-not-allowed disabled:opacity-45 ${
                       active
                         ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'

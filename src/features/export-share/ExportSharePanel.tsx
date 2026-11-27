@@ -163,6 +163,7 @@ export function ExportSharePanel({
 
   const renderResTag =
     targetResolution === '2k' ||
+    targetResolution === '3k' ||
     targetResolution === '4k' ||
     targetResolution === '8k' ||
     targetResolution === 'hd'

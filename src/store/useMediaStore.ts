@@ -160,6 +160,7 @@ function shouldUsePreviewMode(edit: ImageEditState, profile: DeviceProfile): boo
   }
   return (
     edit.targetResolution === '2k' ||
+    edit.targetResolution === '3k' ||
     edit.targetResolution === '4k' ||
     edit.targetResolution === '8k'
   );
@@ -966,10 +967,14 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     }
 
     const curImg = active.imageEdit;
+    const preserveTargetRes = curImg.targetResolution !== 'original';
     const nextEdit: ImageEditState = {
       ...cloneImageEdit(presetSpec.image),
+      targetResolution: preserveTargetRes ? curImg.targetResolution : presetSpec.image.targetResolution,
+      targetSizeKB: preserveTargetRes ? null : presetSpec.image.targetSizeKB,
       qualityModel:
         presetId === 'archive-hd' ? presetSpec.image.qualityModel : curImg.qualityModel,
+      qualityModelStrength: curImg.qualityModelStrength,
       photoFilterId: curImg.photoFilterId,
       photoFilterIntensity: curImg.photoFilterIntensity,
       denoiseAmount: curImg.denoiseAmount,
