@@ -185,4 +185,38 @@ describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
     expect(built.args).toContain('webm');
     expect(built.outputFileNameOnFs).toBe('output.webm');
   });
+
+  it('calibrates WhatsApp HD & Status WA HD FFmpeg pipeline with BT.709, High@L4.1, lanczos, anti-blur unsharp, and VBV caps', () => {
+    for (const presetId of ['whatsapp-hd', 'whatsapp-status'] as const) {
+      const edit = structuredClone(getMediaPreset(presetId).video);
+      const built = buildFfmpegArgs({
+        inputFileNameOnFs: 'input.mp4',
+        sourceMetadata: { width: 3840, height: 2160, durationSec: 15, hasAudioHint: true },
+        edit,
+      });
+
+      expect(built.filterGraph.vfChain).toContain('hqdn3d=');
+      expect(built.filterGraph.vfChain).toContain('scale=1920:1080:flags=lanczos');
+      expect(built.filterGraph.vfChain).toContain('unsharp=5:5:0.45:5:5:0.0');
+      expect(built.filterGraph.vfChain).toContain('fps=30');
+
+      const args = built.args;
+      expect(args).toContain('-pix_fmt');
+      expect(args[args.indexOf('-pix_fmt') + 1]).toBe('yuv420p');
+      expect(args[args.indexOf('-profile:v') + 1]).toBe('high');
+      expect(args[args.indexOf('-level') + 1]).toBe('4.1');
+      expect(args[args.indexOf('-colorspace') + 1]).toBe('bt709');
+      expect(args[args.indexOf('-color_primaries') + 1]).toBe('bt709');
+      expect(args[args.indexOf('-color_trc') + 1]).toBe('bt709');
+      expect(args).toContain('+faststart');
+      expect(args[args.indexOf('-c:a') + 1]).toBe('aac');
+      expect(args[args.indexOf('-b:a') + 1]).toBe('128k');
+      expect(args[args.indexOf('-ar') + 1]).toBe('48000');
+
+      const expectedMaxrate = presetId === 'whatsapp-hd' ? '6500k' : '4200k';
+      const expectedBufsize = presetId === 'whatsapp-hd' ? '13000k' : '8400k';
+      expect(args[args.indexOf('-maxrate') + 1]).toBe(expectedMaxrate);
+      expect(args[args.indexOf('-bufsize') + 1]).toBe(expectedBufsize);
+    }
+  });
 });

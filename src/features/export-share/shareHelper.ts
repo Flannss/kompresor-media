@@ -17,7 +17,7 @@ export const PLATFORM_SHARE_META: Record<SharePlatform, PlatformShareSpec> = {
     helperText:
       'File sudah disimpan ke folder Unduhan. Buka WhatsApp Web lalu kirim file dari folder Unduhan.',
     tipText:
-      'Tip: Pilih ikon HD atau kirim sebagai Dokumen di WhatsApp agar ketajaman maksimal terjaga.',
+      'Tip iPhone: Simpan file dulu, lalu kirim dari aplikasi WhatsApp dengan tombol HD aktif (hindari kirim langsung dari menu Bagikan agar tidak dikompres paksa).',
     openLabel: 'Buka WhatsApp Web',
     url: 'https://web.whatsapp.com/',
   },

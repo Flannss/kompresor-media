@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, Download, ExternalLink, FileArchive, Share2 } from 'lucide-react';
 import { Button } from '../../design-system/components/Button';
 import type { PhotoTargetResolution } from '../../engines/contracts';
+import { formatOutputMimeShort } from '../../engines/image/pixelOps';
+import type { MediaPresetId } from '../../presets/mediaPresets';
+import { formatBytes } from '../../shared/utils/formatBytes';
 import {
   executePlatformShareFlow,
   isLikelyMobileDevice,
@@ -17,6 +20,10 @@ export interface ExportSharePanelProps {
   readyUrl: string | null;
   outputFileName: string | null;
   outputMime: string | null;
+  exportedWidth?: number | null;
+  exportedHeight?: number | null;
+  exportedBytes?: number | null;
+  selectedPresetId?: MediaPresetId;
   targetResolution?: PhotoTargetResolution;
   finishedBatchItems?: ZipEntryInput[];
   needsFullResPreparation?: boolean;
@@ -37,6 +44,10 @@ export function ExportSharePanel({
   readyUrl,
   outputFileName,
   outputMime,
+  exportedWidth = null,
+  exportedHeight = null,
+  exportedBytes = null,
+  selectedPresetId,
   targetResolution = 'original',
   finishedBatchItems = [],
   needsFullResPreparation = false,
@@ -54,6 +65,8 @@ export function ExportSharePanel({
   const selfPreparedUrlRef = useRef<string | null>(null);
 
   const likelyMobile = isLikelyMobileDevice();
+  const isWhatsAppPreset =
+    selectedPresetId === 'whatsapp-hd' || selectedPresetId === 'whatsapp-status';
 
   useEffect(() => {
     if (readyUrl && selfPreparedUrlRef.current === readyUrl) {
@@ -76,14 +89,18 @@ export function ExportSharePanel({
     fileName: string;
     mimeType: string;
   } | null> => {
-    if (needsFullResPreparation && onPrepareFullResExport) {
+    if (needsFullResPreparation) {
+      if (!onPrepareFullResExport) {
+        return null;
+      }
       setPreparingFullRes(true);
       try {
         const prepared = await onPrepareFullResExport();
-        if (prepared) {
-          selfPreparedUrlRef.current = prepared.url;
-          return prepared;
+        if (!prepared) {
+          return null;
         }
+        selfPreparedUrlRef.current = prepared.url;
+        return prepared;
       } finally {
         setPreparingFullRes(false);
       }
@@ -153,15 +170,24 @@ export function ExportSharePanel({
       : 'HD';
 
   const downloadLabel = preparingFullRes
-    ? `Merender ${renderResTag}…`
-    : mediaKind === 'image'
+    ? `Merender ${renderResTag} penuh…`
+    : likelyMobile
       ? isProcessing
-        ? 'Memproses Foto…'
-        : 'Unduh Foto'
-      : 'Unduh Video';
+        ? 'Memproses HD…'
+        : 'Simpan File HD'
+      : mediaKind === 'image'
+        ? isProcessing
+          ? 'Memproses Foto…'
+          : 'Unduh Foto'
+        : 'Unduh Video';
 
   const downloadedText =
-    mediaKind === 'image' ? 'Foto berhasil diunduh' : 'Video berhasil diunduh';
+    mediaKind === 'image' ? 'Foto HD berhasil disimpan' : 'Video HD berhasil disimpan';
+
+  const formatShort =
+    outputMime && outputMime.startsWith('image/')
+      ? formatOutputMimeShort(outputMime as 'image/jpeg' | 'image/webp' | 'image/png' | 'image/avif')
+      : outputMime?.replace('video/', '').toUpperCase() ?? null;
 
   const helperSpec = activeHelperPlatform ? PLATFORM_SHARE_META[activeHelperPlatform] : null;
 
@@ -173,7 +199,7 @@ export function ExportSharePanel({
         data-testid={mediaKind === 'image' ? 'download-photo-btn' : 'download-video-btn'}
         disabled={!canExport}
         onClick={() => void handleDownload()}
-        className="min-h-[44px] w-full font-semibold"
+        className="min-h-[46px] w-full font-semibold"
       >
         <Download className="h-4 w-4" aria-hidden="true" />
         <span>{downloadLabel}</span>
@@ -182,14 +208,14 @@ export function ExportSharePanel({
       {likelyMobile ? (
         <Button
           variant="secondary"
-          size="lg"
+          size="md"
           data-testid="whatsapp-share-btn"
           disabled={!canExport || sharing}
           onClick={() => void handleSharePlatform('whatsapp')}
           className="min-h-[44px] w-full"
         >
           <Share2 className="h-4 w-4 text-[var(--accent-highlight)]" aria-hidden="true" />
-          <span>{preparingFullRes ? `Merender ${renderResTag}…` : 'Bagikan ke Aplikasi'}</span>
+          <span>{preparingFullRes ? `Merender ${renderResTag} penuh…` : 'Bagikan'}</span>
         </Button>
       ) : (
         <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Kirim cepat ke aplikasi">
@@ -224,6 +250,27 @@ export function ExportSharePanel({
             TikTok
           </Button>
         </div>
+      )}
+
+      {exportedWidth && exportedHeight && exportedBytes !== null && (
+        <p
+          data-testid="exported-dimensions-badge"
+          className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-center text-[11px] font-medium text-[var(--text-secondary)] tabular-nums"
+        >
+          {needsFullResPreparation
+            ? `Pratinjau cepat (${exportedWidth}×${exportedHeight}) · Hasil penuh dirender saat simpan`
+            : `Output: ${exportedWidth} × ${exportedHeight} px · ${formatBytes(exportedBytes)}${formatShort ? ` · ${formatShort}` : ''}`}
+        </p>
+      )}
+
+      {likelyMobile && isWhatsAppPreset && (
+        <p
+          data-testid="ios-wa-hd-tip"
+          className="rounded-xl border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-2.5 py-1.5 text-[11px] leading-relaxed text-[var(--status-warn-ink)]"
+        >
+          Tip iPhone: Simpan file dulu, lalu kirim dari aplikasi WhatsApp dengan tombol HD aktif
+          (hindari kirim langsung dari menu Bagikan agar tidak dikompres paksa).
+        </p>
       )}
 
       {finishedBatchItems.length >= 2 && (

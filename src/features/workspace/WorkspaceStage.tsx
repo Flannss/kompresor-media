@@ -887,6 +887,10 @@ export function WorkspaceStage({
               readyUrl={processedImageUrl}
               outputFileName={imageProcessResult?.outputFileName ?? null}
               outputMime={imageProcessResult?.outputMime ?? null}
+              exportedWidth={imageProcessResult?.outputWidth ?? null}
+              exportedHeight={imageProcessResult?.outputHeight ?? null}
+              exportedBytes={imageProcessResult?.outputBytes ?? null}
+              selectedPresetId={selectedPresetId}
               targetResolution={imageEdit.targetResolution}
               finishedBatchItems={finishedBatchItems}
               needsFullResPreparation={needsFullResExport}
@@ -1005,30 +1009,26 @@ export function WorkspaceStage({
               disabled={mobilePreparingExport}
               onClick={() => {
                 void (async () => {
-                  let target = null;
                   if (isImage && needsFullResExport) {
                     setMobilePreparingExport(true);
+                    let target = null;
                     try {
                       target = await handlePreparePhotoFullRes();
                     } finally {
                       setMobilePreparingExport(false);
                     }
+                    if (!target) return;
+                    triggerObjectUrlDownload(target.url, target.fileName);
+                    return;
                   }
-                  triggerObjectUrlDownload(
-                    target?.url ?? activeExportUrl,
-                    target?.fileName ?? activeExportName
-                  );
+                  triggerObjectUrlDownload(activeExportUrl, activeExportName);
                 })();
               }}
               className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--accent-primary)] px-3 text-xs font-semibold text-[var(--ink-on-accent)] disabled:opacity-60"
             >
               <Download className="h-4 w-4" aria-hidden="true" />
               <span>
-                {mobilePreparingExport
-                  ? 'Merender…'
-                  : isImage
-                    ? 'Unduh Foto'
-                    : 'Unduh Video'}
+                {mobilePreparingExport ? 'Merender HD…' : 'Simpan File HD'}
               </span>
             </button>
             <button
@@ -1037,20 +1037,28 @@ export function WorkspaceStage({
               disabled={mobilePreparingExport}
               onClick={() => {
                 void (async () => {
-                  let target = null;
                   if (isImage && needsFullResExport) {
                     setMobilePreparingExport(true);
+                    let target = null;
                     try {
                       target = await handlePreparePhotoFullRes();
                     } finally {
                       setMobilePreparingExport(false);
                     }
+                    if (!target) return;
+                    await executeWhatsAppShareFlow({
+                      blob: target.blob,
+                      objectUrl: target.url,
+                      fileName: target.fileName,
+                      mimeType: target.mimeType,
+                    });
+                    return;
                   }
                   await executeWhatsAppShareFlow({
-                    blob: target?.blob ?? activeExportBlob,
-                    objectUrl: target?.url ?? activeExportUrl,
-                    fileName: target?.fileName ?? activeExportName,
-                    mimeType: target?.mimeType ?? activeExportMime,
+                    blob: activeExportBlob,
+                    objectUrl: activeExportUrl,
+                    fileName: activeExportName,
+                    mimeType: activeExportMime,
                   });
                 })();
               }}

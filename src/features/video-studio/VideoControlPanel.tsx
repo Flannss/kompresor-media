@@ -1402,6 +1402,10 @@ export function VideoControlPanel({
                 readyUrl={processedVideoUrl}
                 outputFileName={videoProcessResult.outputFileName}
                 outputMime={videoProcessResult.outputMime}
+                exportedWidth={videoProcessResult.outputWidth}
+                exportedHeight={videoProcessResult.outputHeight}
+                exportedBytes={videoProcessResult.outputBytes}
+                selectedPresetId={selectedPresetId}
                 finishedBatchItems={finishedBatchItems}
               />
             )}

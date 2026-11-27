@@ -5,6 +5,7 @@ import type {
   VideoProcessRequest,
   VideoProcessResult,
 } from '../contracts';
+import { getDeviceProfile } from '../../shared/utils/deviceCapability';
 import { runFfmpegVideoTranscode } from './ffmpegVideoEngine';
 import { VideoCancelledError } from './videoErrors';
 import {
@@ -106,9 +107,13 @@ export async function processVideo(
 ): Promise<VideoProcessResult> {
   const t0 = performance.now();
   const formatMeta = getVideoFormatMeta(request.edit.outputFormat);
+  const isLowMemoryMobileWa =
+    getDeviceProfile().performanceTier === 'low-memory-mobile' &&
+    (request.edit.presetId === 'whatsapp-hd' || request.edit.presetId === 'whatsapp-status');
   const useFfmpeg =
     request.preferredBackend === 'ffmpeg-wasm-st' ||
-    (request.preferredBackend !== 'webcodecs-mediabunny' && shouldUseFfmpegBackend(request.edit));
+    (request.preferredBackend !== 'webcodecs-mediabunny' &&
+      (shouldUseFfmpegBackend(request.edit) || isLowMemoryMobileWa));
 
   let backendUsed: VideoExecutionBackend = useFfmpeg
     ? 'ffmpeg-wasm-st'

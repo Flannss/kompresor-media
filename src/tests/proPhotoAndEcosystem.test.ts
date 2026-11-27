@@ -88,9 +88,10 @@ describe('KM-T008 Pro Photo Studio (2K-8K RealPhoto, 12 Filters, Adjustments, Ec
     });
     expect(iphoneX.useGlassLite).toBe(true);
     expect(iphoneX.allow8KPhotoExport).toBe(false);
-    expect(iphoneX.maxPhotoCanvasPixels).toBeLessThan(12_000_000);
+    expect(iphoneX.maxPhotoCanvasPixels).toBe(15_000_000);
+    expect(iphoneX.maxPhotoCanvasPixels).toBeLessThan(16_700_000);
 
-    // 8K requested on mobile/iPhone X safely downgrades and clamps square 4K below 12 MP
+    // 8K requested on mobile/iPhone X safely downgrades to 4K and clamps >15 MP squares cleanly
     const mobileGuarded = computePhotoTargetDimensions(
       2000,
       2000,
@@ -101,8 +102,33 @@ describe('KM-T008 Pro Photo Studio (2K-8K RealPhoto, 12 Filters, Adjustments, Ec
       }
     );
     expect(mobileGuarded.appliedTargetResolution).toBe('4k');
-    expect(mobileGuarded.clampedByMemoryGuard).toBe(true);
-    expect(mobileGuarded.width * mobileGuarded.height).toBeLessThanOrEqual(11_500_000);
+    expect(mobileGuarded.clampedByMemoryGuard).toBe(false);
+    expect(mobileGuarded.width * mobileGuarded.height).toBeLessThanOrEqual(15_000_000);
+
+    // Full-res WhatsApp HD (2560px) and Status WA HD (1920px) retain complete target dimensions
+    const mobileWaHd = computePhotoTargetDimensions(
+      3600,
+      2400,
+      getMediaPreset('whatsapp-hd').image,
+      {
+        maxCanvasPixels: iphoneX.maxPhotoCanvasPixels,
+        allow8K: iphoneX.allow8KPhotoExport,
+      }
+    );
+    expect(mobileWaHd.width).toBe(2560);
+    expect(mobileWaHd.height).toBe(1707);
+
+    const mobileWaStatus = computePhotoTargetDimensions(
+      2160,
+      3840,
+      getMediaPreset('whatsapp-status').image,
+      {
+        maxCanvasPixels: iphoneX.maxPhotoCanvasPixels,
+        allow8K: iphoneX.allow8KPhotoExport,
+      }
+    );
+    expect(mobileWaStatus.width).toBe(1080);
+    expect(mobileWaStatus.height).toBe(1920);
   });
 
   it('produces distinct pixel outputs for RealPhoto vs High Quality quality models', () => {

@@ -138,7 +138,7 @@ export function getDeviceProfile(input?: DeviceCapabilityInput): DeviceProfile {
       useLightweightCssPreview,
       useGlassLite,
       allow8KPhotoExport: false,
-      maxPhotoCanvasPixels: 11_500_000,
+      maxPhotoCanvasPixels: 15_000_000,
       releaseFfmpegAfterExport: true,
       maxDualVideoBytes: LOW_MEM_DUAL_VIDEO_CAP_BYTES,
     };

@@ -122,6 +122,8 @@ export function buildFfmpegFilterGraph(
 ): BuiltFfmpegFilterGraph {
   const trim = clampTrimRange(edit.trimStartSec, edit.trimEndSec, sourceMetadata.durationSec);
   const { noise, sharpen, colorContrast, upscale1080 } = edit.enhanceSuite;
+  const isWhatsAppPreset =
+    edit.presetId === 'whatsapp-hd' || edit.presetId === 'whatsapp-status';
 
   const dims = upscale1080.enabled
     ? compute1080pTargetDimensions(
@@ -138,13 +140,15 @@ export function buildFfmpegFilterGraph(
 
   const vFilters: string[] = [];
 
-  // Step 1: Denoise BEFORE scaling to prevent amplifying grain
+  // Step 1: Denoise BEFORE scaling to prevent amplifying grain (plus subtle WA anti-blur pass)
   if (noise.enabled) {
     const lumaSpatial = noise.grainStrength.toFixed(1);
     const chromaSpatial = noise.colorSmooth.toFixed(1);
     const lumaTemp = Math.max(1, noise.motionStability).toFixed(1);
     const chromaTemp = Math.max(1, Number((noise.motionStability * 0.72).toFixed(1))).toFixed(1);
     vFilters.push(`hqdn3d=${lumaSpatial}:${chromaSpatial}:${lumaTemp}:${chromaTemp}`);
+  } else if (isWhatsAppPreset) {
+    vFilters.push('hqdn3d=1.5:1.2:3.0:2.2');
   }
 
   // Step 2: Scaling (with aspect lock or clean center-fill to 16:9 / 9:16 1080p)
@@ -179,12 +183,14 @@ export function buildFfmpegFilterGraph(
   );
   vFilters.push(...colorSegments);
 
-  // Step 5: Detail sharpening strictly AFTER scaling
+  // Step 5: Detail sharpening strictly AFTER scaling (pre-compensate WA second-pass softness)
   if (sharpen.enabled) {
     const k = sharpen.kernelSize;
     const strength = Math.min(2.0, Math.max(0.2, sharpen.strength)).toFixed(2);
     const chromaAmount = sharpen.antiArtifact ? '0.0' : '0.15';
     vFilters.push(`unsharp=${k}:${k}:${strength}:3:3:${chromaAmount}`);
+  } else if (isWhatsAppPreset) {
+    vFilters.push('unsharp=5:5:0.45:5:5:0.0');
   }
 
   // Step 6: FPS cap
@@ -311,6 +317,10 @@ export function buildFfmpegArgs(params: {
     args.push(
       '-c:v',
       'libx264',
+      '-profile:v',
+      'high',
+      '-level',
+      '4.1',
       '-preset',
       'veryfast',
       '-crf',
@@ -320,7 +330,13 @@ export function buildFfmpegArgs(params: {
       '-bufsize',
       `${edit.bufsizeKbps}k`,
       '-pix_fmt',
-      'yuv420p'
+      'yuv420p',
+      '-colorspace',
+      'bt709',
+      '-color_primaries',
+      'bt709',
+      '-color_trc',
+      'bt709'
     );
     if (edit.outputFormat === 'mp4' || edit.outputFormat === 'mov') {
       args.push('-movflags', '+faststart');
@@ -337,7 +353,7 @@ export function buildFfmpegArgs(params: {
     if (edit.outputFormat === 'webm') {
       args.push('-c:a', 'libopus', '-b:a', `${aBitrate}k`);
     } else {
-      args.push('-c:a', 'aac', '-b:a', `${aBitrate}k`);
+      args.push('-c:a', 'aac', '-b:a', `${aBitrate}k`, '-ar', '48000');
     }
   }
 

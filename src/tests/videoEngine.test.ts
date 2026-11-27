@@ -74,10 +74,25 @@ describe('video presets, trim helpers, and even scaling', () => {
 
   it('provides consistent video preset configurations across all calibrated destinations', () => {
     expect(MEDIA_PRESETS.length).toBe(9);
-    expect(getMediaPreset('whatsapp-hd').video.maxHeightPx).toBe(1080);
-    expect(getMediaPreset('whatsapp-hd').video.targetBitrateBps).toBe(4_500_000);
+    const waHd = getMediaPreset('whatsapp-hd').video;
+    expect(waHd.maxHeightPx).toBe(1080);
+    expect(waHd.fpsCap).toBe(30);
+    expect(waHd.crf).toBe(20);
+    expect(waHd.maxrateKbps).toBe(6500);
+    expect(waHd.bufsizeKbps).toBe(13000);
+    expect(waHd.targetBitrateBps).toBe(6_000_000);
+    expect(waHd.audioBitrateKbps).toBe(128);
+
     expect(getMediaPreset('whatsapp-fast').video.maxHeightPx).toBe(720);
-    expect(getMediaPreset('whatsapp-status').video.maxHeightPx).toBe(1080);
+
+    const waStatus = getMediaPreset('whatsapp-status').video;
+    expect(waStatus.maxHeightPx).toBe(1080);
+    expect(waStatus.fpsCap).toBe(30);
+    expect(waStatus.crf).toBe(21);
+    expect(waStatus.maxrateKbps).toBe(4200);
+    expect(waStatus.bufsizeKbps).toBe(8400);
+    expect(waStatus.audioBitrateKbps).toBe(128);
+
     expect(getMediaPreset('instagram-story').video.maxHeightPx).toBe(1080);
     expect(getMediaPreset('tiktok-hd').video.fpsCap).toBe(60);
     expect(getMediaPreset('web-light').video.maxHeightPx).toBe(480);

@@ -362,6 +362,9 @@ async function processPhotoItem(
   ) => void,
   previewOnly = false
 ): Promise<void> {
+  if (!previewOnly) {
+    clearItemTimers(itemId);
+  }
   const targetItem = get().items.find((i) => i.id === itemId);
   if (!targetItem || targetItem.metadata.kind !== 'image') {
     return;
@@ -1115,7 +1118,12 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     const { nextEdit, nextPreset } = buildNextEdit(active.imageEdit, active.selectedPresetId);
     updateItemInStore(get, set, active.id, (it) => {
       if (!commitHistory) {
-        return { ...it, selectedPresetId: nextPreset, imageEdit: nextEdit };
+        return {
+          ...it,
+          selectedPresetId: nextPreset,
+          imageEdit: nextEdit,
+          needsFullResExport: true,
+        };
       }
       const pushed = pushSnapshot(it.photoHistory, it.photoHistoryIndex, nextEdit);
       return {
@@ -1280,12 +1288,14 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     if (!id) return null;
     const item = get().items.find((i) => i.id === id);
     if (!item || item.metadata.kind !== 'image') return null;
-    if (!item.needsFullResExport && item.imageResult && item.outputUrl) {
+    const hadPendingTimer = previewTimers.has(id);
+    clearItemTimers(id);
+    if (!hadPendingTimer && !item.needsFullResExport && item.imageResult && item.outputUrl) {
       return { result: item.imageResult, url: item.outputUrl };
     }
     await processPhotoItem(id, get, set, false);
     const updated = get().items.find((i) => i.id === id);
-    if (updated?.imageResult && updated.outputUrl) {
+    if (updated && !updated.needsFullResExport && updated.imageResult && updated.outputUrl) {
       return { result: updated.imageResult, url: updated.outputUrl };
     }
     return null;
@@ -1293,9 +1303,12 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
 
   ensureAllPhotosFullRes: async () => {
     const pending = get().items.filter(
-      (i) => i.metadata.kind === 'image' && (!i.imageResult || i.needsFullResExport)
+      (i) =>
+        i.metadata.kind === 'image' &&
+        (previewTimers.has(i.id) || !i.imageResult || i.needsFullResExport)
     );
     for (const item of pending) {
+      clearItemTimers(item.id);
       await processPhotoItem(item.id, get, set, false);
     }
   },
