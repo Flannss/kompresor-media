@@ -9,6 +9,7 @@ import {
   Download,
   Focus,
   ImagePlus,
+  Lock,
   Play,
   Plus,
   RotateCcw,
@@ -28,12 +29,14 @@ import type {
   SubtitleCue,
   SubtitlePosition,
   SubtitleSize,
+  VideoClarityModel,
   VideoEditState,
   VideoMetadata,
   VideoOutputFormat,
   VideoProcessProgress,
   VideoProcessResult,
   VideoQualityTier,
+  VideoTargetResolution,
 } from '../../engines/contracts';
 import {
   applyEnhanceRecipe,
@@ -101,11 +104,42 @@ const VIDEO_FORMAT_OPTIONS: ReadonlyArray<{ value: VideoOutputFormat; label: str
   { value: 'mkv', label: 'MKV' },
 ];
 
-const RESOLUTION_OPTIONS: ReadonlyArray<{ value: number | null; label: string }> = [
-  { value: null, label: 'Asli' },
-  { value: 1080, label: '1080p' },
-  { value: 720, label: '720p' },
-  { value: 480, label: '480p' },
+const RESOLUTION_OPTIONS: ReadonlyArray<{
+  value: VideoTargetResolution;
+  maxHeightPx: number | null;
+  label: string;
+}> = [
+  { value: 'original', maxHeightPx: null, label: 'Asli' },
+  { value: '720p', maxHeightPx: 720, label: '720p' },
+  { value: '1080p', maxHeightPx: 1080, label: '1080p HD' },
+  { value: '2k', maxHeightPx: 1440, label: '2K 1440p' },
+];
+
+const VIDEO_CLARITY_MODELS: ReadonlyArray<{
+  id: VideoClarityModel;
+  title: string;
+  desc: string;
+}> = [
+  {
+    id: 'original',
+    title: 'Asli (Hemat)',
+    desc: 'Lanczos + BT.709 murni, pertahankan tekstur asli',
+  },
+  {
+    id: 'natural-hd',
+    title: 'Natural HD',
+    desc: 'Bersih halus + anti-buram siap kompres WA/IG',
+  },
+  {
+    id: 'sharp-1080p',
+    title: 'Tajam 1080p',
+    desc: 'Pulihkan detail teks, objek, & rekaman buram',
+  },
+  {
+    id: 'low-light',
+    title: 'Malam & Minim Cahaya',
+    desc: 'Redam bintik gelap + angkat bayangan bersih',
+  },
 ];
 
 const FPS_OPTIONS: ReadonlyArray<{ value: number | null; label: string }> = [
@@ -122,10 +156,10 @@ const QUALITY_TIER_OPTIONS: ReadonlyArray<{ value: VideoQualityTier; label: stri
 ];
 
 const AUDIO_CLARITY_OPTIONS: ReadonlyArray<{ kbps: AudioBitrateKbps; label: string }> = [
-  { kbps: 96, label: 'Hemat' },
-  { kbps: 128, label: 'Standar' },
-  { kbps: 192, label: 'Tinggi' },
-  { kbps: 320, label: 'Maksimal' },
+  { kbps: 128, label: '128k' },
+  { kbps: 160, label: '160k' },
+  { kbps: 192, label: '192k' },
+  { kbps: 320, label: '320k' },
 ];
 
 function getStageLabel(progress: VideoProcessProgress | null): string {
@@ -200,16 +234,18 @@ export function VideoControlPanel({
 
   const hasHeavyMobileFilters =
     deviceProfile.performanceTier === 'low-memory-mobile' &&
-    (videoEdit.stabilize.enabled ||
-      videoEdit.enhanceSuite.noise.enabled ||
-      videoEdit.enhanceSuite.upscale1080.enabled) &&
-    (metadata.durationSec > 25 || metadata.sizeBytes > 40 * 1024 * 1024);
+    (metadata.durationSec > 60 ||
+      ((videoEdit.stabilize.enabled ||
+        videoEdit.enhanceSuite.noise.enabled ||
+        videoEdit.enhanceSuite.upscale1080.enabled) &&
+        (metadata.durationSec > 25 || metadata.sizeBytes > 40 * 1024 * 1024)));
 
   const handleApplyMobileLightSettings = () => {
     const balancedParams = resolveCustomVideoParams('balanced');
     const defaults = createDefaultEnhanceSuite();
     onUpdateVideoEdit({
       outputFormat: 'mp4',
+      targetResolution: '720p',
       maxHeightPx: 720,
       qualityTier: 'balanced',
       ...balancedParams,
@@ -420,8 +456,8 @@ export function VideoControlPanel({
           <div className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <p className="leading-relaxed">
-              Efek berat diaktifkan pada video panjang/besar di ponsel. Agar proses cepat dan ringan,
-              disarankan gunakan resolusi 720p.
+              Video berdurasi panjang atau memakai efek berat di ponsel. Tetap pertahankan 1080p HD,
+              atau aktifkan mode hemat RAM di bawah jika diperlukan.
             </p>
           </div>
           <Button
@@ -432,7 +468,7 @@ export function VideoControlPanel({
             onClick={handleApplyMobileLightSettings}
             className="min-h-[38px] self-start"
           >
-            Pakai Setelan Ringan HP
+            Mode Hemat RAM HP (720p)
           </Button>
         </div>
       )}
@@ -507,30 +543,50 @@ export function VideoControlPanel({
 
             <div>
               <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
-                Resolusi
+                Resolusi Output
               </span>
               <div className="mt-1.5 grid grid-cols-4 gap-1.5">
                 {RESOLUTION_OPTIONS.map((opt) => {
-                  const active = videoEdit.maxHeightPx === opt.value;
+                  const isLocked2k = opt.value === '2k' && !deviceProfile.allow2KVideoExport;
+                  const active = videoEdit.targetResolution === opt.value;
                   return (
                     <button
-                      key={opt.label}
+                      key={opt.value}
                       type="button"
-                      disabled={isProcessing}
-                      data-testid={`video-res-${opt.value ?? 'original'}`}
+                      disabled={isProcessing || isLocked2k}
+                      data-testid={`video-res-${opt.value}`}
                       aria-pressed={active}
-                      onClick={() => onUpdateVideoEdit({ maxHeightPx: opt.value })}
-                      className={`min-h-[36px] rounded-lg border text-xs font-medium tabular-nums transition-all disabled:opacity-50 ${
+                      title={
+                        isLocked2k
+                          ? 'Video 2K aktif di Laptop/Desktop agar memori HP tetap aman.'
+                          : opt.label
+                      }
+                      onClick={() =>
+                        onUpdateVideoEdit({
+                          targetResolution: opt.value,
+                          maxHeightPx: opt.maxHeightPx,
+                        })
+                      }
+                      className={`inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg border px-1.5 text-[11px] font-medium tabular-nums transition-all disabled:cursor-not-allowed disabled:opacity-45 ${
                         active
                           ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
                       }`}
                     >
-                      {opt.label}
+                      <span>{opt.label}</span>
+                      {isLocked2k && <Lock className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />}
                     </button>
                   );
                 })}
               </div>
+              {!deviceProfile.allow2KVideoExport && (
+                <p
+                  data-testid="guard-2k-video-note"
+                  className="mt-1.5 text-[10px] leading-snug text-[var(--text-muted)]"
+                >
+                  Video 2K aktif di Laptop/Desktop agar memori HP tetap aman.
+                </p>
+              )}
             </div>
 
             <div>
@@ -729,20 +785,77 @@ export function VideoControlPanel({
         </div>
       )}
 
-      {/* TAB 2: TAMPILAN (1080p HD Enhancer + 7 Live Color Grades) */}
+      {/* TAB 2: TAMPILAN (Model Penjernih Video HD + 1080p HD Enhancer + 7 Live Color Grades) */}
       {activeTab === 'tampilan' && (
-        <EnhanceAndGradePanel
-          mediaKind="video"
-          enhanceSuite={videoEdit.enhanceSuite}
-          colorGrade={videoEdit.colorGrade}
-          baseThumbnailUrl={baseThumbnailUrl}
-          onRequestThumbnail={onRequestThumbnail}
-          holdOriginalActive={holdOriginalActive}
-          onHoldOriginalChange={onHoldOriginalChange}
-          onUpdateEnhanceSuite={(nextSuite) => onUpdateVideoEdit({ enhanceSuite: nextSuite })}
-          onUpdateColorGrade={(nextGrade) => onUpdateVideoEdit({ colorGrade: nextGrade })}
-          onSelectColorGrade={onSelectColorGrade}
-        />
+        <div className="space-y-4">
+          <div className="space-y-3 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-[var(--text-primary)]">
+                Model Penjernih Video
+              </span>
+              <span className="rounded-md border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent-highlight)]">
+                {VIDEO_CLARITY_MODELS.find((m) => m.id === videoEdit.clarityModel)?.title ??
+                  'Natural HD'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {VIDEO_CLARITY_MODELS.map((model) => {
+                const active = videoEdit.clarityModel === model.id;
+                return (
+                  <button
+                    key={model.id}
+                    type="button"
+                    disabled={isProcessing}
+                    data-testid={`video-clarity-model-${model.id}`}
+                    aria-pressed={active}
+                    onClick={() => onUpdateVideoEdit({ clarityModel: model.id })}
+                    className={`flex flex-col items-start rounded-xl border px-2.5 py-2 text-left transition-all ${
+                      active
+                        ? 'border-[var(--accent-primary)] bg-[var(--accent-tint)] text-[var(--text-primary)] shadow-sm'
+                        : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    <span
+                      className={`text-xs font-semibold ${
+                        active ? 'text-[var(--accent-highlight)]' : 'text-[var(--text-primary)]'
+                      }`}
+                    >
+                      {model.title}
+                    </span>
+                    <span className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">
+                      {model.desc}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <Slider
+              label="Kekuatan Penjernih"
+              testId="slider-video-clarity-strength"
+              min={0}
+              max={100}
+              step={5}
+              defaultValue={80}
+              value={videoEdit.clarityStrength}
+              valueLabel={`${videoEdit.clarityStrength}%`}
+              disabled={isProcessing}
+              onChange={(val) => onUpdateVideoEdit({ clarityStrength: val })}
+            />
+          </div>
+
+          <EnhanceAndGradePanel
+            mediaKind="video"
+            enhanceSuite={videoEdit.enhanceSuite}
+            colorGrade={videoEdit.colorGrade}
+            baseThumbnailUrl={baseThumbnailUrl}
+            onRequestThumbnail={onRequestThumbnail}
+            holdOriginalActive={holdOriginalActive}
+            onHoldOriginalChange={onHoldOriginalChange}
+            onUpdateEnhanceSuite={(nextSuite) => onUpdateVideoEdit({ enhanceSuite: nextSuite })}
+            onUpdateColorGrade={(nextGrade) => onUpdateVideoEdit({ colorGrade: nextGrade })}
+            onSelectColorGrade={onSelectColorGrade}
+          />
+        </div>
       )}
 
       {/* TAB 3: LANJUTAN (Stabilizer, Audio, Subtitle, Ambil Frame) */}

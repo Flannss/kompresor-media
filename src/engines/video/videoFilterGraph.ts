@@ -3,6 +3,7 @@ import type {
   VideoMetadata,
   VideoOutputFormat,
   VideoOutputMime,
+  VideoPresetId,
 } from '../contracts';
 import {
   buildColorGradeFfmpegFilters,
@@ -10,7 +11,18 @@ import {
   hasActiveColorGrade,
   hasActiveEnhancements,
 } from '../shared/colorGrades';
-import { clampTrimRange, computeEvenScaledDimensions } from './videoPresets';
+import {
+  clampTrimRange,
+  computeVideoTargetDimensions,
+  VIDEO_CLARITY_MODEL_LABELS,
+} from './videoPresets';
+
+export const SOCIAL_HD_PRESET_IDS: ReadonlySet<VideoPresetId> = new Set([
+  'whatsapp-hd',
+  'whatsapp-status',
+  'instagram-story',
+  'tiktok-hd',
+]);
 
 export interface VideoFormatMeta {
   format: VideoOutputFormat;
@@ -57,10 +69,19 @@ export function getEffectiveAudioBitrateKbps(edit: VideoEditState): number {
 export function getActiveVideoModuleLabels(edit: VideoEditState): string[] {
   const labels: string[] = [];
   if (edit.compressEnabled) labels.push('Kompres');
+  if (edit.clarityModel && edit.clarityModel !== 'original') {
+    labels.push(VIDEO_CLARITY_MODEL_LABELS[edit.clarityModel]);
+  }
+  if (edit.targetResolution === '2k') {
+    labels.push('2K');
+  } else if (edit.targetResolution === '1080p' || edit.enhanceSuite.upscale1080.enabled) {
+    labels.push('1080p');
+  } else if (edit.targetResolution === '720p') {
+    labels.push('720p');
+  }
   if (edit.enhanceSuite.noise.enabled) labels.push('Noise');
   if (edit.enhanceSuite.sharpen.enabled) labels.push('Tajam');
   if (edit.enhanceSuite.colorContrast.enabled) labels.push('Warna');
-  if (edit.enhanceSuite.upscale1080.enabled) labels.push('1080p');
   if (hasActiveColorGrade(edit.colorGrade)) labels.push('Filter');
   if (edit.stabilize.enabled) labels.push('Stabilkan');
   if (edit.audio.enabled || edit.muteAudio) labels.push('Audio');
@@ -70,12 +91,26 @@ export function getActiveVideoModuleLabels(edit: VideoEditState): string[] {
 }
 
 /**
- * Smart hybrid router: picks hardware WebCodecs + mediabunny for standard MP4/WebM
- * compression/trim/mute/hardsub, and switches to single-pass FFmpeg WASM whenever
- * MOV/MKV, Enhancement Suite, Color Grading/Tone, Stabilizer, Audio DSP, or Softsub are active.
+ * Deterministic cross-device router:
+ * Runs crisp libx264 FFmpeg WASM whenever MOV/MKV, Social-HD presets, 1080p/2K target resolution,
+ * clarity models, enhancement suite, color grading, stabilizer, audio DSP, or softsub are active.
+ * Reserves WebCodecs strictly for fast simple passthrough/light compression without filtergraphs.
  */
 export function shouldUseFfmpegBackend(edit: VideoEditState): boolean {
   if (edit.outputFormat === 'mov' || edit.outputFormat === 'mkv') {
+    return true;
+  }
+  if (SOCIAL_HD_PRESET_IDS.has(edit.presetId)) {
+    return true;
+  }
+  if (edit.targetResolution === '1080p' || edit.targetResolution === '2k') {
+    return true;
+  }
+  if (
+    edit.clarityModel &&
+    edit.clarityModel !== 'original' &&
+    (edit.clarityStrength ?? 80) > 0
+  ) {
     return true;
   }
   if (hasActiveEnhancements(edit.enhanceSuite) || hasActiveColorGrade(edit.colorGrade)) {
@@ -110,10 +145,10 @@ export interface BuiltFfmpegFilterGraph {
 /**
  * Optimal LUT-free single-pass FFmpeg signal pipeline:
  * 1. hqdn3d noise reduction (BEFORE scaling)
- * 2. scale (lanczos/bicubic + orientation-aware 1920x1080 / 1080x1920 when enabled)
+ * 2. scale (lanczos/bicubic + even 1080p/2K/720p dimensions + setsar=1)
  * 3. deshake stabilizer (if active)
- * 4. eq + colorchannelmixer + colorbalance + curves (100% LUT-free grade & tone)
- * 5. unsharp detail sharpen (AFTER scaling, chroma untouched when antiArtifact=true)
+ * 4. eq + colorchannelmixer + colorbalance + curves (100% LUT-free grade & clarity tone)
+ * 5. unsharp luminance detail sharpen (AFTER scaling, chroma untouched)
  * 6. fps cap (when selected)
  */
 export function buildFfmpegFilterGraph(
@@ -122,8 +157,9 @@ export function buildFfmpegFilterGraph(
 ): BuiltFfmpegFilterGraph {
   const trim = clampTrimRange(edit.trimStartSec, edit.trimEndSec, sourceMetadata.durationSec);
   const { noise, sharpen, colorContrast, upscale1080 } = edit.enhanceSuite;
-  const isWhatsAppPreset =
-    edit.presetId === 'whatsapp-hd' || edit.presetId === 'whatsapp-status';
+  const targetRes = edit.targetResolution ?? 'original';
+  const clarityModel = edit.clarityModel ?? 'original';
+  const clarityScale = Math.min(1, Math.max(0, (edit.clarityStrength ?? 80) / 100));
 
   const dims = upscale1080.enabled
     ? compute1080pTargetDimensions(
@@ -131,43 +167,57 @@ export function buildFfmpegFilterGraph(
         sourceMetadata.height,
         upscale1080.keepAspect
       )
-    : computeEvenScaledDimensions(
+    : computeVideoTargetDimensions(
         sourceMetadata.width,
         sourceMetadata.height,
-        edit.maxHeightPx,
-        1
+        targetRes,
+        edit.maxHeightPx
       );
 
   const vFilters: string[] = [];
 
-  // Step 1: Denoise BEFORE scaling to prevent amplifying grain (plus subtle WA anti-blur pass)
+  // Step 1: Denoise BEFORE scaling to prevent amplifying grain/blockiness
   if (noise.enabled) {
     const lumaSpatial = noise.grainStrength.toFixed(1);
     const chromaSpatial = noise.colorSmooth.toFixed(1);
     const lumaTemp = Math.max(1, noise.motionStability).toFixed(1);
     const chromaTemp = Math.max(1, Number((noise.motionStability * 0.72).toFixed(1))).toFixed(1);
     vFilters.push(`hqdn3d=${lumaSpatial}:${chromaSpatial}:${lumaTemp}:${chromaTemp}`);
-  } else if (isWhatsAppPreset) {
-    vFilters.push('hqdn3d=1.5:1.2:3.0:2.2');
+  } else if (clarityScale > 0.01) {
+    if (clarityModel === 'natural-hd') {
+      vFilters.push(
+        `hqdn3d=${(1.2 * clarityScale).toFixed(2)}:${(1.0 * clarityScale).toFixed(2)}:${(2.5 * clarityScale).toFixed(2)}:${(2.0 * clarityScale).toFixed(2)}`
+      );
+    } else if (clarityModel === 'sharp-1080p') {
+      vFilters.push(
+        `hqdn3d=${(1.4 * clarityScale).toFixed(2)}:${(1.1 * clarityScale).toFixed(2)}:${(3.0 * clarityScale).toFixed(2)}:${(2.4 * clarityScale).toFixed(2)}`
+      );
+    } else if (clarityModel === 'low-light') {
+      vFilters.push(
+        `hqdn3d=${(2.8 * clarityScale).toFixed(2)}:${(2.2 * clarityScale).toFixed(2)}:${(4.5 * clarityScale).toFixed(2)}:${(3.5 * clarityScale).toFixed(2)}`
+      );
+    }
   }
 
-  // Step 2: Scaling (with aspect lock or clean center-fill to 16:9 / 9:16 1080p)
+  // Step 2: Scaling with lanczos + even dimensions + setsar=1
   const scaleFlags = upscale1080.enabled ? upscale1080.method : 'lanczos';
-  const needsScale =
+  const wantsExplicitResize =
     upscale1080.enabled ||
+    targetRes === '1080p' ||
+    targetRes === '2k' ||
     dims.width !== sourceMetadata.width ||
-    dims.height !== sourceMetadata.height ||
-    vFilters.length === 0;
+    dims.height !== sourceMetadata.height;
 
-  if (needsScale) {
-    if (upscale1080.enabled && !upscale1080.keepAspect) {
-      vFilters.push(
-        `scale=${dims.width}:${dims.height}:force_original_aspect_ratio=increase:flags=${scaleFlags}`,
-        `crop=${dims.width}:${dims.height}`
-      );
-    } else {
-      vFilters.push(`scale=${dims.width}:${dims.height}:flags=${scaleFlags}`);
-    }
+  if (upscale1080.enabled && !upscale1080.keepAspect) {
+    vFilters.push(
+      `scale=${dims.width}:${dims.height}:force_original_aspect_ratio=increase:flags=${scaleFlags}`,
+      `crop=${dims.width}:${dims.height}`,
+      'setsar=1'
+    );
+  } else if (wantsExplicitResize) {
+    vFilters.push(`scale=${dims.width}:${dims.height}:flags=${scaleFlags}`, 'setsar=1');
+  } else {
+    vFilters.push(`scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=${scaleFlags}`, 'setsar=1');
   }
 
   // Step 3: Deshake stabilizer (if active)
@@ -176,21 +226,39 @@ export function buildFfmpegFilterGraph(
     vFilters.push(`deshake=rx=${r}:ry=${r}:edge=mirror`);
   }
 
-  // Step 4: Color Grading, Color/Contrast Enhancement & Manual Tone Adjustments (LUT-free)
+  // Step 4: Color Grading, Color/Contrast Enhancement, Clarity Tone & Manual Adjustments
   const colorSegments = buildColorGradeFfmpegFilters(
     edit.colorGrade,
     colorContrast.enabled ? colorContrast : undefined
   );
   vFilters.push(...colorSegments);
 
-  // Step 5: Detail sharpening strictly AFTER scaling (pre-compensate WA second-pass softness)
+  if (clarityScale > 0.01) {
+    if (clarityModel === 'sharp-1080p') {
+      vFilters.push(
+        `eq=contrast=${(1 + 0.04 * clarityScale).toFixed(3)}:saturation=${(1 + 0.05 * clarityScale).toFixed(3)}`
+      );
+    } else if (clarityModel === 'low-light') {
+      vFilters.push(
+        `eq=gamma=${(1 + 0.08 * clarityScale).toFixed(3)}:contrast=${(1 + 0.03 * clarityScale).toFixed(3)}:saturation=${(1 + 0.04 * clarityScale).toFixed(3)}`
+      );
+    }
+  }
+
+  // Step 5: Detail sharpening strictly AFTER scaling (chroma untouched)
   if (sharpen.enabled) {
     const k = sharpen.kernelSize;
     const strength = Math.min(2.0, Math.max(0.2, sharpen.strength)).toFixed(2);
     const chromaAmount = sharpen.antiArtifact ? '0.0' : '0.15';
     vFilters.push(`unsharp=${k}:${k}:${strength}:3:3:${chromaAmount}`);
-  } else if (isWhatsAppPreset) {
-    vFilters.push('unsharp=5:5:0.45:5:5:0.0');
+  } else if (clarityScale > 0.01) {
+    if (clarityModel === 'natural-hd') {
+      vFilters.push(`unsharp=5:5:${(0.45 * clarityScale).toFixed(2)}:5:5:0.0`);
+    } else if (clarityModel === 'sharp-1080p') {
+      vFilters.push(`unsharp=5:5:${(0.78 * clarityScale).toFixed(2)}:5:5:0.0`);
+    } else if (clarityModel === 'low-light') {
+      vFilters.push(`unsharp=5:5:${(0.35 * clarityScale).toFixed(2)}:5:5:0.0`);
+    }
   }
 
   // Step 6: FPS cap
@@ -336,7 +404,15 @@ export function buildFfmpegArgs(params: {
       '-color_primaries',
       'bt709',
       '-color_trc',
-      'bt709'
+      'bt709',
+      '-color_range',
+      'tv',
+      '-g',
+      '60',
+      '-keyint_min',
+      '30',
+      '-sc_threshold',
+      '0'
     );
     if (edit.outputFormat === 'mp4' || edit.outputFormat === 'mov') {
       args.push('-movflags', '+faststart');
@@ -353,7 +429,7 @@ export function buildFfmpegArgs(params: {
     if (edit.outputFormat === 'webm') {
       args.push('-c:a', 'libopus', '-b:a', `${aBitrate}k`);
     } else {
-      args.push('-c:a', 'aac', '-b:a', `${aBitrate}k`, '-ar', '48000');
+      args.push('-c:a', 'aac', '-b:a', `${aBitrate}k`, '-ar', '48000', '-ac', '2');
     }
   }
 

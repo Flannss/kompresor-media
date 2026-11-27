@@ -8,12 +8,15 @@ import {
 import { getMediaPreset } from '../presets/mediaPresets';
 
 describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
-  it('routes simple MP4/WebM compress + trim + hardsub via fast WebCodecs path', () => {
-    const base = structuredClone(getMediaPreset('whatsapp-hd').video);
-    expect(shouldUseFfmpegBackend(base)).toBe(false);
+  it('routes simple custom/light MP4 & WebM compress without filtergraphs via fast WebCodecs path, and Social-HD presets deterministically via FFmpeg', () => {
+    const simpleCustom = structuredClone(getMediaPreset('custom').video);
+    expect(shouldUseFfmpegBackend(simpleCustom)).toBe(false);
 
-    base.outputFormat = 'webm';
-    base.subtitle = {
+    const lightPreset = structuredClone(getMediaPreset('web-light').video);
+    expect(shouldUseFfmpegBackend(lightPreset)).toBe(false);
+
+    simpleCustom.outputFormat = 'webm';
+    simpleCustom.subtitle = {
       enabled: true,
       mode: 'hardsub',
       size: 'medium',
@@ -21,34 +24,44 @@ describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
       sourceFileName: null,
       cues: [{ id: '1', startSec: 0, endSec: 2, text: 'Tes' }],
     };
-    expect(shouldUseFfmpegBackend(base)).toBe(false);
+    expect(shouldUseFfmpegBackend(simpleCustom)).toBe(false);
+
+    for (const socialId of ['whatsapp-hd', 'whatsapp-status', 'instagram-story', 'tiktok-hd'] as const) {
+      expect(shouldUseFfmpegBackend(getMediaPreset(socialId).video)).toBe(true);
+    }
+
+    const sharp1080 = structuredClone(getMediaPreset('custom').video);
+    sharp1080.clarityModel = 'sharp-1080p';
+    sharp1080.targetResolution = '1080p';
+    expect(shouldUseFfmpegBackend(sharp1080)).toBe(true);
   });
 
   it('routes MOV/MKV, enhanceSuite, colorGrade, stabilizer, audio filters, and softsub via single-pass FFmpeg', () => {
-    const mov = structuredClone(getMediaPreset('whatsapp-hd').video);
+    const mov = structuredClone(getMediaPreset('custom').video);
     mov.outputFormat = 'mov';
     expect(shouldUseFfmpegBackend(mov)).toBe(true);
 
-    const enhanced = structuredClone(getMediaPreset('whatsapp-hd').video);
+    const enhanced = structuredClone(getMediaPreset('custom').video);
     enhanced.enhanceSuite.noise.enabled = true;
     expect(shouldUseFfmpegBackend(enhanced)).toBe(true);
 
-    const graded = structuredClone(getMediaPreset('whatsapp-hd').video);
+    const graded = structuredClone(getMediaPreset('custom').video);
     graded.colorGrade.gradeId = 'teal-orange';
     expect(shouldUseFfmpegBackend(graded)).toBe(true);
 
-    const stabilized = structuredClone(getMediaPreset('whatsapp-hd').video);
+    const stabilized = structuredClone(getMediaPreset('custom').video);
     stabilized.stabilize.enabled = true;
     expect(shouldUseFfmpegBackend(stabilized)).toBe(true);
 
-    const eq = structuredClone(getMediaPreset('whatsapp-hd').video);
+    const eq = structuredClone(getMediaPreset('custom').video);
     eq.audio = { ...eq.audio, enabled: true, vocalClarity: true };
     expect(shouldUseFfmpegBackend(eq)).toBe(true);
   });
 
   it('builds single-pass -vf in strict hqdn3d -> scale -> deshake -> color -> unsharp order with anti-deadlock flags', () => {
-    const edit = structuredClone(getMediaPreset('whatsapp-hd').video);
+    const edit = structuredClone(getMediaPreset('custom').video);
     edit.outputFormat = 'mkv';
+    edit.targetResolution = '720p';
     edit.maxHeightPx = 720;
     edit.fpsCap = 30;
     edit.enhanceSuite = {
@@ -108,7 +121,7 @@ describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
     expect(fg.targetWidth).toBe(1280);
     expect(fg.targetHeight).toBe(720);
     expect(fg.vfChain).toContain('hqdn3d=4.0:3.0:6.0:4.3');
-    expect(fg.vfChain).toContain('scale=1280:720:flags=lanczos');
+    expect(fg.vfChain).toContain('scale=1280:720:flags=lanczos,setsar=1');
     expect(fg.vfChain).toContain('deshake=rx=32:ry=32:edge=mirror');
     expect(fg.vfChain).toContain('eq=contrast=');
     expect(fg.vfChain).toContain('colorbalance=');
@@ -151,6 +164,7 @@ describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
     expect(built.outputFileNameOnFs).toBe('output.mkv');
     expect(getActiveVideoModuleLabels(edit)).toEqual([
       'Kompres',
+      '720p',
       'Noise',
       'Tajam',
       'Warna',
@@ -186,8 +200,55 @@ describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
     expect(built.outputFileNameOnFs).toBe('output.webm');
   });
 
-  it('calibrates WhatsApp HD & Status WA HD FFmpeg pipeline with BT.709, High@L4.1, lanczos, anti-blur unsharp, and VBV caps', () => {
-    for (const presetId of ['whatsapp-hd', 'whatsapp-status'] as const) {
+  it('builds distinct filtergraphs for all 4 Video Clarity Models and scales proportionally with clarityStrength', () => {
+    const models = ['original', 'natural-hd', 'sharp-1080p', 'low-light'] as const;
+    const vfByModel = new Map<string, string>();
+    for (const model of models) {
+      const edit = structuredClone(getMediaPreset('whatsapp-hd').video);
+      edit.clarityModel = model;
+      edit.clarityStrength = 100;
+      const fg = buildFfmpegFilterGraph({ width: 640, height: 360, durationSec: 10 }, edit);
+      expect(fg.targetWidth).toBe(1920);
+      expect(fg.targetHeight).toBe(1080);
+      expect(fg.vfChain).toContain('scale=1920:1080:flags=lanczos,setsar=1');
+      vfByModel.set(model, fg.vfChain);
+    }
+
+    expect(new Set(vfByModel.values()).size).toBe(4);
+    expect(vfByModel.get('original')).not.toContain('hqdn3d=');
+    expect(vfByModel.get('natural-hd')).toContain('unsharp=5:5:0.45:5:5:0.0');
+    expect(vfByModel.get('sharp-1080p')).toContain('unsharp=5:5:0.78:5:5:0.0');
+    expect(vfByModel.get('sharp-1080p')).toContain('eq=contrast=1.040:saturation=1.050');
+    expect(vfByModel.get('low-light')).toContain('hqdn3d=2.80:2.20:4.50:3.50');
+    expect(vfByModel.get('low-light')).toContain('eq=gamma=1.080:contrast=1.030:saturation=1.040');
+
+    // Scaling by clarityStrength (0% vs 50% vs 100%)
+    const halfEdit = structuredClone(getMediaPreset('whatsapp-hd').video);
+    halfEdit.clarityModel = 'sharp-1080p';
+    halfEdit.clarityStrength = 50;
+    const halfFg = buildFfmpegFilterGraph({ width: 640, height: 360, durationSec: 10 }, halfEdit);
+    expect(halfFg.vfChain).toContain('unsharp=5:5:0.39:5:5:0.0');
+
+    const zeroEdit = structuredClone(halfEdit);
+    zeroEdit.clarityStrength = 0;
+    const zeroFg = buildFfmpegFilterGraph({ width: 640, height: 360, durationSec: 10 }, zeroEdit);
+    expect(zeroFg.vfChain).not.toContain('unsharp=');
+  });
+
+  it('calibrates all Social-HD presets with veryfast, BT.709 TV range, GOP=60, 48kHz stereo AAC, and VBV caps', () => {
+    const specs: Array<[
+      'whatsapp-hd' | 'whatsapp-status' | 'instagram-story' | 'tiktok-hd',
+      string,
+      string,
+      string,
+    ]> = [
+      ['whatsapp-hd', '7500k', '15000k', '128k'],
+      ['whatsapp-status', '4800k', '9600k', '128k'],
+      ['instagram-story', '8000k', '16000k', '160k'],
+      ['tiktok-hd', '8500k', '17000k', '160k'],
+    ];
+
+    for (const [presetId, maxrate, bufsize, audioBr] of specs) {
       const edit = structuredClone(getMediaPreset(presetId).video);
       const built = buildFfmpegArgs({
         inputFileNameOnFs: 'input.mp4',
@@ -196,27 +257,30 @@ describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
       });
 
       expect(built.filterGraph.vfChain).toContain('hqdn3d=');
-      expect(built.filterGraph.vfChain).toContain('scale=1920:1080:flags=lanczos');
-      expect(built.filterGraph.vfChain).toContain('unsharp=5:5:0.45:5:5:0.0');
+      expect(built.filterGraph.vfChain).toContain('scale=1920:1080:flags=lanczos,setsar=1');
+      expect(built.filterGraph.vfChain).toContain('unsharp=5:5:0.36:5:5:0.0');
       expect(built.filterGraph.vfChain).toContain('fps=30');
 
       const args = built.args;
-      expect(args).toContain('-pix_fmt');
+      expect(args[args.indexOf('-preset') + 1]).toBe('veryfast');
+      expect(args).not.toContain('ultrafast');
       expect(args[args.indexOf('-pix_fmt') + 1]).toBe('yuv420p');
       expect(args[args.indexOf('-profile:v') + 1]).toBe('high');
       expect(args[args.indexOf('-level') + 1]).toBe('4.1');
       expect(args[args.indexOf('-colorspace') + 1]).toBe('bt709');
       expect(args[args.indexOf('-color_primaries') + 1]).toBe('bt709');
       expect(args[args.indexOf('-color_trc') + 1]).toBe('bt709');
+      expect(args[args.indexOf('-color_range') + 1]).toBe('tv');
+      expect(args[args.indexOf('-g') + 1]).toBe('60');
+      expect(args[args.indexOf('-keyint_min') + 1]).toBe('30');
+      expect(args[args.indexOf('-sc_threshold') + 1]).toBe('0');
       expect(args).toContain('+faststart');
       expect(args[args.indexOf('-c:a') + 1]).toBe('aac');
-      expect(args[args.indexOf('-b:a') + 1]).toBe('128k');
+      expect(args[args.indexOf('-b:a') + 1]).toBe(audioBr);
       expect(args[args.indexOf('-ar') + 1]).toBe('48000');
-
-      const expectedMaxrate = presetId === 'whatsapp-hd' ? '6500k' : '4200k';
-      const expectedBufsize = presetId === 'whatsapp-hd' ? '13000k' : '8400k';
-      expect(args[args.indexOf('-maxrate') + 1]).toBe(expectedMaxrate);
-      expect(args[args.indexOf('-bufsize') + 1]).toBe(expectedBufsize);
+      expect(args[args.indexOf('-ac') + 1]).toBe('2');
+      expect(args[args.indexOf('-maxrate') + 1]).toBe(maxrate);
+      expect(args[args.indexOf('-bufsize') + 1]).toBe(bufsize);
     }
   });
 });

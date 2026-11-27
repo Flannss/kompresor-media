@@ -21,7 +21,10 @@ export type VideoExecutionBackend = 'webcodecs-mediabunny' | 'ffmpeg-wasm-st';
 
 export type VideoQualityTier = 'light' | 'balanced' | 'high';
 
-export type AudioBitrateKbps = 96 | 128 | 192 | 320;
+export type VideoClarityModel = 'original' | 'natural-hd' | 'sharp-1080p' | 'low-light';
+export type VideoTargetResolution = 'original' | '720p' | '1080p' | '2k';
+
+export type AudioBitrateKbps = 96 | 128 | 160 | 192 | 320;
 
 export type SubtitleRenderMode = 'hardsub' | 'softsub';
 export type SubtitleSize = 'small' | 'medium' | 'large';
@@ -67,10 +70,15 @@ export interface VideoEditState {
   presetId: VideoPresetId;
   compressEnabled: boolean;
   outputFormat: VideoOutputFormat;
+  /** Semantic target resolution preset/override ('original' honors maxHeightPx). */
+  targetResolution: VideoTargetResolution;
   /** Max height in pixels (null keeps original height while ensuring even dimensions). */
   maxHeightPx: number | null;
   fpsCap: number | null;
   qualityTier: VideoQualityTier;
+  clarityModel: VideoClarityModel;
+  /** Clarity strength 0..100 (default 80). */
+  clarityStrength: number;
   targetBitrateBps: number;
   crf: number;
   maxrateKbps: number;
@@ -127,6 +135,9 @@ export interface VideoProcessResult {
   outputBytes: number;
   durationMs: number;
   activeModules: string[];
+  effectiveBitrateMbps?: number;
+  colorStandard?: string;
+  appliedFps?: number | null;
   engineDetail?: string;
   notice?: string;
 }

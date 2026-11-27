@@ -36,6 +36,7 @@ export interface DeviceProfile {
   useLightweightCssPreview: boolean;
   useGlassLite: boolean;
   allow8KPhotoExport: boolean;
+  allow2KVideoExport: boolean;
   maxPhotoCanvasPixels: number;
   releaseFfmpegAfterExport: boolean;
   maxDualVideoBytes: number;
@@ -138,6 +139,7 @@ export function getDeviceProfile(input?: DeviceCapabilityInput): DeviceProfile {
       useLightweightCssPreview,
       useGlassLite,
       allow8KPhotoExport: false,
+      allow2KVideoExport: false,
       maxPhotoCanvasPixels: 15_000_000,
       releaseFfmpegAfterExport: true,
       maxDualVideoBytes: LOW_MEM_DUAL_VIDEO_CAP_BYTES,
@@ -165,6 +167,7 @@ export function getDeviceProfile(input?: DeviceCapabilityInput): DeviceProfile {
       useLightweightCssPreview,
       useGlassLite,
       allow8KPhotoExport: isHighRamNonIos,
+      allow2KVideoExport: isHighRamNonIos,
       maxPhotoCanvasPixels: isHighRamNonIos ? 48_000_000 : 24_000_000,
       releaseFfmpegAfterExport: false,
       maxDualVideoBytes: Number.POSITIVE_INFINITY,
@@ -190,6 +193,7 @@ export function getDeviceProfile(input?: DeviceCapabilityInput): DeviceProfile {
     useLightweightCssPreview,
     useGlassLite,
     allow8KPhotoExport: true,
+    allow2KVideoExport: true,
     maxPhotoCanvasPixels: 67_108_864,
     releaseFfmpegAfterExport: false,
     maxDualVideoBytes: Number.POSITIVE_INFINITY,

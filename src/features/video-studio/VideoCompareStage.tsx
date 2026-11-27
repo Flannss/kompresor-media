@@ -443,12 +443,24 @@ export function VideoCompareStage({
     ? videoEdit.enhanceSuite.colorContrast
     : undefined;
 
-  const livePreviewCssOrSvg = resolvePreviewFilterStyle({
+  const basePreviewFilter = resolvePreviewFilterStyle({
     filterId: filterDomId,
     colorGrade: videoEdit.colorGrade,
     colorContrast: activeColorContrast,
     useLightweightCss: deviceProfile.useLightweightCssPreview,
   });
+
+  const clarityStrengthNorm = Math.min(1, Math.max(0, (videoEdit.clarityStrength ?? 80) / 100));
+  let clarityCssSuffix = '';
+  if (clarityStrengthNorm > 0.01) {
+    if (videoEdit.clarityModel === 'sharp-1080p') {
+      clarityCssSuffix = `contrast(${(1 + 0.04 * clarityStrengthNorm).toFixed(3)}) saturate(${(1 + 0.05 * clarityStrengthNorm).toFixed(3)})`;
+    } else if (videoEdit.clarityModel === 'low-light') {
+      clarityCssSuffix = `brightness(${(1 + 0.06 * clarityStrengthNorm).toFixed(3)}) contrast(${(1 + 0.03 * clarityStrengthNorm).toFixed(3)}) saturate(${(1 + 0.04 * clarityStrengthNorm).toFixed(3)})`;
+    }
+  }
+  const livePreviewCssOrSvg =
+    [basePreviewFilter, clarityCssSuffix].filter(Boolean).join(' ').trim() || undefined;
 
   const isShowingProcessedInSingle =
     singleSourceChoice === 'result' && canPlayProcessedResult && !holdOriginalActive;

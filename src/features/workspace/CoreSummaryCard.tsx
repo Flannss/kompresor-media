@@ -195,6 +195,20 @@ export function CoreSummaryCard({
         </div>
       </div>
 
+      {!isImage && videoProcessResult && (
+        <p
+          data-testid="video-hd-proof-badge"
+          className="mt-2 rounded-lg border border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] px-2.5 py-1 text-[10.5px] font-semibold text-[var(--status-ok-ink)] tabular-nums"
+        >
+          Hasil HD · {videoProcessResult.outputWidth}×{videoProcessResult.outputHeight}
+          {videoProcessResult.appliedFps ? ` · ${videoProcessResult.appliedFps} fps` : ''}
+          {videoProcessResult.colorStandard ? ` · ${videoProcessResult.colorStandard}` : ''}
+          {videoProcessResult.effectiveBitrateMbps !== undefined
+            ? ` · ${videoProcessResult.effectiveBitrateMbps.toFixed(1).replace('.', ',')} Mbps`
+            : ''}
+        </p>
+      )}
+
       {clampedGuard && (
         <p
           data-testid="memory-clamp-badge"

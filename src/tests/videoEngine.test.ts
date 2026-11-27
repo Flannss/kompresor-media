@@ -3,9 +3,12 @@ import {
   buildVideoExportFileName,
   clampTrimRange,
   computeEvenScaledDimensions,
+  computeVideoTargetDimensions,
   resolveCustomVideoParams,
 } from '../engines/video/videoPresets';
 import { getMediaPreset, MEDIA_PRESETS } from '../presets/mediaPresets';
+import { getDeviceProfile } from '../shared/utils/deviceCapability';
+import { useMediaStore } from '../store/useMediaStore';
 
 describe('video presets, trim helpers, and even scaling', () => {
   it('computes aspect-preserving even dimensions without upscaling', () => {
@@ -75,30 +78,116 @@ describe('video presets, trim helpers, and even scaling', () => {
   it('provides consistent video preset configurations across all calibrated destinations', () => {
     expect(MEDIA_PRESETS.length).toBe(9);
     const waHd = getMediaPreset('whatsapp-hd').video;
+    expect(waHd.targetResolution).toBe('1080p');
     expect(waHd.maxHeightPx).toBe(1080);
     expect(waHd.fpsCap).toBe(30);
-    expect(waHd.crf).toBe(20);
-    expect(waHd.maxrateKbps).toBe(6500);
-    expect(waHd.bufsizeKbps).toBe(13000);
-    expect(waHd.targetBitrateBps).toBe(6_000_000);
+    expect(waHd.crf).toBe(19);
+    expect(waHd.maxrateKbps).toBe(7500);
+    expect(waHd.bufsizeKbps).toBe(15000);
+    expect(waHd.targetBitrateBps).toBe(7_000_000);
     expect(waHd.audioBitrateKbps).toBe(128);
+    expect(waHd.clarityModel).toBe('natural-hd');
 
     expect(getMediaPreset('whatsapp-fast').video.maxHeightPx).toBe(720);
 
     const waStatus = getMediaPreset('whatsapp-status').video;
+    expect(waStatus.targetResolution).toBe('1080p');
     expect(waStatus.maxHeightPx).toBe(1080);
     expect(waStatus.fpsCap).toBe(30);
-    expect(waStatus.crf).toBe(21);
-    expect(waStatus.maxrateKbps).toBe(4200);
-    expect(waStatus.bufsizeKbps).toBe(8400);
+    expect(waStatus.crf).toBe(20);
+    expect(waStatus.maxrateKbps).toBe(4800);
+    expect(waStatus.bufsizeKbps).toBe(9600);
     expect(waStatus.audioBitrateKbps).toBe(128);
+    expect(waStatus.clarityModel).toBe('natural-hd');
 
-    expect(getMediaPreset('instagram-story').video.maxHeightPx).toBe(1080);
-    expect(getMediaPreset('tiktok-hd').video.fpsCap).toBe(60);
-    expect(getMediaPreset('web-light').video.maxHeightPx).toBe(480);
+    const igStory = getMediaPreset('instagram-story').video;
+    expect(igStory.maxHeightPx).toBe(1080);
+    expect(igStory.maxrateKbps).toBe(8000);
+    expect(igStory.audioBitrateKbps).toBe(160);
+
+    const tiktok = getMediaPreset('tiktok-hd').video;
+    expect(tiktok.maxHeightPx).toBe(1080);
+    expect(tiktok.fpsCap).toBe(30);
+    expect(tiktok.maxrateKbps).toBe(8500);
+    expect(tiktok.audioBitrateKbps).toBe(160);
+
+    expect(getMediaPreset('web-light').video.maxHeightPx).toBe(720);
+    expect(getMediaPreset('web-light').video.maxrateKbps).toBe(2400);
 
     // HD upscale capped cleanly at 1080p with even dimensions
     expect(computeEvenScaledDimensions(854, 480, 1080, 2)).toEqual({ width: 1708, height: 960 });
     expect(computeEvenScaledDimensions(1280, 720, 1080, 2)).toEqual({ width: 1920, height: 1080 });
+    expect(computeVideoTargetDimensions(640, 360, '1080p', 1080)).toEqual({ width: 1920, height: 1080 });
+    expect(computeVideoTargetDimensions(360, 640, '1080p', 1080)).toEqual({ width: 1080, height: 1920 });
+    expect(computeVideoTargetDimensions(1920, 1080, '2k', 1440)).toEqual({ width: 2560, height: 1440 });
+  });
+
+  it('keeps 1080p HD unlocked on iPhone X while guarding 2K video and honoring explicit desktop 2K across presets', () => {
+    const iphoneX = getDeviceProfile({
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) Safari/604.1',
+      viewportWidth: 375,
+      deviceMemoryGB: null,
+      hardwareConcurrency: null,
+      maxTouchPoints: 5,
+    });
+    expect(iphoneX.allow2KVideoExport).toBe(false);
+    expect(iphoneX.releaseFfmpegAfterExport).toBe(true);
+
+    const desktop = getDeviceProfile({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0',
+      viewportWidth: 1440,
+      deviceMemoryGB: 8,
+      hardwareConcurrency: 8,
+      maxTouchPoints: 0,
+    });
+    expect(desktop.allow2KVideoExport).toBe(true);
+
+    useMediaStore.getState().clearMedia();
+    useMediaStore.setState({
+      deviceProfile: desktop,
+      items: [
+        {
+          id: 'vid-desk-1',
+          file: new File(['mp4'], 'clip.mp4', { type: 'video/mp4' }),
+          validation: { valid: true, kind: 'video', mimeType: 'video/mp4', signatureLabel: 'MP4' },
+          metadata: {
+            kind: 'video',
+            fileName: 'clip.mp4',
+            mimeType: 'video/mp4',
+            sizeBytes: 2_000_000,
+            width: 1280,
+            height: 720,
+            orientation: 'landscape',
+            durationSec: 10,
+            hasAudioHint: true,
+          },
+          objectUrl: 'blob:mock/vid',
+          status: 'ready',
+          progress: 0,
+          selectedPresetId: 'whatsapp-hd',
+          imageEdit: getMediaPreset('whatsapp-hd').image,
+          photoHistory: [getMediaPreset('whatsapp-hd').image],
+          photoHistoryIndex: 0,
+          imageResult: null,
+          needsFullResExport: false,
+          videoEdit: structuredClone(getMediaPreset('whatsapp-hd').video),
+          videoProgress: null,
+          videoResult: null,
+          outputUrl: null,
+          errorMessage: null,
+          baseThumbnailUrl: null,
+          processSeq: 0,
+        },
+      ],
+      activeItemId: 'vid-desk-1',
+    } as never);
+
+    // Explicit 2K target stays 2K even if user changes preset afterwards
+    useMediaStore.getState().updateVideoEdit({ targetResolution: '2k' });
+    expect(useMediaStore.getState().videoEdit.targetResolution).toBe('2k');
+    expect(useMediaStore.getState().videoEdit.maxHeightPx).toBe(1440);
+    useMediaStore.getState().setPreset('whatsapp-status');
+    expect(useMediaStore.getState().videoEdit.targetResolution).toBe('2k');
+    expect(useMediaStore.getState().videoEdit.maxHeightPx).toBe(1440);
   });
 });

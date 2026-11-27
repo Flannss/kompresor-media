@@ -5,7 +5,6 @@ import type {
   VideoProcessRequest,
   VideoProcessResult,
 } from '../contracts';
-import { getDeviceProfile } from '../../shared/utils/deviceCapability';
 import { runFfmpegVideoTranscode } from './ffmpegVideoEngine';
 import { VideoCancelledError } from './videoErrors';
 import {
@@ -107,13 +106,10 @@ export async function processVideo(
 ): Promise<VideoProcessResult> {
   const t0 = performance.now();
   const formatMeta = getVideoFormatMeta(request.edit.outputFormat);
-  const isLowMemoryMobileWa =
-    getDeviceProfile().performanceTier === 'low-memory-mobile' &&
-    (request.edit.presetId === 'whatsapp-hd' || request.edit.presetId === 'whatsapp-status');
   const useFfmpeg =
     request.preferredBackend === 'ffmpeg-wasm-st' ||
     (request.preferredBackend !== 'webcodecs-mediabunny' &&
-      (shouldUseFfmpegBackend(request.edit) || isLowMemoryMobileWa));
+      shouldUseFfmpegBackend(request.edit));
 
   let backendUsed: VideoExecutionBackend = useFfmpeg
     ? 'ffmpeg-wasm-st'
@@ -161,6 +157,14 @@ export async function processVideo(
     checkHasDecodableAudio(output.outputBlob, isAudioMuted(request.edit), formatMeta.mime),
   ]);
 
+  const effectiveBitrateMbps = Number(
+    ((output.outputBlob.size * 8) / Math.max(0.1, verifiedVideo.durationSec) / 1_000_000).toFixed(
+      1
+    )
+  );
+  const colorStandard =
+    request.edit.outputFormat === 'webm' ? 'VP9/VP8' : 'H.264 BT.709';
+
   const result: VideoProcessResult = {
     requestId: request.requestId,
     backend: backendUsed,
@@ -176,6 +180,9 @@ export async function processVideo(
     outputBytes: output.outputBlob.size,
     durationMs: performance.now() - t0,
     activeModules: getActiveVideoModuleLabels(request.edit),
+    effectiveBitrateMbps,
+    colorStandard,
+    appliedFps: request.edit.fpsCap,
     ...(output.notice ? { notice: output.notice } : {}),
     ...(output.engineDetail ? { engineDetail: output.engineDetail } : {}),
   };

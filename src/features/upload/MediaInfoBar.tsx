@@ -159,6 +159,17 @@ export function MediaInfoBar({
             {formatBytes(videoProcessResult.inputBytes)} →{' '}
             {formatBytes(videoProcessResult.outputBytes)}
           </span>
+          {videoProcessResult.effectiveBitrateMbps !== undefined && (
+            <>
+              <span aria-hidden="true" className="text-[var(--text-muted)]">
+                ·
+              </span>
+              <span className="text-[var(--text-secondary)]">
+                {videoProcessResult.colorStandard ?? 'H.264'} ·{' '}
+                {videoProcessResult.effectiveBitrateMbps.toFixed(1).replace('.', ',')} Mbps
+              </span>
+            </>
+          )}
           <span aria-hidden="true" className="text-[var(--text-muted)]">
             ·
           </span>

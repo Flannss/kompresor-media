@@ -946,6 +946,11 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     if (active.metadata.kind === 'video') {
       const cur = active.videoEdit;
       const nextVideo = cloneVideoEdit(presetSpec.video);
+      const keep2k = cur.targetResolution === '2k' && get().deviceProfile.allow2KVideoExport;
+      if (keep2k) {
+        nextVideo.targetResolution = '2k';
+        nextVideo.maxHeightPx = 1440;
+      }
       nextVideo.trimStartSec = cur.trimStartSec;
       nextVideo.trimEndSec = cur.trimEndSec;
       nextVideo.muteAudio = cur.muteAudio;
@@ -1428,47 +1433,76 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       return;
     }
 
-    const switchedToCustom =
-      patch.qualityTier !== undefined ||
-      patch.maxHeightPx !== undefined ||
-      patch.outputFormat !== undefined ||
-      patch.fpsCap !== undefined;
+    const profile = get().deviceProfile;
+    const sanitizedPatch = { ...patch };
+    if (sanitizedPatch.targetResolution === '2k' && !profile.allow2KVideoExport) {
+      sanitizedPatch.targetResolution = '1080p';
+      sanitizedPatch.maxHeightPx = 1080;
+    } else if (sanitizedPatch.targetResolution !== undefined && sanitizedPatch.maxHeightPx === undefined) {
+      sanitizedPatch.maxHeightPx =
+        sanitizedPatch.targetResolution === '2k'
+          ? 1440
+          : sanitizedPatch.targetResolution === '1080p'
+            ? 1080
+            : sanitizedPatch.targetResolution === '720p'
+              ? 720
+              : null;
+    } else if (
+      sanitizedPatch.maxHeightPx !== undefined &&
+      sanitizedPatch.targetResolution === undefined
+    ) {
+      sanitizedPatch.targetResolution =
+        sanitizedPatch.maxHeightPx === 1440
+          ? '2k'
+          : sanitizedPatch.maxHeightPx === 1080
+            ? '1080p'
+            : sanitizedPatch.maxHeightPx === 720
+              ? '720p'
+              : 'original';
+    }
 
-    const qualityParams = patch.qualityTier
-      ? resolveCustomVideoParams(patch.qualityTier)
+    const switchedToCustom =
+      sanitizedPatch.qualityTier !== undefined ||
+      sanitizedPatch.maxHeightPx !== undefined ||
+      sanitizedPatch.targetResolution !== undefined ||
+      sanitizedPatch.outputFormat !== undefined ||
+      sanitizedPatch.fpsCap !== undefined;
+
+    const qualityParams = sanitizedPatch.qualityTier
+      ? resolveCustomVideoParams(sanitizedPatch.qualityTier)
       : {};
 
     const cur = active.videoEdit;
     const nextVideoEdit: VideoEditState = {
       ...cur,
-      ...patch,
+      ...sanitizedPatch,
       ...qualityParams,
-      enhanceSuite: patch.enhanceSuite
-        ? cloneEnhanceSuite(patch.enhanceSuite)
+      enhanceSuite: sanitizedPatch.enhanceSuite
+        ? cloneEnhanceSuite(sanitizedPatch.enhanceSuite)
         : cloneEnhanceSuite(cur.enhanceSuite),
-      colorGrade: patch.colorGrade
-        ? cloneColorGrade(patch.colorGrade)
+      colorGrade: sanitizedPatch.colorGrade
+        ? cloneColorGrade(sanitizedPatch.colorGrade)
         : cloneColorGrade(cur.colorGrade),
-      stabilize: patch.stabilize
-        ? { ...cur.stabilize, ...patch.stabilize }
+      stabilize: sanitizedPatch.stabilize
+        ? { ...cur.stabilize, ...sanitizedPatch.stabilize }
         : { ...cur.stabilize },
-      audio: patch.audio
-        ? { ...cur.audio, ...patch.audio }
+      audio: sanitizedPatch.audio
+        ? { ...cur.audio, ...sanitizedPatch.audio }
         : { ...cur.audio },
-      subtitle: patch.subtitle
+      subtitle: sanitizedPatch.subtitle
         ? {
             ...cur.subtitle,
-            ...patch.subtitle,
-            cues: patch.subtitle.cues
-              ? patch.subtitle.cues.map((c) => ({ ...c }))
+            ...sanitizedPatch.subtitle,
+            cues: sanitizedPatch.subtitle.cues
+              ? sanitizedPatch.subtitle.cues.map((c) => ({ ...c }))
               : cur.subtitle.cues.map((c) => ({ ...c })),
           }
         : { ...cur.subtitle, cues: cur.subtitle.cues.map((c) => ({ ...c })) },
       muteAudio:
-        patch.muteAudio !== undefined
-          ? patch.muteAudio
-          : patch.audio?.muteAudio !== undefined
-            ? patch.audio.muteAudio
+        sanitizedPatch.muteAudio !== undefined
+          ? sanitizedPatch.muteAudio
+          : sanitizedPatch.audio?.muteAudio !== undefined
+            ? sanitizedPatch.audio.muteAudio
             : cur.muteAudio,
       presetId: switchedToCustom ? 'custom' : cur.presetId,
     };

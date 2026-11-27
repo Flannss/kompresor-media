@@ -1,4 +1,10 @@
-import type { VideoEditState, VideoOutputFormat, VideoQualityTier } from '../contracts';
+import type {
+  VideoClarityModel,
+  VideoEditState,
+  VideoOutputFormat,
+  VideoQualityTier,
+  VideoTargetResolution,
+} from '../contracts';
 
 export interface VideoDimensions {
   width: number;
@@ -10,6 +16,52 @@ export interface ClampedTrimRange {
   endSec: number;
   durationSec: number;
   isTrimmed: boolean;
+}
+
+export const VIDEO_CLARITY_MODEL_LABELS: Record<VideoClarityModel, string> = {
+  original: 'Asli (Hemat)',
+  'natural-hd': 'Natural HD',
+  'sharp-1080p': 'Tajam 1080p',
+  'low-light': 'Malam & Minim Cahaya',
+};
+
+/**
+ * Resolves exact orientation-aware even output dimensions for semantic Video targets
+ * ('original' | '720p' | '1080p' | '2k'), scaling both up and down cleanly for YUV420p.
+ */
+export function computeVideoTargetDimensions(
+  srcWidth: number,
+  srcHeight: number,
+  targetResolution: VideoTargetResolution,
+  maxHeightPx: number | null
+): VideoDimensions {
+  if (srcWidth <= 0 || srcHeight <= 0) {
+    throw new Error(`Resolusi video tidak valid: ${srcWidth}x${srcHeight}`);
+  }
+
+  if (targetResolution === '1080p' || targetResolution === '2k') {
+    const longEdge = targetResolution === '2k' ? 2560 : 1920;
+    const shortEdge = targetResolution === '2k' ? 1440 : 1080;
+    const isPortrait = srcHeight > srcWidth;
+    if (srcWidth === srcHeight) {
+      return { width: shortEdge, height: shortEdge };
+    }
+    const maxW = isPortrait ? shortEdge : longEdge;
+    const maxH = isPortrait ? longEdge : shortEdge;
+    const scale = Math.min(maxW / srcWidth, maxH / srcHeight);
+    const rawW = Math.round(srcWidth * scale);
+    const rawH = Math.round(srcHeight * scale);
+    return {
+      width: Math.max(2, rawW - (rawW % 2)),
+      height: Math.max(2, rawH - (rawH % 2)),
+    };
+  }
+
+  if (targetResolution === '720p') {
+    return computeEvenScaledDimensions(srcWidth, srcHeight, 720, 1);
+  }
+
+  return computeEvenScaledDimensions(srcWidth, srcHeight, maxHeightPx, 1);
 }
 
 /**
@@ -79,27 +131,27 @@ export function resolveCustomVideoParams(
   switch (qualityTier) {
     case 'light':
       return {
-        crf: 29,
-        targetBitrateBps: 950_000,
-        maxrateKbps: 1150,
-        bufsizeKbps: 2300,
-        audioBitrateKbps: 96,
+        crf: 24,
+        targetBitrateBps: 2_200_000,
+        maxrateKbps: 2400,
+        bufsizeKbps: 4800,
+        audioBitrateKbps: 128,
       };
     case 'high':
       return {
-        crf: 21,
-        targetBitrateBps: 4_200_000,
-        maxrateKbps: 4800,
-        bufsizeKbps: 9600,
-        audioBitrateKbps: 192,
+        crf: 19,
+        targetBitrateBps: 7_500_000,
+        maxrateKbps: 8000,
+        bufsizeKbps: 16000,
+        audioBitrateKbps: 160,
       };
     case 'balanced':
     default:
       return {
-        crf: 25,
-        targetBitrateBps: 2_200_000,
-        maxrateKbps: 2600,
-        bufsizeKbps: 5200,
+        crf: 21,
+        targetBitrateBps: 4_800_000,
+        maxrateKbps: 5200,
+        bufsizeKbps: 10400,
         audioBitrateKbps: 128,
       };
   }
