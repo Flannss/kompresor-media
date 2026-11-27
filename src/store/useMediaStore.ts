@@ -1366,7 +1366,18 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     }
     await processPhotoItem(id, get, set, false);
     const updated = get().items.find((i) => i.id === id);
-    if (updated && !updated.needsFullResExport && updated.imageResult && updated.outputUrl) {
+    const updatedGenMatches =
+      updated &&
+      (updated.renderedFullResGeneration === undefined ||
+        updated.renderedFullResGeneration === (updated.editGeneration ?? 0));
+    if (
+      updated &&
+      updated.status === 'done' &&
+      updatedGenMatches &&
+      !updated.needsFullResExport &&
+      updated.imageResult &&
+      updated.outputUrl
+    ) {
       return { result: updated.imageResult, url: updated.outputUrl };
     }
     return null;

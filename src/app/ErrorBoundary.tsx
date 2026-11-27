@@ -26,10 +26,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       hasError: true,
       isChunkError: chunkErr,
       message: chunkErr
-        ? 'Versi baru aplikasi baru saja tersedia. Muat ulang halaman untuk melanjutkan.'
+        ? 'Versi baru aplikasi baru saja tersedia. Muat ulang studio untuk melanjutkan.'
         : error instanceof Error && error.message
           ? error.message
-          : 'Terjadi gangguan pada halaman.',
+          : 'Terjadi gangguan tak terduga saat memuat studio.',
     };
   }
 
@@ -53,35 +53,45 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       return (
         <div
           data-testid="error-boundary-card"
-          className="mx-auto my-12 max-w-lg rounded-2xl border border-[var(--status-err-border)] bg-[var(--bg-surface)] p-6"
+          className="bg-warm-stage flex min-h-screen w-full items-center justify-center p-4"
         >
-          <h1 className="text-base font-semibold text-[var(--text-primary)]">
-            {this.state.isChunkError
-              ? 'Versi baru aplikasi tersedia'
-              : 'Halaman mengalami kendala'}
-          </h1>
-          <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">
-            {this.state.message}
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button
-              variant="primary"
-              size="md"
-              data-testid="error-reload-btn"
-              onClick={this.handleReloadPage}
-              className="min-h-[44px]"
-            >
-              Muat Ulang Halaman
-            </Button>
-            <Button
-              variant="secondary"
-              size="md"
-              data-testid="error-reset-btn"
-              onClick={this.handleReset}
-              className="min-h-[44px]"
-            >
-              Kembali ke Awal
-            </Button>
+          <div className="km-glass-strong w-full max-w-md rounded-[26px] border border-[var(--status-err-border)] p-6 shadow-[var(--stage-shadow)]">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="text-xs font-semibold tracking-tight text-[var(--text-primary)]">
+                Kompresor Media
+              </span>
+              <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--accent-gold-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent-gold)]">
+                BY AMDZ
+              </span>
+            </div>
+            <h1 className="font-editorial text-lg font-semibold text-[var(--text-primary)]">
+              {this.state.isChunkError
+                ? 'Pembaruan studio tersedia'
+                : 'Studio mengalami gangguan ringan'}
+            </h1>
+            <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">
+              {this.state.message}
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2.5">
+              <Button
+                variant="primary"
+                size="md"
+                data-testid="error-reload-btn"
+                onClick={this.handleReloadPage}
+                className="min-h-[44px] rounded-full px-5"
+              >
+                Muat Ulang Studio
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
+                data-testid="error-reset-btn"
+                onClick={this.handleReset}
+                className="min-h-[44px] rounded-full px-5"
+              >
+                Kembali ke Beranda
+              </Button>
+            </div>
           </div>
         </div>
       );

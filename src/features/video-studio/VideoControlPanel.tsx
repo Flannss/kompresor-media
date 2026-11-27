@@ -95,8 +95,8 @@ export interface VideoControlPanelProps {
 
 const VIDEO_TABS = [
   { id: 'utama' as const, label: '1. Tujuan' },
-  { id: 'tampilan' as const, label: '2. Jernihkan & Warna', mobileLabel: '2. Jernihkan' },
-  { id: 'lanjutan' as const, label: '3. Potong & Audio', mobileLabel: '3. Potong' },
+  { id: 'tampilan' as const, label: '2. Warna & HD', mobileLabel: '2. Warna' },
+  { id: 'lanjutan' as const, label: '3. Edit & Audio', mobileLabel: '3. Edit' },
 ];
 
 const VIDEO_FORMAT_OPTIONS: ReadonlyArray<{ value: VideoOutputFormat; label: string }> = [
@@ -331,7 +331,24 @@ export function VideoControlPanel({
     onUpdateVideoEdit({
       subtitle: {
         ...videoEdit.subtitle,
-        cues: videoEdit.subtitle.cues.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+        cues: videoEdit.subtitle.cues.map((c) => {
+          if (c.id !== id) return c;
+          const nextStart =
+            patch.startSec !== undefined && Number.isFinite(patch.startSec)
+              ? Math.max(0, patch.startSec)
+              : c.startSec;
+          const rawEnd =
+            patch.endSec !== undefined && Number.isFinite(patch.endSec)
+              ? Math.max(0, patch.endSec)
+              : c.endSec;
+          const nextEnd = Math.max(nextStart + 0.1, rawEnd);
+          return {
+            ...c,
+            ...patch,
+            startSec: nextStart,
+            endSec: nextEnd,
+          };
+        }),
       },
     });
   };
@@ -348,14 +365,14 @@ export function VideoControlPanel({
   return (
     <div className="flex flex-col gap-3.5">
       {/* Compact Composable Active Module Pills */}
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-2">
         <button
           type="button"
           disabled={isProcessing}
           data-testid="toggle-video-compress-btn"
           aria-pressed={videoEdit.compressEnabled}
           onClick={() => onUpdateVideoEdit({ compressEnabled: !videoEdit.compressEnabled })}
-          className={`inline-flex min-h-[30px] items-center gap-1 rounded-xl border px-2.5 text-[11px] font-semibold transition-all disabled:opacity-50 ${
+          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
             videoEdit.compressEnabled
               ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] text-[var(--text-primary)]'
               : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)]'
@@ -382,7 +399,7 @@ export function VideoControlPanel({
             }
             setActiveTab('tampilan');
           }}
-          className={`inline-flex min-h-[30px] items-center gap-1 rounded-xl border px-2.5 text-[11px] font-semibold transition-all disabled:opacity-50 ${
+          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
             enhanceOrGradeActive
               ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
               : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
@@ -404,7 +421,7 @@ export function VideoControlPanel({
             setActiveTab('lanjutan');
             setAdvancedOpen('stabilize');
           }}
-          className={`inline-flex min-h-[30px] items-center gap-1 rounded-xl border px-2.5 text-[11px] font-semibold transition-all disabled:opacity-50 ${
+          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
             videoEdit.stabilize.enabled
               ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
               : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
@@ -426,7 +443,7 @@ export function VideoControlPanel({
             setActiveTab('lanjutan');
             setAdvancedOpen('audio');
           }}
-          className={`inline-flex min-h-[30px] items-center gap-1 rounded-xl border px-2.5 text-[11px] font-semibold transition-all disabled:opacity-50 ${
+          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
             videoEdit.audio.enabled || videoEdit.muteAudio
               ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
               : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
@@ -448,7 +465,7 @@ export function VideoControlPanel({
             setActiveTab('lanjutan');
             setAdvancedOpen('subtitle');
           }}
-          className={`inline-flex min-h-[30px] items-center gap-1 rounded-xl border px-2.5 text-[11px] font-semibold transition-all disabled:opacity-50 ${
+          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
             videoEdit.subtitle.enabled
               ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
               : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
@@ -677,7 +694,7 @@ export function VideoControlPanel({
               </button>
 
               {motionDrawerOpen && (
-                <div className="mt-2 grid grid-cols-4 gap-1.5">
+                <div className="mt-2.5 grid grid-cols-2 gap-2">
                   {FPS_OPTIONS.map((opt) => {
                     const active = videoEdit.fpsCap === opt.value;
                     return (
@@ -687,10 +704,10 @@ export function VideoControlPanel({
                         disabled={isProcessing}
                         data-testid={`video-fps-${opt.value ?? 'original'}`}
                         onClick={() => onUpdateVideoEdit({ fpsCap: opt.value })}
-                        className={`min-h-[32px] rounded-lg border text-[11px] font-medium tabular-nums transition-all disabled:opacity-50 ${
+                        className={`min-h-[40px] rounded-lg border px-2.5 py-1.5 text-xs font-medium leading-tight tabular-nums transition-all disabled:opacity-50 ${
                           active
                             ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                            : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)]'
+                            : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
                         }`}
                       >
                         {opt.value === null ? opt.label : `${opt.label} Gerak/dtk`}
@@ -750,17 +767,28 @@ export function VideoControlPanel({
                     data-testid="trim-start-slider"
                     type="range"
                     min={0}
-                    max={Math.max(0, metadata.durationSec - 0.5)}
+                    max={Math.max(0, metadata.durationSec - Math.min(0.5, Math.max(0.1, metadata.durationSec)))}
                     step={0.1}
-                    disabled={isProcessing}
+                    disabled={isProcessing || metadata.durationSec <= 0.15}
                     value={trim.startSec}
                     onChange={(e) => {
+                      const minSpan = Math.min(0.5, Math.max(0.1, metadata.durationSec));
                       const nextStart = Number(e.target.value);
-                      const nextEnd = Math.max(nextStart + 0.5, trim.endSec);
+                      const nextEnd = Math.min(
+                        metadata.durationSec,
+                        Math.max(nextStart + minSpan, trim.endSec)
+                      );
                       onUpdateVideoEdit({ trimStartSec: nextStart, trimEndSec: nextEnd });
                       onSeekPreview(nextStart);
                     }}
-                    className="km-range-input"
+                    className="km-range-input w-full disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{
+                      background: `linear-gradient(to right, var(--accent-primary) ${
+                        metadata.durationSec > 0 ? (trim.startSec / metadata.durationSec) * 100 : 0
+                      }%, var(--border-hairline) ${
+                        metadata.durationSec > 0 ? (trim.startSec / metadata.durationSec) * 100 : 0
+                      }%)`,
+                    }}
                   />
                 </label>
 
@@ -774,18 +802,29 @@ export function VideoControlPanel({
                   <input
                     data-testid="trim-end-slider"
                     type="range"
-                    min={Math.min(metadata.durationSec, 0.5)}
-                    max={metadata.durationSec}
+                    min={Math.min(metadata.durationSec, Math.min(0.5, Math.max(0.1, metadata.durationSec)))}
+                    max={Math.max(0.1, metadata.durationSec)}
                     step={0.1}
-                    disabled={isProcessing}
+                    disabled={isProcessing || metadata.durationSec <= 0.15}
                     value={trim.endSec}
                     onChange={(e) => {
+                      const minSpan = Math.min(0.5, Math.max(0.1, metadata.durationSec));
                       const nextEnd = Number(e.target.value);
-                      const nextStart = Math.min(trim.startSec, Math.max(0, nextEnd - 0.5));
+                      const nextStart = Math.max(
+                        0,
+                        Math.min(trim.startSec, nextEnd - minSpan)
+                      );
                       onUpdateVideoEdit({ trimStartSec: nextStart, trimEndSec: nextEnd });
                       onSeekPreview(nextEnd);
                     }}
-                    className="km-range-input"
+                    className="km-range-input w-full disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{
+                      background: `linear-gradient(to right, var(--accent-primary) ${
+                        metadata.durationSec > 0 ? (trim.endSec / metadata.durationSec) * 100 : 100
+                      }%, var(--border-hairline) ${
+                        metadata.durationSec > 0 ? (trim.endSec / metadata.durationSec) * 100 : 100
+                      }%)`,
+                    }}
                   />
                 </label>
 
@@ -1154,7 +1193,7 @@ export function VideoControlPanel({
                       <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                         Kejernihan Audio
                       </span>
-                      <div className="mt-1 grid grid-cols-4 gap-1">
+                      <div className="mt-1.5 grid grid-cols-4 gap-2">
                         {AUDIO_CLARITY_OPTIONS.map((opt) => (
                           <button
                             key={opt.kbps}
@@ -1166,7 +1205,7 @@ export function VideoControlPanel({
                                 audio: { ...videoEdit.audio, enabled: true, bitrateKbps: opt.kbps },
                               })
                             }
-                            className={`min-h-[30px] rounded-lg border text-[11px] font-medium ${
+                            className={`min-h-[36px] rounded-lg border py-1 text-[11px] font-medium ${
                               videoEdit.audio.bitrateKbps === opt.kbps
                                 ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                                 : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)]'
@@ -1213,16 +1252,17 @@ export function VideoControlPanel({
                   className="sr-only"
                 />
 
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-2 gap-2">
                   <Button
                     variant="secondary"
                     size="sm"
                     disabled={isProcessing}
                     data-testid="upload-subtitle-btn"
                     onClick={() => subFileInputRef.current?.click()}
+                    className="px-2.5 text-[11px]"
                   >
-                    <Upload className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span>Unggah .SRT/.VTT</span>
+                    <Upload className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span>Unggah SRT/VTT</span>
                   </Button>
                   <Button
                     variant="secondary"
@@ -1230,8 +1270,9 @@ export function VideoControlPanel({
                     disabled={isProcessing}
                     data-testid="add-subtitle-cue-btn"
                     onClick={handleAddBlankCue}
+                    className="px-2.5 text-[11px]"
                   >
-                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                    <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     <span>Tambah Teks</span>
                   </Button>
                 </div>
@@ -1285,12 +1326,12 @@ export function VideoControlPanel({
                 </div>
 
                 {videoEdit.subtitle.mode === 'hardsub' && (
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                     <div>
                       <span className="block text-[10px] font-medium text-[var(--text-muted)]">
                         Ukuran Teks
                       </span>
-                      <div className="mt-1 grid grid-cols-3 gap-1">
+                      <div className="mt-1.5 grid grid-cols-3 gap-1.5">
                         {(
                           [
                             { id: 'small', label: 'Kecil' },
@@ -1307,7 +1348,7 @@ export function VideoControlPanel({
                                 subtitle: { ...videoEdit.subtitle, size: sz.id },
                               })
                             }
-                            className={`min-h-[28px] rounded-md border text-[10px] font-semibold ${
+                            className={`min-h-[34px] rounded-md border px-2 text-[11px] font-semibold ${
                               videoEdit.subtitle.size === sz.id
                                 ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                                 : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)]'
@@ -1323,7 +1364,7 @@ export function VideoControlPanel({
                       <span className="block text-[10px] font-medium text-[var(--text-muted)]">
                         Posisi
                       </span>
-                      <div className="mt-1 grid grid-cols-3 gap-1">
+                      <div className="mt-1.5 grid grid-cols-3 gap-1.5">
                         {(
                           [
                             { id: 'bottom', label: 'Bawah' },
@@ -1340,7 +1381,7 @@ export function VideoControlPanel({
                                 subtitle: { ...videoEdit.subtitle, position: pos.id },
                               })
                             }
-                            className={`min-h-[28px] rounded-md border text-[10px] font-semibold ${
+                            className={`min-h-[34px] rounded-md border px-2 text-[11px] font-semibold ${
                               videoEdit.subtitle.position === pos.id
                                 ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                                 : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)]'
@@ -1458,24 +1499,24 @@ export function VideoControlPanel({
                       alt="Hasil tangkapan frame video"
                       className="max-h-24 w-full rounded-lg bg-black object-contain"
                     />
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-2 gap-2">
                       <a
                         href={capturedFrame.url}
                         download={capturedFrame.file.name}
                         data-testid="download-frame-link"
-                        className="inline-flex min-h-[34px] items-center justify-center gap-1 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2 text-[11px] font-semibold text-[var(--text-primary)] hover:border-[var(--border-active)]"
+                        className="inline-flex min-h-[40px] items-center justify-center gap-1 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-center text-[11px] font-semibold leading-tight text-[var(--text-primary)] hover:border-[var(--border-active)]"
                       >
-                        <Download className="h-3 w-3" aria-hidden="true" />
+                        <Download className="h-3 w-3 shrink-0" aria-hidden="true" />
                         <span>Unduh PNG</span>
                       </a>
                       <button
                         type="button"
                         data-testid="edit-frame-as-photo-btn"
                         onClick={onEditCapturedFrameAsPhoto}
-                        className="inline-flex min-h-[34px] items-center justify-center gap-1 rounded-full bg-[var(--accent-primary)] px-2.5 text-[11px] font-semibold text-[var(--ink-on-accent)] hover:bg-[var(--accent-primary-hover)]"
+                        className="inline-flex min-h-[40px] items-center justify-center gap-1 rounded-full bg-[var(--accent-primary)] px-2.5 py-1.5 text-center text-[11px] font-semibold leading-tight text-[var(--ink-on-accent)] hover:bg-[var(--accent-primary-hover)]"
                       >
-                        <ImagePlus className="h-3 w-3" aria-hidden="true" />
-                        <span>Edit di Studio Foto</span>
+                        <ImagePlus className="h-3 w-3 shrink-0" aria-hidden="true" />
+                        <span>Edit di Foto</span>
                       </button>
                     </div>
                   </div>

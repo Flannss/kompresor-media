@@ -249,7 +249,13 @@ async function decodeImageDimensions(file: File): Promise<{ width: number; heigh
   try {
     return await new Promise<{ width: number; height: number }>((resolve, reject) => {
       const img = new Image();
+      const timeout = setTimeout(() => {
+        img.onload = null;
+        img.onerror = null;
+        reject(new Error(`Foto "${file.name}" terlalu lama dibuka oleh browser.`));
+      }, 15_000);
       img.onload = () => {
+        clearTimeout(timeout);
         if (img.naturalWidth > 0 && img.naturalHeight > 0) {
           resolve({ width: img.naturalWidth, height: img.naturalHeight });
         } else {
@@ -257,6 +263,7 @@ async function decodeImageDimensions(file: File): Promise<{ width: number; heigh
         }
       };
       img.onerror = () => {
+        clearTimeout(timeout);
         reject(new Error(`Foto "${file.name}" rusak atau tidak dapat dibuka oleh browser.`));
       };
       img.src = objectUrl;
@@ -387,6 +394,10 @@ export async function readVideoMetadata(
   try {
     const [dimsAndDuration, hints] = await Promise.all([
       new Promise<{ width: number; height: number; durationSec: number }>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          cleanup();
+          reject(new Error(`Video "${file.name}" terlalu lama dibaca oleh browser.`));
+        }, 15_000);
         const onLoaded = () => {
           cleanup();
           if (video.videoWidth <= 0 || video.videoHeight <= 0) {
@@ -396,7 +407,7 @@ export async function readVideoMetadata(
           resolve({
             width: video.videoWidth,
             height: video.videoHeight,
-            durationSec: Number.isFinite(video.duration) ? video.duration : 0,
+            durationSec: Number.isFinite(video.duration) && video.duration >= 0 ? video.duration : 0,
           });
         };
         const onError = () => {
@@ -404,6 +415,7 @@ export async function readVideoMetadata(
           reject(new Error(`Video "${file.name}" rusak atau formatnya tidak didukung browser.`));
         };
         const cleanup = () => {
+          clearTimeout(timeout);
           video.removeEventListener('loadedmetadata', onLoaded);
           video.removeEventListener('error', onError);
         };

@@ -67,8 +67,8 @@ export interface PhotoControlPanelProps {
 
 const PHOTO_TABS = [
   { id: 'utama' as const, label: '1. Tujuan' },
-  { id: 'tampilan' as const, label: '2. Jernihkan & Filter', mobileLabel: '2. Jernihkan' },
-  { id: 'edit' as const, label: '3. Edit & Potong', mobileLabel: '3. Edit' },
+  { id: 'tampilan' as const, label: '2. Efek & Filter', mobileLabel: '2. Efek' },
+  { id: 'edit' as const, label: '3. Edit & Crop', mobileLabel: '3. Edit' },
 ];
 
 const QUALITY_MODELS: ReadonlyArray<{
@@ -342,7 +342,7 @@ export function PhotoControlPanel({
                 Format Output
               </span>
               <div
-                className={`mt-1.5 grid gap-1.5 ${
+                className={`mt-1.5 grid gap-2 ${
                   formatOptions.length === 4 ? 'grid-cols-4' : 'grid-cols-3'
                 }`}
               >
@@ -355,7 +355,7 @@ export function PhotoControlPanel({
                       data-testid={`format-${opt.label.toLowerCase()}`}
                       aria-pressed={active}
                       onClick={() => onUpdateImageEdit({ outputFormat: opt.value })}
-                      className={`min-h-[38px] rounded-lg border text-xs font-medium transition-all active:scale-[0.98] ${
+                      className={`min-h-[40px] rounded-xl border text-xs font-medium transition-all active:scale-[0.98] ${
                         active
                           ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
@@ -425,7 +425,7 @@ export function PhotoControlPanel({
                     <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                       Batas Sisi Panjang (saat Resolusi Asli)
                     </span>
-                    <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                    <div className="mt-2 grid grid-cols-3 gap-2">
                       {MAX_EDGE_OPTIONS.map((opt) => {
                         const active =
                           imageEdit.targetResolution === 'original' &&
@@ -442,7 +442,7 @@ export function PhotoControlPanel({
                                 maxEdgePx: opt.value,
                               })
                             }
-                            className={`min-h-[36px] rounded-full border text-xs font-medium tabular-nums transition-all ${
+                            className={`min-h-[38px] rounded-full border px-2 py-1.5 text-xs font-medium tabular-nums transition-all ${
                               active
                                 ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                                 : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
@@ -460,7 +460,7 @@ export function PhotoControlPanel({
                       <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                         Batas Ukuran File
                       </span>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      <div className="mt-2 flex flex-wrap gap-2">
                         {TARGET_SIZE_OPTIONS.map((opt) => {
                           const active = imageEdit.targetSizeKB === opt.value;
                           return (
@@ -475,7 +475,7 @@ export function PhotoControlPanel({
                                   { commitHistory: true, preservePreset: true }
                                 )
                               }
-                              className={`min-h-[34px] rounded-full border px-2.5 text-[11px] font-medium tabular-nums transition-all ${
+                              className={`min-h-[36px] rounded-full border px-3 py-1.5 text-[11px] font-medium tabular-nums transition-all ${
                                 active
                                   ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                                   : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
@@ -581,11 +581,11 @@ export function PhotoControlPanel({
             </p>
 
             {colouriseActive && (
-              <div className="space-y-1.5 border-t border-[var(--border-hairline)] pt-2.5">
+              <div className="space-y-2 border-t border-[var(--border-hairline)] pt-2.5">
                 <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                   Profil Warna (Warnai Foto)
                 </span>
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   {COLOURISE_PROFILE_OPTIONS.map((opt) => {
                     const selected =
                       (imageEdit.colouriseProfile ?? 'warm-portrait') === opt.id;
@@ -601,7 +601,7 @@ export function PhotoControlPanel({
                             { commitHistory: true, preservePreset: true }
                           )
                         }
-                        className={`min-h-[36px] rounded-full border px-2 text-[10.5px] font-semibold transition-all ${
+                        className={`min-h-[40px] rounded-full border px-3 py-1.5 text-[11px] font-semibold leading-snug transition-all ${
                           selected
                             ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                             : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
@@ -668,7 +668,7 @@ export function PhotoControlPanel({
                         { commitHistory: true, preservePreset: true }
                       )
                     }
-                    className={`flex min-h-[52px] min-w-[152px] shrink-0 snap-start flex-col items-start justify-center rounded-xl border px-3.5 py-2 text-left transition-all md:min-h-[56px] md:min-w-0 md:px-3 ${
+                    className={`flex min-h-[54px] min-w-[164px] shrink-0 snap-start flex-col items-start justify-center rounded-xl border px-3.5 py-2 text-left transition-all md:min-h-[58px] md:min-w-0 md:px-3 ${
                       idx === 4 ? 'md:col-span-2' : ''
                     } ${
                       selected
@@ -676,10 +676,10 @@ export function PhotoControlPanel({
                         : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] hover:border-[var(--border-active)]'
                     }`}
                   >
-                    <span className="whitespace-nowrap text-xs font-semibold text-[var(--text-primary)]">
+                    <span className="w-full truncate text-xs font-semibold text-[var(--text-primary)]">
                       {model.title}
                     </span>
-                    <span className="mt-0.5 line-clamp-1 text-[10.5px] leading-snug text-[var(--text-muted)]">
+                    <span className="mt-0.5 line-clamp-1 w-full text-[10.5px] leading-snug text-[var(--text-muted)]">
                       {model.desc}
                     </span>
                   </button>
@@ -739,7 +739,7 @@ export function PhotoControlPanel({
                         { commitHistory: true, preservePreset: true }
                       )
                     }
-                    className={`flex min-h-[44px] min-w-[78px] shrink-0 snap-start flex-col items-center justify-center whitespace-nowrap rounded-xl border px-3 py-1.5 text-center transition-all tabular-nums disabled:cursor-not-allowed disabled:opacity-45 md:min-h-[46px] md:min-w-0 md:rounded-lg md:px-1.5 md:py-1 ${
+                    className={`flex min-h-[48px] min-w-[82px] shrink-0 snap-start flex-col items-center justify-center gap-0.5 whitespace-nowrap rounded-xl border px-3 py-2 text-center transition-all tabular-nums disabled:cursor-not-allowed disabled:opacity-45 md:min-h-[48px] md:min-w-0 md:rounded-lg md:px-1.5 md:py-1.5 ${
                       active
                         ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
@@ -840,7 +840,7 @@ export function PhotoControlPanel({
               </button>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-2">
               {PHOTO_FILTER_PRESETS.map((look) => {
                 const active = imageEdit.photoFilterId === look.id;
                 const cssFilter = getPhotoFilterCssPreview(look.id, 100);
@@ -852,7 +852,7 @@ export function PhotoControlPanel({
                     aria-pressed={active}
                     onClick={() => onSelectPhotoFilter(look.id)}
                     title={look.description}
-                    className={`flex flex-col overflow-hidden rounded-xl border text-left transition-all ${
+                    className={`flex min-w-0 flex-col overflow-hidden rounded-xl border text-left transition-all ${
                       active
                         ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] ring-1 ring-[var(--border-active)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] hover:border-[var(--border-active)]'
@@ -875,8 +875,8 @@ export function PhotoControlPanel({
                         </div>
                       )}
                     </div>
-                    <div className="px-1.5 py-1">
-                      <span className="block truncate text-[10px] font-semibold text-[var(--text-primary)]">
+                    <div className="w-full px-2 py-1.5">
+                      <span className="block truncate text-[10.5px] font-semibold text-[var(--text-primary)]">
                         {look.title}
                       </span>
                     </div>
@@ -909,8 +909,8 @@ export function PhotoControlPanel({
 
       {/* TAB 3: EDIT & BINGKAI */}
       {activeTab === 'edit' && (
-        <div className="flex flex-col gap-3.5">
-          <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-col gap-4 sm:gap-3.5">
+          <div className="grid grid-cols-2 gap-2.5">
             <Button
               variant={isCropping ? 'primary' : 'secondary'}
               size="md"

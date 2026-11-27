@@ -57,10 +57,12 @@ export function computeRotatedDimensions(
   height: number,
   rotationDeg: ImageRotation
 ): Dimensions {
+  const safeW = Number.isFinite(width) && width > 0 ? Math.round(width) : 1;
+  const safeH = Number.isFinite(height) && height > 0 ? Math.round(height) : 1;
   if (rotationDeg === 90 || rotationDeg === 270) {
-    return { width: height, height: width };
+    return { width: safeH, height: safeW };
   }
-  return { width, height };
+  return { width: safeW, height: safeH };
 }
 
 /**
@@ -72,8 +74,9 @@ export function computeStraightenScale(
   height: number,
   degrees: number
 ): number {
-  const clamped = Math.min(45, Math.max(-45, degrees));
-  if (clamped === 0 || width <= 0 || height <= 0) {
+  const safeDeg = Number.isFinite(degrees) ? degrees : 0;
+  const clamped = Math.min(45, Math.max(-45, safeDeg));
+  if (clamped === 0 || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
     return 1;
   }
   const rad = (Math.abs(clamped) * Math.PI) / 180;
@@ -88,18 +91,25 @@ export function computeCropPixels(
   srcHeight: number,
   crop: NormalizedCropRect | null
 ): PixelCropRect {
+  const safeW = Number.isFinite(srcWidth) && srcWidth >= 1 ? Math.round(srcWidth) : 1;
+  const safeH = Number.isFinite(srcHeight) && srcHeight >= 1 ? Math.round(srcHeight) : 1;
   if (!crop) {
-    return { sx: 0, sy: 0, sw: srcWidth, sh: srcHeight };
+    return { sx: 0, sy: 0, sw: safeW, sh: safeH };
   }
-  const x0 = Math.min(1, Math.max(0, crop.x));
-  const y0 = Math.min(1, Math.max(0, crop.y));
-  const w0 = Math.min(1 - x0, Math.max(0.01, crop.width));
-  const h0 = Math.min(1 - y0, Math.max(0.01, crop.height));
+  const rx = Number.isFinite(crop.x) ? crop.x : 0;
+  const ry = Number.isFinite(crop.y) ? crop.y : 0;
+  const rw = Number.isFinite(crop.width) ? crop.width : 1;
+  const rh = Number.isFinite(crop.height) ? crop.height : 1;
 
-  const sx = Math.min(srcWidth - 1, Math.max(0, Math.round(x0 * srcWidth)));
-  const sy = Math.min(srcHeight - 1, Math.max(0, Math.round(y0 * srcHeight)));
-  const sw = Math.min(srcWidth - sx, Math.max(1, Math.round(w0 * srcWidth)));
-  const sh = Math.min(srcHeight - sy, Math.max(1, Math.round(h0 * srcHeight)));
+  const x0 = Math.min(1, Math.max(0, rx));
+  const y0 = Math.min(1, Math.max(0, ry));
+  const w0 = Math.min(1 - x0, Math.max(0.01, rw));
+  const h0 = Math.min(1 - y0, Math.max(0.01, rh));
+
+  const sx = Math.min(safeW - 1, Math.max(0, Math.round(x0 * safeW)));
+  const sy = Math.min(safeH - 1, Math.max(0, Math.round(y0 * safeH)));
+  const sw = Math.min(safeW - sx, Math.max(1, Math.round(w0 * safeW)));
+  const sh = Math.min(safeH - sy, Math.max(1, Math.round(h0 * safeH)));
   return { sx, sy, sw, sh };
 }
 
@@ -108,12 +118,12 @@ export function computeTargetDimensions(
   srcHeight: number,
   maxEdgePx: number | null
 ): Dimensions {
-  if (srcWidth <= 0 || srcHeight <= 0) {
+  if (!Number.isFinite(srcWidth) || !Number.isFinite(srcHeight) || srcWidth <= 0 || srcHeight <= 0) {
     throw new Error(`Dimensi foto tidak valid: ${srcWidth}x${srcHeight}`);
   }
   const longest = Math.max(srcWidth, srcHeight);
-  if (maxEdgePx === null || maxEdgePx <= 0 || longest <= maxEdgePx) {
-    return { width: srcWidth, height: srcHeight };
+  if (maxEdgePx === null || !Number.isFinite(maxEdgePx) || maxEdgePx <= 0 || longest <= maxEdgePx) {
+    return { width: Math.round(srcWidth), height: Math.round(srcHeight) };
   }
   const scale = maxEdgePx / longest;
   return {
@@ -131,7 +141,7 @@ export function computePhotoTargetDimensions(
   edit: Pick<ImageEditState, 'maxEdgePx' | 'targetResolution' | 'enhanceSuite'>,
   guard?: PhotoCanvasGuardrails
 ): PhotoTargetResolutionResult {
-  if (srcWidth <= 0 || srcHeight <= 0) {
+  if (!Number.isFinite(srcWidth) || !Number.isFinite(srcHeight) || srcWidth <= 0 || srcHeight <= 0) {
     throw new Error(`Dimensi foto tidak valid: ${srcWidth}x${srcHeight}`);
   }
 
@@ -175,6 +185,27 @@ export function computePhotoTargetDimensions(
     clampedByMemoryGuard,
     appliedTargetResolution,
   };
+}
+
+/**
+ * Computes planned export dimensions accounting for rotation and crop first so metric cards
+ * display exact pixel outputs matching pipelineRunner.
+ */
+export function computePlannedPhotoDimensions(
+  srcWidth: number,
+  srcHeight: number,
+  edit: Pick<
+    ImageEditState,
+    'rotationDeg' | 'crop' | 'maxEdgePx' | 'targetResolution' | 'enhanceSuite'
+  >,
+  guard?: PhotoCanvasGuardrails
+): PhotoTargetResolutionResult {
+  if (!Number.isFinite(srcWidth) || !Number.isFinite(srcHeight) || srcWidth <= 0 || srcHeight <= 0) {
+    throw new Error(`Dimensi foto tidak valid: ${srcWidth}x${srcHeight}`);
+  }
+  const rotated = computeRotatedDimensions(srcWidth, srcHeight, edit.rotationDeg);
+  const cropped = computeCropPixels(rotated.width, rotated.height, edit.crop);
+  return computePhotoTargetDimensions(cropped.sw, cropped.sh, edit, guard);
 }
 
 /**

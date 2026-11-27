@@ -87,10 +87,23 @@ export function releaseCanvasSurface(
 function drawOrientedAndFlipped<TCanvas extends CanvasSurfaceLike>(
   bitmap: ImageBitmap,
   edit: Pick<ImageEditState, 'rotationDeg' | 'straightenDeg' | 'flipH' | 'flipV'>,
-  adapter: CanvasAdapter<TCanvas>
+  adapter: CanvasAdapter<TCanvas>,
+  maxCanvasPixels?: number
 ): TCanvas {
+  if (!Number.isFinite(bitmap.width) || !Number.isFinite(bitmap.height) || bitmap.width <= 0 || bitmap.height <= 0) {
+    throw new Error('Dimensi gambar sumber tidak valid.');
+  }
   const rotDims = computeRotatedDimensions(bitmap.width, bitmap.height, edit.rotationDeg);
-  const canvas = adapter.createCanvas(rotDims.width, rotDims.height);
+  let targetW = rotDims.width;
+  let targetH = rotDims.height;
+  // Cap oversized initial decode canvas (e.g., 48MP+ camera photos) inside hardware RAM bounds
+  if (maxCanvasPixels && maxCanvasPixels > 0 && targetW * targetH > maxCanvasPixels) {
+    const preScale = Math.sqrt(maxCanvasPixels / (targetW * targetH));
+    targetW = Math.max(1, Math.floor(targetW * preScale));
+    targetH = Math.max(1, Math.floor(targetH * preScale));
+  }
+
+  const canvas = adapter.createCanvas(targetW, targetH);
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     releaseCanvasSurface(canvas);
@@ -101,14 +114,17 @@ function drawOrientedAndFlipped<TCanvas extends CanvasSurfaceLike>(
   ctx.imageSmoothingQuality = 'high';
 
   const straightenDeg = edit.straightenDeg ?? 0;
-  const straightenScale = computeStraightenScale(rotDims.width, rotDims.height, straightenDeg);
+  const straightenScale = computeStraightenScale(targetW, targetH, straightenDeg);
+  const drawScaleX = targetW / rotDims.width;
+  const drawScaleY = targetH / rotDims.height;
 
   ctx.save();
-  ctx.translate(rotDims.width / 2, rotDims.height / 2);
+  ctx.translate(targetW / 2, targetH / 2);
   if (straightenDeg !== 0) {
     ctx.rotate((straightenDeg * Math.PI) / 180);
     ctx.scale(straightenScale, straightenScale);
   }
+  ctx.scale(drawScaleX, drawScaleY);
   if (edit.rotationDeg !== 0) {
     ctx.rotate((edit.rotationDeg * Math.PI) / 180);
   }
@@ -302,7 +318,7 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
   previewMaxEdgePx?: number,
   guard?: PhotoCanvasGuardrails
 ): Promise<PipelineOutput> {
-  let currentCanvas = drawOrientedAndFlipped(bitmap, edit, adapter);
+  let currentCanvas = drawOrientedAndFlipped(bitmap, edit, adapter, guard?.maxCanvasPixels);
 
   try {
     if (edit.crop) {
@@ -553,6 +569,9 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
       edit.outputFormat,
       edit.outputFormat === 'image/png' ? undefined : clampedQuality
     );
+    if (!blob || blob.size === 0) {
+      throw new Error('Hasil konversi foto kosong. Silakan coba format lain.');
+    }
 
     return {
       blob,

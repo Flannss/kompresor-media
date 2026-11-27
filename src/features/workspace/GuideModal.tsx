@@ -40,7 +40,7 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
         className="km-glass-strong relative flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-[26px] border p-5 shadow-[var(--stage-shadow)] sm:p-6"
       >
         <div className="flex items-start justify-between gap-3 border-b border-[var(--border-hairline)] pb-4">
-          <div className="flex items-center gap-2.5">
+          <div className="flex min-w-0 items-center gap-2.5">
             <div
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border"
               style={{
@@ -51,10 +51,10 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
             >
               <BookOpen className="h-4.5 w-4.5" aria-hidden="true" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2
                 id="guide-modal-title"
-                className="font-editorial text-lg font-semibold text-[var(--text-primary)]"
+                className="font-editorial text-base font-semibold leading-snug text-[var(--text-primary)] sm:text-lg"
               >
                 Panduan Singkat Kompresor Media
               </h2>

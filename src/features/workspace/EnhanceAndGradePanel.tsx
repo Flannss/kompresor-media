@@ -45,6 +45,12 @@ const NOISE_LEVELS: ReadonlyArray<{ id: NoisePresetLevel; label: string }> = [
 
 const NEUTRAL_TONE = { temperature: 0, tint: 0, shadows: 0, highlights: 0 };
 
+function rangeTrackBg(value: number, min: number, max: number): string {
+  const span = max - min;
+  const pct = span > 0 ? Math.min(100, Math.max(0, ((value - min) / span) * 100)) : 0;
+  return `linear-gradient(to right, var(--accent-primary) ${pct}%, var(--border-hairline) ${pct}%)`;
+}
+
 export function EnhanceAndGradePanel({
   mediaKind,
   enhanceSuite,
@@ -113,14 +119,14 @@ export function EnhanceAndGradePanel({
         </div>
 
         {/* Quick 1-tap recipes */}
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {ENHANCE_RECIPES.map((rec) => (
             <button
               key={rec.id}
               type="button"
               data-testid={`enhance-recipe-${rec.id}`}
               onClick={() => onUpdateEnhanceSuite(applyEnhanceRecipe(rec.id, enhanceSuite))}
-              className="min-h-[36px] rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--border-active)] hover:text-[var(--text-primary)]"
+              className="min-h-[38px] rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-1.5 text-[11px] font-medium leading-tight text-[var(--text-secondary)] transition-colors hover:border-[var(--border-active)] hover:text-[var(--text-primary)]"
             >
               {rec.label}
             </button>
@@ -163,7 +169,7 @@ export function EnhanceAndGradePanel({
 
             {expandedCard === 'noise' && (
               <div className="mt-2.5 space-y-2.5 border-t border-[var(--border-hairline)] pt-2.5 text-xs">
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-3 gap-2">
                   {NOISE_LEVELS.map((lv) => {
                     const active = enhanceSuite.noise.level === lv.id;
                     return (
@@ -182,7 +188,7 @@ export function EnhanceAndGradePanel({
                             },
                           })
                         }
-                        className={`min-h-[34px] rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors ${
+                        className={`min-h-[36px] rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-colors ${
                           active
                             ? 'border-[var(--border-active)] bg-[var(--accent-deep)] text-white'
                             : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
@@ -218,6 +224,7 @@ export function EnhanceAndGradePanel({
                     }
                     onPointerUp={onCommitSliderSnapshot}
                     className="km-range-input w-full"
+                    style={{ background: rangeTrackBg(enhanceSuite.noise.grainStrength, 1, 10) }}
                   />
                 </label>
 
@@ -245,6 +252,7 @@ export function EnhanceAndGradePanel({
                     }
                     onPointerUp={onCommitSliderSnapshot}
                     className="km-range-input w-full"
+                    style={{ background: rangeTrackBg(enhanceSuite.noise.colorSmooth, 1, 8) }}
                   />
                 </label>
 
@@ -272,6 +280,7 @@ export function EnhanceAndGradePanel({
                         })
                       }
                       className="km-range-input w-full"
+                      style={{ background: rangeTrackBg(enhanceSuite.noise.motionStability, 1, 10) }}
                     />
                   </label>
                 )}
@@ -337,6 +346,7 @@ export function EnhanceAndGradePanel({
                       })
                     }
                     onPointerUp={onCommitSliderSnapshot}
+                    style={{ background: rangeTrackBg(enhanceSuite.sharpen.strength, 0.2, 2.0) }}
                     className="km-range-input w-full"
                   />
                 </label>
@@ -345,7 +355,7 @@ export function EnhanceAndGradePanel({
                   <span className="block text-[11px] text-[var(--text-secondary)]">
                     Radius Deteksi
                   </span>
-                  <div className="grid grid-cols-3 gap-1.5">
+                  <div className="grid grid-cols-3 gap-2">
                     {(
                       [
                         { size: 3, label: 'Halus' },
@@ -366,7 +376,7 @@ export function EnhanceAndGradePanel({
                             },
                           })
                         }
-                        className={`min-h-[34px] rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors ${
+                        className={`min-h-[38px] rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                           enhanceSuite.sharpen.kernelSize === opt.size
                             ? 'border-[var(--border-active)] bg-[var(--accent-deep)] text-white'
                             : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
@@ -469,6 +479,7 @@ export function EnhanceAndGradePanel({
                           })
                         }
                         onPointerUp={onCommitSliderSnapshot}
+                        style={{ background: rangeTrackBg(val, -50, 50) }}
                         className="km-range-input w-full"
                       />
                     </label>
@@ -518,7 +529,7 @@ export function EnhanceAndGradePanel({
                   Meningkatkan ukuran ke 1920×1080 (mendatar) atau 1080×1920 (tegak) agar tampilan
                   tajam di layar besar.
                 </p>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-2 gap-2">
                   {(
                     [
                       { id: 'lanczos', label: 'Detail Maksimal' },
@@ -538,7 +549,7 @@ export function EnhanceAndGradePanel({
                           },
                         })
                       }
-                      className={`min-h-[34px] rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors ${
+                      className={`min-h-[38px] rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                         enhanceSuite.upscale1080.method === opt.id
                           ? 'border-[var(--border-active)] bg-[var(--accent-deep)] text-white'
                           : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
@@ -673,6 +684,7 @@ export function EnhanceAndGradePanel({
               }
               onPointerUp={onCommitSliderSnapshot}
               className="km-range-input w-full"
+              style={{ background: rangeTrackBg(colorGrade.intensity, 0, 100) }}
             />
           </label>
         )}
@@ -752,6 +764,7 @@ export function EnhanceAndGradePanel({
                       }
                       onPointerUp={onCommitSliderSnapshot}
                       className="km-range-input w-full"
+                      style={{ background: rangeTrackBg(val, -50, 50) }}
                     />
                   </label>
                 );

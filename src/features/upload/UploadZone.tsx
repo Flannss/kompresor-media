@@ -208,7 +208,7 @@ export function UploadZone({
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <div
-                  className="flex h-12 w-12 items-center justify-center rounded-2xl border"
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border"
                   style={{
                     backgroundColor: 'var(--accent-olive-soft)',
                     borderColor: 'var(--status-ok-border)',
@@ -223,7 +223,7 @@ export function UploadZone({
                 </div>
 
                 <span
-                  className="rounded-full border px-3 py-1 text-[11px] font-semibold tabular-nums"
+                  className="shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-semibold tabular-nums"
                   style={{
                     backgroundColor: 'var(--accent-gold-soft)',
                     borderColor: 'var(--border-hairline)',
@@ -283,7 +283,7 @@ export function UploadZone({
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <div
-                  className="flex h-12 w-12 items-center justify-center rounded-2xl border"
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border"
                   style={{
                     backgroundColor: 'var(--accent-terracotta-soft)',
                     borderColor: 'var(--status-err-border)',
@@ -298,7 +298,7 @@ export function UploadZone({
                 </div>
 
                 <span
-                  className="rounded-full border px-3 py-1 text-[11px] font-semibold tabular-nums"
+                  className="shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-semibold tabular-nums"
                   style={{
                     backgroundColor: 'var(--accent-gold-soft)',
                     borderColor: 'var(--border-hairline)',
@@ -343,7 +343,7 @@ export function UploadZone({
         <div className="flex w-full flex-col items-center gap-3">
           <div
             data-testid="landing-flow-strip"
-            className="km-glass flex flex-wrap items-center justify-center gap-x-5 gap-y-2 rounded-full border px-6 py-3 text-xs text-[var(--text-secondary)] tabular-nums"
+            className="km-glass flex max-w-full flex-wrap items-center justify-center gap-x-4 gap-y-2 rounded-2xl border px-4 py-3 text-xs text-[var(--text-secondary)] tabular-nums sm:gap-x-5 sm:rounded-full sm:px-6"
           >
             <span className="flex items-center gap-1.5">
               <span className="font-editorial text-[13px] font-semibold text-[var(--accent-gold)]">

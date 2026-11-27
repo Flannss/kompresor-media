@@ -8,7 +8,7 @@ import type {
   VideoMetadata,
   VideoProcessResult,
 } from '../../engines/contracts';
-import { computePhotoTargetDimensions, computeReductionPct } from '../../engines/image/pixelOps';
+import { computePlannedPhotoDimensions, computeReductionPct } from '../../engines/image/pixelOps';
 import type { DeviceProfile } from '../../shared/utils/deviceCapability';
 import type { ImageProcessStatus, VideoProcessStatus } from '../../store/useMediaStore';
 import { formatBytes } from '../../shared/utils/formatBytes';
@@ -65,7 +65,7 @@ export function MediaInfoBar({
     const plannedTarget =
       imageEdit &&
       (needsFullResExport || imageEdit.targetResolution !== 'original')
-        ? computePhotoTargetDimensions(
+        ? computePlannedPhotoDimensions(
             imageMeta.width,
             imageMeta.height,
             imageEdit,
@@ -237,8 +237,8 @@ export function MediaInfoBar({
   };
 
   return (
-    <div className="flex max-w-full flex-col items-center gap-2">
-      <div className="km-glass-lite max-w-full rounded-full border px-4 py-1.5 shadow-xs">
+    <div className="flex w-full max-w-full flex-col items-center gap-2">
+      <div className="km-glass-lite max-w-full rounded-2xl border px-3.5 py-2 shadow-xs sm:rounded-full sm:px-4 sm:py-1.5">
         {metadata.kind === 'image' ? renderPhotoSummary(metadata) : renderVideoSummary(metadata)}
       </div>
 

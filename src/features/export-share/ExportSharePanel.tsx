@@ -252,14 +252,14 @@ export function ExportSharePanel({
           <span>{preparingFullRes ? `Merender ${renderResTag} penuh…` : 'Bagikan'}</span>
         </Button>
       ) : (
-        <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Kirim cepat ke aplikasi">
+        <div className="grid grid-cols-3 gap-2" role="group" aria-label="Kirim cepat ke aplikasi">
           <Button
             variant="secondary"
             size="sm"
             data-testid="whatsapp-share-btn"
             disabled={!canExport || sharing}
             onClick={() => void handleSharePlatform('whatsapp')}
-            className="min-h-[40px] rounded-full px-2 text-[11px] font-semibold"
+            className="min-h-[42px] rounded-full px-2 text-[11px] font-semibold"
           >
             WhatsApp
           </Button>
@@ -269,7 +269,7 @@ export function ExportSharePanel({
             data-testid="instagram-share-btn"
             disabled={!canExport || sharing}
             onClick={() => void handleSharePlatform('instagram')}
-            className="min-h-[40px] rounded-full px-2 text-[11px] font-semibold"
+            className="min-h-[42px] rounded-full px-2 text-[11px] font-semibold"
           >
             Instagram
           </Button>
@@ -279,7 +279,7 @@ export function ExportSharePanel({
             data-testid="tiktok-share-btn"
             disabled={!canExport || sharing}
             onClick={() => void handleSharePlatform('tiktok')}
-            className="min-h-[40px] rounded-full px-2 text-[11px] font-semibold"
+            className="min-h-[42px] rounded-full px-2 text-[11px] font-semibold"
           >
             TikTok
           </Button>
@@ -289,7 +289,7 @@ export function ExportSharePanel({
       {exportedWidth && exportedHeight && exportedBytes !== null && (
         <p
           data-testid="exported-dimensions-badge"
-          className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-center text-[11px] font-medium text-[var(--text-secondary)] tabular-nums"
+          className="break-words rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-2 text-center text-[11px] font-medium leading-snug text-[var(--text-secondary)] tabular-nums"
         >
           {needsFullResPreparation
             ? `Pratinjau cepat (${exportedWidth}×${exportedHeight}) · Hasil penuh dirender saat simpan`
@@ -300,7 +300,7 @@ export function ExportSharePanel({
       {likelyMobile && isWhatsAppPreset && (
         <p
           data-testid="ios-wa-hd-tip"
-          className="rounded-xl border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-2.5 py-1.5 text-[11px] leading-relaxed text-[var(--status-warn-ink)]"
+          className="rounded-2xl border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-3 py-2 text-[11px] leading-relaxed text-[var(--status-warn-ink)]"
         >
           Tip iPhone: Simpan file dulu, lalu kirim dari aplikasi WhatsApp dengan tombol HD aktif
           (hindari kirim langsung dari menu Bagikan agar tidak dikompres paksa).
@@ -314,10 +314,10 @@ export function ExportSharePanel({
           data-testid="download-zip-btn"
           disabled={zipping || preparingFullRes}
           onClick={() => void handleZipDownload()}
-          className="min-h-[44px] w-full rounded-full tabular-nums"
+          className="min-h-[44px] w-full rounded-full py-2 tabular-nums"
         >
-          <FileArchive className="h-4 w-4 text-[var(--accent-highlight)]" aria-hidden="true" />
-          <span>
+          <FileArchive className="h-4 w-4 shrink-0 text-[var(--accent-highlight)]" aria-hidden="true" />
+          <span className="truncate">
             {zipping
               ? batchStatusLabel || 'Membuat arsip ZIP…'
               : `Simpan Semua (ZIP · ${finishedBatchItems.length} file)`}
@@ -328,7 +328,7 @@ export function ExportSharePanel({
       {savedSummaryMsg && (
         <p
           data-testid="download-confirmed-msg"
-          className="flex items-center justify-center gap-1.5 rounded-full border border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] px-3 py-1 text-center text-[11px] font-semibold text-[var(--status-ok-ink)] tabular-nums"
+          className="flex items-center justify-center gap-1.5 break-words rounded-2xl border border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] px-3.5 py-2 text-center text-[11px] font-semibold leading-snug text-[var(--status-ok-ink)] tabular-nums"
         >
           <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>{savedSummaryMsg}</span>
@@ -338,7 +338,7 @@ export function ExportSharePanel({
       {zipDoneMsg && (
         <p
           data-testid="zip-confirmed-msg"
-          className="flex items-center justify-center gap-1.5 rounded-full border border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] px-3 py-1 text-center text-[11px] font-semibold text-[var(--status-ok-ink)] tabular-nums"
+          className="flex items-center justify-center gap-1.5 break-words rounded-2xl border border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] px-3.5 py-2 text-center text-[11px] font-semibold leading-snug text-[var(--status-ok-ink)] tabular-nums"
         >
           <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>{zipDoneMsg}</span>

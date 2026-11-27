@@ -36,7 +36,7 @@ export function computeVideoTargetDimensions(
   targetResolution: VideoTargetResolution,
   maxHeightPx: number | null
 ): VideoDimensions {
-  if (srcWidth <= 0 || srcHeight <= 0) {
+  if (!Number.isFinite(srcWidth) || !Number.isFinite(srcHeight) || srcWidth <= 0 || srcHeight <= 0) {
     throw new Error(`Resolusi video tidak valid: ${srcWidth}x${srcHeight}`);
   }
 
@@ -75,7 +75,7 @@ export function computeEvenScaledDimensions(
   maxHeightPx: number | null,
   upscaleFactor: 1 | 1.5 | 2 = 1
 ): VideoDimensions {
-  if (srcWidth <= 0 || srcHeight <= 0) {
+  if (!Number.isFinite(srcWidth) || !Number.isFinite(srcHeight) || srcWidth <= 0 || srcHeight <= 0) {
     throw new Error(`Resolusi video tidak valid: ${srcWidth}x${srcHeight}`);
   }
 

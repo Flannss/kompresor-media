@@ -1132,15 +1132,33 @@ export function WorkspaceStage({
               <span>Bagikan</span>
             </button>
           </>
+        ) : isImage ? (
+          <div className="flex flex-1 items-center justify-center py-2 text-xs font-medium text-[var(--text-secondary)]">
+            Mengoptimalkan foto HD…
+          </div>
+        ) : videoProcessStatus === 'processing' ? (
+          <>
+            <div className="flex min-w-0 flex-1 items-center gap-2 text-xs font-medium text-[var(--text-primary)]">
+              <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-[var(--accent-highlight)]" />
+              <span className="truncate">Memproses Video HD…</span>
+            </div>
+            <button
+              type="button"
+              data-testid="mobile-sticky-cancel-btn"
+              onClick={onCancelVideoProcess}
+              className="inline-flex min-h-[42px] shrink-0 items-center justify-center rounded-xl border border-[var(--status-err-border)] bg-[var(--status-err-bg)] px-4 text-xs font-semibold text-[var(--status-err-ink)]"
+            >
+              Batalkan
+            </button>
+          </>
         ) : (
           <button
             type="button"
-            disabled={videoProcessStatus === 'processing'}
             onClick={() => onStartVideoProcess('auto')}
-            className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--accent-primary)] px-3 text-xs font-semibold text-[var(--ink-on-accent)] disabled:opacity-55"
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--accent-primary)] px-3 text-xs font-semibold text-[var(--ink-on-accent)]"
           >
             <Play className="h-4 w-4" aria-hidden="true" />
-            <span>{videoProcessStatus === 'processing' ? 'Memproses…' : 'Proses Video'}</span>
+            <span>Proses Video HD</span>
           </button>
         )}
       </div>

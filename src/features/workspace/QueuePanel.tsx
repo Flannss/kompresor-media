@@ -262,13 +262,13 @@ export function QueuePanel({
                   <div
                     key={item.id}
                     data-testid={`queue-card-${item.id}`}
-                    className={`group rounded-2xl border p-2 transition-colors ${
+                    className={`group min-w-0 overflow-hidden rounded-2xl border p-2 transition-colors ${
                       active
                         ? 'border-[var(--border-active)] bg-[var(--bg-subtle)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] hover:border-[var(--border-active)]'
                     }`}
                   >
-                    <div className="flex items-start gap-2">
+                    <div className="flex min-w-0 items-start gap-2">
                       <button
                         type="button"
                         onClick={() => onSelectItem(item.id)}
@@ -287,15 +287,15 @@ export function QueuePanel({
                             </div>
                           )}
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1">
+                        <div className="min-w-0 flex-1 overflow-hidden">
+                          <div className="flex min-w-0 items-center gap-1">
                             {isImg ? (
                               <ImageIcon className="h-3 w-3 shrink-0 text-[var(--accent-olive)]" aria-hidden="true" />
                             ) : (
                               <Film className="h-3 w-3 shrink-0 text-[var(--accent-terracotta)]" aria-hidden="true" />
                             )}
                             <span
-                              className="truncate text-[11px] font-semibold text-[var(--text-primary)]"
+                              className="block min-w-0 truncate text-[11px] font-semibold text-[var(--text-primary)]"
                               title={item.file.name}
                             >
                               {item.file.name}

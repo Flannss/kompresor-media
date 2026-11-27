@@ -175,7 +175,7 @@ export function CropOverlay({
       data-testid="crop-editor-view"
       className="flex w-full flex-col items-center gap-3"
     >
-      <div className="flex flex-wrap items-center justify-center gap-1.5">
+      <div className="flex flex-wrap items-center justify-center gap-2">
         {ASPECT_OPTIONS.map((opt) => {
           const active = aspectId === opt.id;
           return (
@@ -184,7 +184,7 @@ export function CropOverlay({
               type="button"
               data-testid={`crop-aspect-${opt.id}`}
               onClick={() => handleSelectAspect(opt)}
-              className={`min-h-[32px] rounded-lg border px-2.5 text-xs font-medium transition-colors ${
+              className={`min-h-[36px] rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
                 active
                   ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                   : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
@@ -196,7 +196,7 @@ export function CropOverlay({
         })}
         <span
           data-testid="crop-pixel-readout"
-          className="ml-1 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-1 text-xs font-semibold text-[var(--text-primary)] tabular-nums"
+          className="rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-primary)] tabular-nums"
         >
           {pxDims.sw} × {pxDims.sh} px
         </span>
@@ -207,13 +207,13 @@ export function CropOverlay({
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
-        className="relative inline-block max-h-[54vh] max-w-full select-none overflow-hidden rounded-xl border border-[var(--border-hairline)] bg-black/80"
+        className="relative inline-block max-h-[38vh] max-w-full select-none overflow-hidden rounded-xl border border-[var(--border-hairline)] bg-black/80 sm:max-h-[54vh]"
       >
         <img
           src={imageUrl}
           alt="Area potong foto"
           draggable={false}
-          className="block max-h-[54vh] w-auto max-w-full opacity-55"
+          className="block max-h-[38vh] w-auto max-w-full opacity-55 sm:max-h-[54vh]"
         />
 
         <div

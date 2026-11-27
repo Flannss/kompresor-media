@@ -48,7 +48,7 @@ export function SegmentedTabs<T extends string>({
             aria-selected={active}
             data-testid={`tab-${item.id}`}
             onClick={() => onChange(item.id)}
-            className={`relative z-10 min-h-[44px] sm:min-h-[40px] whitespace-nowrap rounded-full px-2 sm:px-3 py-1.5 text-[12px] font-semibold leading-tight transition-colors duration-200 active:scale-[0.985] ${
+            className={`relative z-10 flex min-h-[44px] sm:min-h-[40px] items-center justify-center overflow-hidden whitespace-nowrap rounded-full px-1.5 sm:px-2.5 py-1.5 text-[11px] sm:text-[11.5px] font-semibold leading-tight transition-colors duration-200 active:scale-[0.985] ${
               active
                 ? 'text-[var(--text-primary)]'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'

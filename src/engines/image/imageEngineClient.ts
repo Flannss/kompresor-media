@@ -14,9 +14,13 @@ interface WorkerSlot {
 }
 
 const workerPool: WorkerSlot[] = [];
-const waitingResolvers: Array<(slot: WorkerSlot) => void> = [];
+const waitingResolvers: Array<{
+  resolve: (slot: WorkerSlot) => void;
+  reject: (reason?: unknown) => void;
+}> = [];
 let sequenceCounter = 0;
 let cachedAvifSupport: boolean | null = null;
+const WORKER_TIMEOUT_MS = 60_000;
 
 function getWorkerPoolLimit(): number {
   return getDeviceProfile().imageWorkerPoolSize;
@@ -41,8 +45,8 @@ async function acquireWorkerSlot(): Promise<WorkerSlot> {
     workerPool.push(slot);
     return slot;
   }
-  return new Promise<WorkerSlot>((resolve) => {
-    waitingResolvers.push(resolve);
+  return new Promise<WorkerSlot>((resolve, reject) => {
+    waitingResolvers.push({ resolve, reject });
   });
 }
 
@@ -67,13 +71,14 @@ function releaseWorkerSlot(slot: WorkerSlot, terminateOnFault = false): void {
         return fresh;
       })();
     readySlot.busy = true;
-    next(readySlot);
+    next.resolve(readySlot);
   }
 }
 
 export function disposeImageEngine(): void {
   while (waitingResolvers.length > 0) {
-    waitingResolvers.pop();
+    const waiter = waitingResolvers.pop();
+    waiter?.reject(new Error('Mesin gambar dihentikan.'));
   }
   while (workerPool.length > 0) {
     const slot = workerPool.pop()!;
@@ -86,8 +91,13 @@ function sendWorkerMessage(
   payload: ImageWorkerRequest
 ): Promise<ImageWorkerResponse> {
   return new Promise<ImageWorkerResponse>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('Waktu tunggu worker foto habis.'));
+    }, WORKER_TIMEOUT_MS);
+
     const onMessage = (event: MessageEvent<ImageWorkerResponse>) => {
-      if (event.data.seq !== payload.seq) {
+      if (event.data?.seq !== payload.seq) {
         return;
       }
       cleanup();
@@ -97,13 +107,20 @@ function sendWorkerMessage(
       cleanup();
       reject(new Error(event.message || 'Worker foto mengalami gangguan saat memproses.'));
     };
+    const onMessageError = () => {
+      cleanup();
+      reject(new Error('Gagal membaca pesan dari worker foto.'));
+    };
     const cleanup = () => {
+      clearTimeout(timer);
       worker.removeEventListener('message', onMessage);
       worker.removeEventListener('error', onError);
+      worker.removeEventListener('messageerror', onMessageError);
     };
 
     worker.addEventListener('message', onMessage);
     worker.addEventListener('error', onError);
+    worker.addEventListener('messageerror', onMessageError);
     worker.postMessage(payload, [payload.buffer]);
   });
 }
@@ -172,7 +189,12 @@ export async function processImage(
     return runMainThreadImageFallback(normalizedRequest);
   }
 
-  const slot = await acquireWorkerSlot();
+  let slot: WorkerSlot;
+  try {
+    slot = await acquireWorkerSlot();
+  } catch {
+    return runMainThreadImageFallback(normalizedRequest);
+  }
   try {
     const inputBuffer = await normalizedRequest.file.arrayBuffer();
     const response = await sendWorkerMessage(slot.worker, {
@@ -240,7 +262,12 @@ export async function generateBaseThumbnail(
     return runMainThreadBaseThumbnailFallback(file);
   }
 
-  const slot = await acquireWorkerSlot();
+  let slot: WorkerSlot;
+  try {
+    slot = await acquireWorkerSlot();
+  } catch {
+    return runMainThreadBaseThumbnailFallback(file);
+  }
   try {
     const inputBuffer = await file.arrayBuffer();
     const response = await sendWorkerMessage(slot.worker, {

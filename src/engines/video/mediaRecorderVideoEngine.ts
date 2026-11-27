@@ -98,7 +98,7 @@ export async function runMediaRecorderVideoTranscode(
 
   const t0 = performance.now();
   const formatMeta = getVideoFormatMeta(edit.outputFormat);
-  const trim = clampTrimRange(edit.trimStartSec, edit.trimEndSec, sourceMetadata.durationSec);
+  let trim = clampTrimRange(edit.trimStartSec, edit.trimEndSec, sourceMetadata.durationSec);
   const dims = edit.enhanceSuite.upscale1080.enabled
     ? compute1080pTargetDimensions(
         sourceMetadata.width,
@@ -229,6 +229,11 @@ export async function runMediaRecorderVideoTranscode(
 
     if (signal?.aborted) {
       throw new VideoCancelledError();
+    }
+
+    // Backfill trim end range if source metadata originally reported 0/unknown duration
+    if (trim.durationSec <= 0 && Number.isFinite(video.duration) && video.duration > 0) {
+      trim = clampTrimRange(edit.trimStartSec, edit.trimEndSec, video.duration);
     }
 
     if (trim.startSec > 0.05) {

@@ -6,7 +6,7 @@ import type {
   VideoProcessResult,
 } from '../../engines/contracts';
 import {
-  computePhotoTargetDimensions,
+  computePlannedPhotoDimensions,
   computeReductionPct,
   formatOutputMimeShort,
   getActiveImageModuleLabels,
@@ -41,7 +41,7 @@ export function CoreSummaryCard({
   const presetSpec = getMediaPreset(selectedPresetId);
 
   const plannedExportDims = isImage
-    ? computePhotoTargetDimensions(
+    ? computePlannedPhotoDimensions(
         metadata.width,
         metadata.height,
         imageEdit,
@@ -138,12 +138,12 @@ export function CoreSummaryCard({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs tabular-nums">
+      <div className="grid grid-cols-2 gap-3 text-xs tabular-nums">
         <div className="min-w-0">
           <span className="block text-[10px] text-[var(--text-muted)]">Resolusi</span>
           <span
             data-testid="core-summary-resolution"
-            className="block truncate font-semibold text-[var(--text-primary)]"
+            className="block break-words text-[11.5px] font-semibold leading-snug text-[var(--text-primary)] sm:text-xs"
             title={resolutionText}
           >
             {resolutionText}
@@ -152,10 +152,10 @@ export function CoreSummaryCard({
 
         <div className="min-w-0">
           <span className="block text-[10px] text-[var(--text-muted)]">Ukuran</span>
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span
               data-testid="core-summary-size"
-              className="font-semibold text-[var(--text-primary)]"
+              className="break-words text-[11.5px] font-semibold leading-snug text-[var(--text-primary)] sm:text-xs"
             >
               {isPreviewPhotoResult
                 ? outputBytes !== null
@@ -184,7 +184,7 @@ export function CoreSummaryCard({
           <span className="block text-[10px] text-[var(--text-muted)]">Output</span>
           <span
             data-testid="core-summary-output"
-            className="block truncate font-semibold text-[var(--text-primary)]"
+            className="block break-words text-[11.5px] font-semibold leading-snug text-[var(--text-primary)] sm:text-xs"
           >
             {outputFormatText}
           </span>
@@ -194,7 +194,7 @@ export function CoreSummaryCard({
           <span className="block text-[10px] text-[var(--text-muted)]">Modul Aktif</span>
           <div
             data-testid="core-summary-modules"
-            className="mt-0.5 flex flex-wrap gap-1"
+            className="mt-1 flex flex-wrap gap-1.5"
           >
             {activeModules.map((mod) => (
               <span
