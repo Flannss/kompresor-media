@@ -43,6 +43,9 @@ export const PLATFORM_SHARE_META: Record<SharePlatform, PlatformShareSpec> = {
   },
 };
 
+/** Safe revoke delay on ephemeral download URLs so Safari iOS never aborts in-flight file saves. */
+export const SAFARI_SAFE_REVOKE_DELAY_MS = 10_000;
+
 export function triggerObjectUrlDownload(objectUrl: string, fileName: string): void {
   const anchor = document.createElement('a');
   anchor.href = objectUrl;
@@ -50,6 +53,14 @@ export function triggerObjectUrlDownload(objectUrl: string, fileName: string): v
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
+}
+
+export function triggerBlobDownload(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  triggerObjectUrlDownload(url, fileName);
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, SAFARI_SAFE_REVOKE_DELAY_MS);
 }
 
 export function isLikelyMobileDevice(): boolean {

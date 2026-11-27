@@ -296,7 +296,11 @@ export async function runFfmpegVideoTranscode(
 
     return {
       outputBlob,
-      outputFileName: buildVideoExportFileName(file.name, edit.outputFormat),
+      outputFileName: buildVideoExportFileName(
+        file.name,
+        edit.outputFormat,
+        edit.targetResolution
+      ),
       outputWidth: finalWidth,
       outputHeight: finalHeight,
       durationSec: finalDuration,

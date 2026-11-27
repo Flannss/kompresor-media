@@ -372,7 +372,7 @@ export function UploadZone({
           </div>
 
           <p className="text-center text-[11px] text-[var(--text-muted)] tabular-nums">
-            Atau tarik &amp; lepas campuran foto dan video langsung ke layar ini ({queueLimits.label}).
+            Atau tarik &amp; lepas file, atau tekan Ctrl+V untuk menempel gambar langsung ({queueLimits.label}).
           </p>
         </div>
       </div>

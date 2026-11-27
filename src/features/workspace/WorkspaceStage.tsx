@@ -67,6 +67,7 @@ export interface WorkspaceStageProps {
   batchRunning: boolean;
   batchCompleted: number;
   batchTotal: number;
+  batchStatusLabel?: string | null;
 
   metadata: MediaMetadata;
   validation: Extract<ValidationResult, { valid: true }>;
@@ -104,11 +105,11 @@ export interface WorkspaceStageProps {
   onSelectColorGrade: (gradeId: ColorGradeId) => void;
   onRequestPhotoThumbnail: () => void;
   onVideoThumbnailReady: (itemId: string, url: string) => void;
-  onEnsureFullResExport: () => Promise<{
+  onEnsureFullResExport: (itemId?: string) => Promise<{
     result: ImageProcessResult;
     url: string;
   } | null>;
-  onEnsureAllPhotosFullRes: () => Promise<void>;
+  onEnsureAllPhotosFullRes: () => Promise<QueueItem[]>;
   onUndoPhoto: () => void;
   onRedoPhoto: () => void;
   onResetPhoto: () => void;
@@ -149,6 +150,7 @@ export function WorkspaceStage({
   batchRunning,
   batchCompleted,
   batchTotal,
+  batchStatusLabel = null,
   metadata,
   validation,
   objectUrl,
@@ -430,13 +432,30 @@ export function WorkspaceStage({
       url: res.url,
       fileName: res.result.outputFileName,
       mimeType: res.result.outputMime,
+      width: res.result.outputWidth,
+      height: res.result.outputHeight,
     };
   };
 
+  const handleDownloadQueueItem = async (itemId: string) => {
+    const targetItem = items.find((i) => i.id === itemId);
+    if (!targetItem) return;
+    if (targetItem.metadata.kind === 'image') {
+      const prepared = await onEnsureFullResExport(itemId);
+      if (!prepared) return;
+      triggerObjectUrlDownload(prepared.url, prepared.result.outputFileName);
+      return;
+    }
+    const readyName = targetItem.videoResult?.outputFileName ?? null;
+    if (targetItem.outputUrl && readyName) {
+      triggerObjectUrlDownload(targetItem.outputUrl, readyName);
+    }
+  };
+
   const handlePrepareAllZipItems = async (): Promise<ZipEntryInput[]> => {
-    await onEnsureAllPhotosFullRes();
+    const freshItems = await onEnsureAllPhotosFullRes();
     const out: ZipEntryInput[] = [];
-    for (const item of items) {
+    for (const item of freshItems) {
       if (item.imageResult) {
         out.push({
           fileName: item.imageResult.outputFileName,
@@ -478,8 +497,10 @@ export function WorkspaceStage({
         batchRunning={batchRunning}
         batchCompleted={batchCompleted}
         batchTotal={batchTotal}
+        batchStatusLabel={batchStatusLabel}
         onSelectItem={onSelectQueueItem}
         onRemoveItem={onRemoveQueueItem}
+        onDownloadItem={(id) => void handleDownloadQueueItem(id)}
         onAddMoreClick={onAddMoreClick}
         onApplyToAll={onApplyToAll}
         onProcessAll={onProcessAll}
@@ -866,6 +887,7 @@ export function WorkspaceStage({
               onFlipV={onFlipV}
               onSelectPhotoFilter={onSelectPhotoFilter}
               onRequestThumbnail={onRequestPhotoThumbnail}
+              onResetPhoto={onResetPhoto}
             />
           ) : (
             <VideoControlPanel
@@ -884,6 +906,8 @@ export function WorkspaceStage({
               videoProcessError={videoProcessError}
               capturedFrame={capturedFrame}
               finishedBatchItems={finishedBatchItems}
+              batchStatusLabel={batchStatusLabel}
+              onPrepareAllZipItems={handlePrepareAllZipItems}
               onSelectPreset={onSelectPreset}
               onUpdateVideoEdit={onUpdateVideoEdit}
               onSelectColorGrade={onSelectColorGrade}
@@ -931,6 +955,7 @@ export function WorkspaceStage({
                 selectedPresetId={selectedPresetId}
                 targetResolution={imageEdit.targetResolution}
                 finishedBatchItems={finishedBatchItems}
+                batchStatusLabel={batchStatusLabel}
                 needsFullResPreparation={needsFullResExport}
                 onPrepareFullResExport={handlePreparePhotoFullRes}
                 onPrepareAllZipItems={handlePrepareAllZipItems}

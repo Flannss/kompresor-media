@@ -62,12 +62,13 @@ export interface PhotoControlPanelProps {
   onFlipV: () => void;
   onSelectPhotoFilter: (filterId: PhotoFilterId) => void;
   onRequestThumbnail: () => void;
+  onResetPhoto?: () => void;
 }
 
 const PHOTO_TABS = [
-  { id: 'utama' as const, label: 'Tujuan' },
-  { id: 'tampilan' as const, label: 'Kualitas & Alat' },
-  { id: 'edit' as const, label: 'Edit' },
+  { id: 'utama' as const, label: '1. Tujuan' },
+  { id: 'tampilan' as const, label: '2. Jernihkan & Filter' },
+  { id: 'edit' as const, label: '3. Edit & Potong' },
 ];
 
 const QUALITY_MODELS: ReadonlyArray<{
@@ -151,6 +152,7 @@ export function PhotoControlPanel({
   onFlipV,
   onSelectPhotoFilter,
   onRequestThumbnail,
+  onResetPhoto,
 }: PhotoControlPanelProps) {
   const [activeTab, setActiveTab] = useState<PhotoTabId>('utama');
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -247,6 +249,29 @@ export function PhotoControlPanel({
             Bingkai Diubah
           </button>
         )}
+        {(activeTools.length > 0 ||
+          filterActive ||
+          imageEdit.targetResolution !== 'original' ||
+          imageEdit.crop !== null ||
+          imageEdit.straightenDeg !== 0 ||
+          imageEdit.rotationDeg > 0) && (
+          <>
+            <span className="rounded-full border border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] px-2.5 py-0.5 font-medium text-[var(--status-ok-ink)]">
+              Tersesuaikan
+            </span>
+            {onResetPhoto && (
+              <button
+                type="button"
+                data-testid="photo-quick-reset-btn"
+                onClick={onResetPhoto}
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-0.5 font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+              >
+                <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                <span>Atur Ulang</span>
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       {/* Strictly 3 Top-Level Tabs */}
@@ -261,7 +286,12 @@ export function PhotoControlPanel({
       {activeTab === 'utama' && (
         <div className="space-y-4">
           <div className="space-y-2">
-            <h2 className="text-xs font-semibold text-[var(--text-primary)]">Pilih Tujuan</h2>
+            <div>
+              <h2 className="text-xs font-semibold text-[var(--text-primary)]">Pilih Tujuan</h2>
+              <p className="mt-0.5 text-[12px] leading-snug text-[var(--text-muted)]">
+                Pilih aplikasi tujuan agar ukuran &amp; ketajaman langsung pas.
+              </p>
+            </div>
             <div
               className="grid grid-cols-2 gap-2"
               role="radiogroup"
@@ -464,8 +494,8 @@ export function PhotoControlPanel({
                 <h3 className="font-editorial text-[14px] font-semibold text-[var(--text-primary)]">
                   Alat Sempurnakan Foto
                 </h3>
-                <span className="text-[10.5px] text-[var(--text-muted)]">
-                  Pemrosesan piksel lokal langsung di perangkat
+                <span className="text-[12px] leading-snug text-[var(--text-muted)]">
+                  Perbaiki masalah foto tertentu (blur, kabut, foto lama, atau wajah).
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -589,9 +619,14 @@ export function PhotoControlPanel({
 
           {/* Quality Model Selector */}
           <section className="space-y-2">
-            <h3 className="text-xs font-semibold text-[var(--text-primary)]">
-              Model Kualitas Foto
-            </h3>
+            <div>
+              <h3 className="text-xs font-semibold text-[var(--text-primary)]">
+                Model Kualitas Foto
+              </h3>
+              <p className="mt-0.5 text-[12px] leading-snug text-[var(--text-muted)]">
+                Atur karakter kejernihan dasar foto tanpa mengubah gaya asli.
+              </p>
+            </div>
             <div
               className="grid grid-cols-2 gap-2"
               role="radiogroup"
@@ -760,10 +795,15 @@ export function PhotoControlPanel({
 
           {/* 12 Filter Warna */}
           <section className="space-y-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-xs font-semibold text-[var(--text-primary)]">
-                Filter Warna (12 Tampilan)
-              </h3>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-xs font-semibold text-[var(--text-primary)]">
+                  Filter Warna (12 Tampilan)
+                </h3>
+                <p className="mt-0.5 text-[12px] leading-snug text-[var(--text-muted)]">
+                  Ubah suasana warna foto secara opsional.
+                </p>
+              </div>
               <button
                 type="button"
                 data-testid="grade-hold-original-btn"

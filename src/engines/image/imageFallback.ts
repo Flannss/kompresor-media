@@ -72,7 +72,11 @@ export async function runMainThreadImageFallback(
       requestId: request.requestId,
       backend: 'main-thread-canvas-fallback',
       outputBlob: out.blob,
-      outputFileName: buildExportFileName(request.file.name, request.edit.outputFormat),
+      outputFileName: buildExportFileName(
+        request.file.name,
+        request.edit.outputFormat,
+        request.edit.targetResolution
+      ),
       outputMime: request.edit.outputFormat,
       outputWidth: out.width,
       outputHeight: out.height,

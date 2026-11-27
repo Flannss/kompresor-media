@@ -178,6 +178,7 @@ export interface MediaStoreState {
   batchRunning: boolean;
   batchCompleted: number;
   batchTotal: number;
+  batchStatusLabel: string | null;
   revokedUrlCount: number;
   activeLoadToken: number;
 
@@ -232,7 +233,7 @@ export interface MediaStoreState {
     result: ImageProcessResult;
     url: string;
   } | null>;
-  ensureAllPhotosFullRes: () => Promise<void>;
+  ensureAllPhotosFullRes: () => Promise<QueueItem[]>;
   undoPhotoEdit: () => void;
   redoPhotoEdit: () => void;
   resetPhotoEdits: () => void;
@@ -616,6 +617,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
   batchRunning: false,
   batchCompleted: 0,
   batchTotal: 0,
+  batchStatusLabel: null,
   revokedUrlCount: 0,
   activeLoadToken: 0,
 
@@ -703,19 +705,20 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     let firstErrorReason: string | null = null;
 
     for (const file of rawFiles) {
-      if (totalCount >= limits.maxTotal) {
-        skippedByLimit += 1;
-        continue;
-      }
-
       const validation = await validateMediaFile(file);
       if (get().activeLoadToken !== token) {
+        revokeAllItemsUrls(addedItems);
         return;
       }
       if (!validation.valid) {
         if (!firstErrorReason) {
           firstErrorReason = validation.reason;
         }
+        continue;
+      }
+
+      if (totalCount >= limits.maxTotal) {
+        skippedByLimit += 1;
         continue;
       }
 
@@ -732,6 +735,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       try {
         const metadata = await readMediaMetadata(file, validation);
         if (get().activeLoadToken !== token) {
+          revokeAllItemsUrls(addedItems);
           return;
         }
 
@@ -807,12 +811,16 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       return;
     }
 
-    let notice: string | null = null;
+    const noticeParts: string[] = [];
     if (skippedByLimit > 0) {
-      notice = `Maksimal ${limits.maxTotal} file (${limits.maxPhotos} foto / ${limits.maxVideos} video) dipilih sesuai kapasitas ${limits.label.toLowerCase()} Anda. ${skippedByLimit} file selebihnya tidak ditambahkan.`;
-    } else if (firstErrorReason && addedItems.length > 0) {
-      notice = firstErrorReason;
+      noticeParts.push(
+        `Maksimal ${limits.maxTotal} file (${limits.maxPhotos} foto / ${limits.maxVideos} video) dipilih sesuai kapasitas ${limits.label.toLowerCase()} Anda. ${skippedByLimit} file selebihnya tidak ditambahkan.`
+      );
     }
+    if (firstErrorReason) {
+      noticeParts.push(firstErrorReason);
+    }
+    const notice = noticeParts.length > 0 ? noticeParts.join(' ') : null;
 
     const nextActiveId =
       addedItems.length > 0
@@ -838,12 +846,13 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       ),
     }));
 
-    // Auto-optimize newly imported photos; preview-cap on low-memory mobile or 2K/4K/8K until export
+    // Auto-optimize newly imported photos & generate lightweight <=160px queue thumbnails
     const profile = get().deviceProfile;
     const imageAdded = addedItems.filter((it) => it.metadata.kind === 'image');
     for (const imgItem of imageAdded) {
       const preferPreviewMode = shouldUsePreviewMode(imgItem.imageEdit, profile);
       void processPhotoItem(imgItem.id, get, set, preferPreviewMode);
+      void get().requestBaseThumbnail(imgItem.id);
     }
   },
 
@@ -1013,6 +1022,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       photoHistory: pushed.history,
       photoHistoryIndex: pushed.index,
       needsFullResExport: preferPreview,
+      processSeq: it.processSeq + 1,
     }));
     void processPhotoItem(active.id, get, set, preferPreview);
   },
@@ -1144,6 +1154,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
           selectedPresetId: nextPreset,
           imageEdit: nextEdit,
           needsFullResExport: true,
+          processSeq: it.processSeq + 1,
         };
       }
       const pushed = pushSnapshot(it.photoHistory, it.photoHistoryIndex, nextEdit);
@@ -1154,6 +1165,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
         photoHistory: pushed.history,
         photoHistoryIndex: pushed.index,
         needsFullResExport: preferPreview,
+        processSeq: it.processSeq + 1,
       };
     });
 
@@ -1327,12 +1339,23 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     const pending = get().items.filter(
       (i) =>
         i.metadata.kind === 'image' &&
-        (previewTimers.has(i.id) || !i.imageResult || i.needsFullResExport)
+        (previewTimers.has(i.id) ||
+          !i.imageResult ||
+          i.needsFullResExport ||
+          i.status === 'processing')
     );
-    for (const item of pending) {
-      clearItemTimers(item.id);
-      await processPhotoItem(item.id, get, set, false);
+    if (pending.length === 0) return get().items;
+    try {
+      for (let idx = 0; idx < pending.length; idx += 1) {
+        const item = pending[idx];
+        clearItemTimers(item.id);
+        set({ batchStatusLabel: `Menyiapkan ${idx + 1} dari ${pending.length} file…` });
+        await processPhotoItem(item.id, get, set, false);
+      }
+    } finally {
+      set({ batchStatusLabel: null });
     }
+    return get().items;
   },
 
   undoPhotoEdit: () => {
@@ -1359,6 +1382,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       imageEdit: snapshot,
       selectedPresetId: snapshot.presetId,
       photoHistoryIndex: nextIndex,
+      processSeq: it.processSeq + 1,
     }));
     void processPhotoItem(
       active.id,
@@ -1392,6 +1416,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       imageEdit: snapshot,
       selectedPresetId: snapshot.presetId,
       photoHistoryIndex: nextIndex,
+      processSeq: it.processSeq + 1,
     }));
     void processPhotoItem(
       active.id,
@@ -1430,6 +1455,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       imageEdit: resetEdit,
       photoHistory: pushed.history,
       photoHistoryIndex: pushed.index,
+      processSeq: it.processSeq + 1,
     }));
     void processPhotoItem(
       active.id,
@@ -1552,13 +1578,23 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       return;
     }
 
-    set({ batchRunning: true, batchCompleted: 0, batchTotal: total });
+    set({
+      batchRunning: true,
+      batchCompleted: 0,
+      batchTotal: total,
+      batchStatusLabel: `Menyiapkan 1 dari ${total} file…`,
+    });
 
     try {
-      const poolStep = Math.max(1, get().deviceProfile.imageWorkerPoolSize);
+      const profile = get().deviceProfile;
+      const poolStep =
+        profile.performanceTier === 'desktop' ? Math.max(1, profile.imageWorkerPoolSize) : 1;
       for (let i = 0; i < photosToProcess.length; i += poolStep) {
         if (!get().batchRunning) break;
         const batchSlice = photosToProcess.slice(i, i + poolStep);
+        set((s) => ({
+          batchStatusLabel: `Menyiapkan ${Math.min(total, s.batchCompleted + 1)} dari ${total} file…`,
+        }));
         await Promise.all(batchSlice.map((p) => processPhotoItem(p.id, get, set, false)));
         set((s) => ({ batchCompleted: Math.min(total, s.batchCompleted + batchSlice.length) }));
       }
@@ -1566,11 +1602,14 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       // Videos run strictly sequentially (concurrency = 1) to protect memory
       for (const vid of videosToProcess) {
         if (!get().batchRunning) break;
+        set((s) => ({
+          batchStatusLabel: `Memproses ${Math.min(total, s.batchCompleted + 1)} dari ${total} file…`,
+        }));
         await processVideoItem(vid.id, preferredBackend, get, set);
         set((s) => ({ batchCompleted: Math.min(total, s.batchCompleted + 1) }));
       }
     } finally {
-      set({ batchRunning: false });
+      set({ batchRunning: false, batchStatusLabel: null });
     }
   },
 
@@ -1581,7 +1620,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
         ctrl.abort();
       }
     }
-    set({ batchRunning: false });
+    set({ batchRunning: false, batchStatusLabel: null });
     if (active && active.metadata.kind === 'video') {
       updateItemInStore(get, set, active.id, (it) => ({
         ...it,
@@ -1604,6 +1643,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       batchRunning: false,
       batchCompleted: 0,
       batchTotal: 0,
+      batchStatusLabel: null,
       revokedUrlCount: state.revokedUrlCount + revokedDelta,
       activeLoadToken: state.activeLoadToken + 1,
       status: 'idle',

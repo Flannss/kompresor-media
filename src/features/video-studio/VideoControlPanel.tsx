@@ -81,6 +81,8 @@ export interface VideoControlPanelProps {
   videoProcessError: string | null;
   capturedFrame: CapturedFrameInfo | null;
   finishedBatchItems: ZipEntryInput[];
+  batchStatusLabel?: string | null;
+  onPrepareAllZipItems?: () => Promise<ZipEntryInput[]>;
   onSelectPreset: (id: MediaPresetId) => void;
   onUpdateVideoEdit: (patch: Partial<VideoEditState>) => void;
   onSelectColorGrade: (gradeId: ColorGradeId) => void;
@@ -92,9 +94,9 @@ export interface VideoControlPanelProps {
 }
 
 const VIDEO_TABS = [
-  { id: 'utama' as const, label: 'Tujuan' },
-  { id: 'tampilan' as const, label: 'Jernihkan & Warna' },
-  { id: 'lanjutan' as const, label: 'Lanjutan' },
+  { id: 'utama' as const, label: '1. Tujuan' },
+  { id: 'tampilan' as const, label: '2. Jernihkan & Warna' },
+  { id: 'lanjutan' as const, label: '3. Potong & Audio' },
 ];
 
 const VIDEO_FORMAT_OPTIONS: ReadonlyArray<{ value: VideoOutputFormat; label: string }> = [
@@ -196,6 +198,8 @@ export function VideoControlPanel({
   videoProcessError,
   capturedFrame,
   finishedBatchItems,
+  batchStatusLabel = null,
+  onPrepareAllZipItems,
   onSelectPreset,
   onUpdateVideoEdit,
   onSelectColorGrade,
@@ -477,7 +481,12 @@ export function VideoControlPanel({
       {activeTab === 'utama' && (
         <div className="space-y-3.5">
           <div className="space-y-2">
-            <h2 className="text-xs font-semibold text-[var(--text-primary)]">Pilih Tujuan</h2>
+            <div>
+              <h2 className="text-xs font-semibold text-[var(--text-primary)]">Pilih Tujuan</h2>
+              <p className="mt-0.5 text-[12px] leading-snug text-[var(--text-muted)]">
+                Pilih aplikasi tujuan agar ukuran &amp; ketajaman langsung pas.
+              </p>
+            </div>
             <div
               className="grid grid-cols-2 gap-2"
               role="radiogroup"
@@ -788,12 +797,17 @@ export function VideoControlPanel({
       {/* TAB 2: TAMPILAN (Model Penjernih Video HD + 1080p HD Enhancer + 7 Live Color Grades) */}
       {activeTab === 'tampilan' && (
         <div className="space-y-4">
-          <div className="space-y-3 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-[var(--text-primary)]">
-                Model Penjernih Video
-              </span>
-              <span className="rounded-md border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent-highlight)]">
+          <div className="space-y-3 rounded-[22px] border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <span className="block text-xs font-semibold text-[var(--text-primary)]">
+                  Model Penjernih Video
+                </span>
+                <span className="mt-0.5 block text-[12px] leading-snug text-[var(--text-muted)]">
+                  Pilih tingkat ketajaman agar video tetap bening setelah diunggah.
+                </span>
+              </div>
+              <span className="shrink-0 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--accent-highlight)]">
                 {VIDEO_CLARITY_MODELS.find((m) => m.id === videoEdit.clarityModel)?.title ??
                   'Natural HD'}
               </span>
@@ -809,9 +823,9 @@ export function VideoControlPanel({
                     data-testid={`video-clarity-model-${model.id}`}
                     aria-pressed={active}
                     onClick={() => onUpdateVideoEdit({ clarityModel: model.id })}
-                    className={`flex flex-col items-start rounded-xl border px-2.5 py-2 text-left transition-all ${
+                    className={`flex flex-col items-start rounded-2xl border px-3 py-2 text-left transition-all ${
                       active
-                        ? 'border-[var(--accent-primary)] bg-[var(--accent-tint)] text-[var(--text-primary)] shadow-sm'
+                        ? 'border-[var(--border-active)] bg-[var(--accent-gold-soft)] text-[var(--text-primary)] ring-1 ring-[var(--border-active)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
                     }`}
                   >
@@ -1424,7 +1438,7 @@ export function VideoControlPanel({
                         type="button"
                         data-testid="edit-frame-as-photo-btn"
                         onClick={onEditCapturedFrameAsPhoto}
-                        className="inline-flex min-h-[34px] items-center justify-center gap-1 rounded-lg bg-[var(--accent-primary)] px-2 text-[11px] font-semibold text-[var(--ink-on-accent)] hover:bg-[var(--accent-hover)]"
+                        className="inline-flex min-h-[34px] items-center justify-center gap-1 rounded-full bg-[var(--accent-primary)] px-2.5 text-[11px] font-semibold text-[var(--ink-on-accent)] hover:bg-[var(--accent-primary-hover)]"
                       >
                         <ImagePlus className="h-3 w-3" aria-hidden="true" />
                         <span>Edit di Studio Foto</span>
@@ -1518,8 +1532,11 @@ export function VideoControlPanel({
                 exportedWidth={videoProcessResult.outputWidth}
                 exportedHeight={videoProcessResult.outputHeight}
                 exportedBytes={videoProcessResult.outputBytes}
+                exportedFps={videoProcessResult.appliedFps ?? null}
                 selectedPresetId={selectedPresetId}
                 finishedBatchItems={finishedBatchItems}
+                batchStatusLabel={batchStatusLabel}
+                onPrepareAllZipItems={onPrepareAllZipItems}
               />
             )}
 
@@ -1528,10 +1545,10 @@ export function VideoControlPanel({
               size="lg"
               data-testid="process-video-btn"
               onClick={onStartProcess}
-              className="min-h-[44px] w-full font-semibold"
+              className="min-h-[44px] w-full rounded-full font-semibold"
             >
               <Play className="h-4 w-4" aria-hidden="true" />
-              <span>{videoProcessResult ? 'Proses Ulang Video' : 'Proses Video'}</span>
+              <span>{videoProcessResult ? 'Proses Ulang Video HD' : 'Proses Video HD'}</span>
             </Button>
           </div>
         )}

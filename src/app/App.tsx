@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { Upload } from 'lucide-react';
 import { disposeImageEngine } from '../engines/image/imageEngineClient';
 import { UploadZone } from '../features/upload/UploadZone';
 import { WorkspaceHeader } from '../features/workspace/WorkspaceHeader';
@@ -13,6 +14,7 @@ const ACCEPTED_MEDIA =
 export function App() {
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const addMoreInputRef = useRef<HTMLInputElement | null>(null);
+  const [isGlobalFileDrag, setIsGlobalFileDrag] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
   const items = useMediaStore((s) => s.items);
@@ -24,6 +26,7 @@ export function App() {
   const batchRunning = useMediaStore((s) => s.batchRunning);
   const batchCompleted = useMediaStore((s) => s.batchCompleted);
   const batchTotal = useMediaStore((s) => s.batchTotal);
+  const batchStatusLabel = useMediaStore((s) => s.batchStatusLabel);
 
   const status = useMediaStore((s) => s.status);
   const validation = useMediaStore((s) => s.validation);
@@ -118,6 +121,71 @@ export function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isReady, metadata?.kind, undoPhotoEdit, redoPhotoEdit]);
 
+  // Global Ctrl+V / Cmd+V clipboard image paste support across landing and studio
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const clipItems = Array.from(e.clipboardData?.items || []);
+      const pastedFiles: File[] = [];
+      let idx = 1;
+      for (const item of clipItems) {
+        if (item.kind === 'file') {
+          const rawFile = item.getAsFile();
+          if (rawFile) {
+            const hasName = rawFile.name && rawFile.name.trim().length > 0 && rawFile.name !== 'image.png';
+            const namedFile = hasName
+              ? rawFile
+              : new File([rawFile], `tempel-foto-${Date.now()}-${idx}.png`, {
+                  type: rawFile.type || 'image/png',
+                });
+            pastedFiles.push(namedFile);
+            idx += 1;
+          }
+        }
+      }
+      if (pastedFiles.length > 0) {
+        e.preventDefault();
+        void addMediaFiles(pastedFiles, { replace: !isReady });
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [isReady, addMediaFiles]);
+
+  const handleGlobalDragOver = (e: DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer?.types?.includes('Files')) return;
+    e.preventDefault();
+    if (!isGlobalFileDrag) {
+      setIsGlobalFileDrag(true);
+    }
+  };
+
+  const handleGlobalDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      setIsGlobalFileDrag(false);
+    }
+  };
+
+  const handleGlobalDrop = (e: DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer?.files || e.dataTransfer.files.length === 0) {
+      setIsGlobalFileDrag(false);
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    setIsGlobalFileDrag(false);
+    const files = Array.from(e.dataTransfer.files);
+    void addMediaFiles(files, { replace: !isReady });
+  };
+
   const handleReplaceInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length > 0) {
@@ -139,13 +207,27 @@ export function App() {
 
   return (
     <ErrorBoundary onReset={clearMedia}>
-      <div className="flex min-h-screen flex-col bg-[var(--bg-app)] text-[var(--text-primary)]">
+      <div
+        onDragOver={handleGlobalDragOver}
+        onDragLeave={handleGlobalDragLeave}
+        onDrop={handleGlobalDrop}
+        className="relative flex min-h-screen flex-col bg-[var(--bg-app)] text-[var(--text-primary)]"
+      >
+        {isGlobalFileDrag && isReady && (
+          <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-app)]/78 p-4">
+            <div className="km-glass-strong flex items-center gap-3 rounded-2xl border-2 border-dashed border-[var(--border-strong)] px-7 py-5 text-sm font-semibold text-[var(--text-primary)]">
+              <Upload className="h-5 w-5 text-[var(--accent-gold)]" aria-hidden="true" />
+              <span>Lepas file untuk ditambahkan ke antrean</span>
+            </div>
+          </div>
+        )}
         <WorkspaceHeader
           hasMedia={isReady}
           activeMediaKind={isReady && metadata ? metadata.kind : null}
           canAddMore={items.length < queueLimits.maxTotal}
           itemCount={items.length}
           maxTotal={queueLimits.maxTotal}
+          isVideoProcessing={videoProcessStatus === 'processing'}
           theme={theme}
           onToggleTheme={toggleTheme}
           onAddMoreClick={() => addMoreInputRef.current?.click()}
@@ -186,6 +268,7 @@ export function App() {
               batchRunning={batchRunning}
               batchCompleted={batchCompleted}
               batchTotal={batchTotal}
+              batchStatusLabel={batchStatusLabel}
               metadata={metadata}
               validation={validation}
               objectUrl={objectUrl}
@@ -216,8 +299,8 @@ export function App() {
               onSelectColorGrade={selectColorGrade}
               onRequestPhotoThumbnail={() => void requestBaseThumbnail()}
               onVideoThumbnailReady={setBaseThumbnail}
-              onEnsureFullResExport={() => ensureFullResPhotoExport()}
-              onEnsureAllPhotosFullRes={() => ensureAllPhotosFullRes()}
+              onEnsureFullResExport={ensureFullResPhotoExport}
+              onEnsureAllPhotosFullRes={ensureAllPhotosFullRes}
               onUndoPhoto={undoPhotoEdit}
               onRedoPhoto={redoPhotoEdit}
               onResetPhoto={resetPhotoEdits}

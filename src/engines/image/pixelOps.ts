@@ -9,6 +9,7 @@ import type {
 } from '../contracts';
 import { applyPhotoFilterToImageData } from '../grading/photoFilters';
 import { compute1080pTargetDimensions, hasActiveColorGrade } from '../shared/colorGrades';
+import { sanitizeExportBaseName } from '../../shared/utils/sanitizeFileName';
 import { PRO_PHOTO_TOOL_LABELS } from './proTools';
 
 export interface Dimensions {
@@ -791,11 +792,13 @@ export { applyPhotoFilterToImageData };
 
 export function buildExportFileName(
   originalName: string,
-  outputFormat: ImageOutputFormat
+  outputFormat: ImageOutputFormat,
+  targetResolution?: PhotoTargetResolution
 ): string {
-  const dotIdx = originalName.lastIndexOf('.');
-  const rawBase = dotIdx > 0 ? originalName.slice(0, dotIdx) : originalName;
-  const cleanBase = rawBase.trim() || 'foto';
+  const leaf = originalName.split(/[\\/]/).pop() ?? originalName;
+  const dotIdx = leaf.lastIndexOf('.');
+  const rawBase = dotIdx > 0 ? leaf.slice(0, dotIdx) : leaf;
+  const cleanBase = sanitizeExportBaseName(rawBase, 'foto');
   const ext =
     outputFormat === 'image/webp'
       ? 'webp'
@@ -804,7 +807,9 @@ export function buildExportFileName(
         : outputFormat === 'image/avif'
           ? 'avif'
           : 'jpg';
-  return `${cleanBase}-kompresor.${ext}`;
+  const suffix =
+    targetResolution && targetResolution !== 'original' ? targetResolution : 'kompresor';
+  return `${cleanBase}-${suffix}.${ext}`;
 }
 
 export function computeReductionPct(inputBytes: number, outputBytes: number): number {

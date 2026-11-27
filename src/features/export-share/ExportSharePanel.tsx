@@ -23,15 +23,19 @@ export interface ExportSharePanelProps {
   exportedWidth?: number | null;
   exportedHeight?: number | null;
   exportedBytes?: number | null;
+  exportedFps?: number | null;
   selectedPresetId?: MediaPresetId;
   targetResolution?: PhotoTargetResolution;
   finishedBatchItems?: ZipEntryInput[];
+  batchStatusLabel?: string | null;
   needsFullResPreparation?: boolean;
   onPrepareFullResExport?: () => Promise<{
     blob: Blob;
     url: string;
     fileName: string;
     mimeType: string;
+    width?: number;
+    height?: number;
   } | null>;
   onPrepareAllZipItems?: () => Promise<ZipEntryInput[]>;
   disabled?: boolean;
@@ -47,16 +51,18 @@ export function ExportSharePanel({
   exportedWidth = null,
   exportedHeight = null,
   exportedBytes = null,
+  exportedFps = null,
   selectedPresetId,
   targetResolution = 'original',
   finishedBatchItems = [],
+  batchStatusLabel = null,
   needsFullResPreparation = false,
   onPrepareFullResExport,
   onPrepareAllZipItems,
   disabled = false,
   isProcessing = false,
 }: ExportSharePanelProps) {
-  const [downloadConfirmed, setDownloadConfirmed] = useState(false);
+  const [savedSummaryMsg, setSavedSummaryMsg] = useState<string | null>(null);
   const [activeHelperPlatform, setActiveHelperPlatform] = useState<SharePlatform | null>(null);
   const [preparingFullRes, setPreparingFullRes] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -73,7 +79,7 @@ export function ExportSharePanel({
       selfPreparedUrlRef.current = null;
       return;
     }
-    setDownloadConfirmed(false);
+    setSavedSummaryMsg(null);
     setActiveHelperPlatform(null);
   }, [readyUrl]);
 
@@ -83,11 +89,30 @@ export function ExportSharePanel({
     !isProcessing &&
     !preparingFullRes;
 
+  const formatSavedMessage = (params: {
+    blob: Blob;
+    width?: number | null;
+    height?: number | null;
+  }): string => {
+    const w = params.width ?? exportedWidth;
+    const h = params.height ?? exportedHeight;
+    const sizeText = formatBytes(params.blob.size);
+    if (mediaKind === 'video') {
+      const dims = w && h ? `${w}×${h}` : 'HD';
+      const fpsPart = exportedFps ? ` · ${exportedFps} fps` : '';
+      return `Tersimpan · ${dims}${fpsPart} · ${sizeText}`;
+    }
+    const dims = w && h ? `${w}×${h} px · ` : '';
+    return `Tersimpan · ${dims}${sizeText}`;
+  };
+
   const resolveReadyExport = async (): Promise<{
     blob: Blob;
     url: string;
     fileName: string;
     mimeType: string;
+    width?: number | null;
+    height?: number | null;
   } | null> => {
     if (needsFullResPreparation) {
       if (!onPrepareFullResExport) {
@@ -113,6 +138,8 @@ export function ExportSharePanel({
       url: readyUrl,
       fileName: outputFileName,
       mimeType: outputMime,
+      width: exportedWidth,
+      height: exportedHeight,
     };
   };
 
@@ -120,7 +147,7 @@ export function ExportSharePanel({
     const target = await resolveReadyExport();
     if (!target) return;
     triggerObjectUrlDownload(target.url, target.fileName);
-    setDownloadConfirmed(true);
+    setSavedSummaryMsg(formatSavedMessage(target));
   };
 
   const handleSharePlatform = async (platform: SharePlatform) => {
@@ -137,7 +164,9 @@ export function ExportSharePanel({
       });
       if (outcome === 'desktop-helper') {
         setActiveHelperPlatform(platform);
-        setDownloadConfirmed(true);
+        setSavedSummaryMsg(formatSavedMessage(target));
+      } else if (outcome === 'shared') {
+        setSavedSummaryMsg(formatSavedMessage(target));
       }
     } finally {
       setSharing(false);
@@ -154,8 +183,8 @@ export function ExportSharePanel({
         : finishedBatchItems;
       if (zipInputs.length < 2) return;
       const { exportQueueAsZip } = await import('./zipExport');
-      await exportQueueAsZip(zipInputs);
-      setZipDoneMsg(`Arsip ZIP (${zipInputs.length} file) berhasil diunduh`);
+      const zipBytes = await exportQueueAsZip(zipInputs);
+      setZipDoneMsg(`ZIP Tersimpan · ${zipInputs.length} file · ${formatBytes(zipBytes)}`);
     } finally {
       setZipping(false);
     }
@@ -170,20 +199,24 @@ export function ExportSharePanel({
       ? targetResolution.toUpperCase()
       : 'HD';
 
+  const hasHighResPhoto =
+    targetResolution === 'hd' ||
+    targetResolution === '2k' ||
+    targetResolution === '3k' ||
+    targetResolution === '4k' ||
+    targetResolution === '8k';
+
   const downloadLabel = preparingFullRes
     ? `Merender ${renderResTag} penuh…`
-    : likelyMobile
+    : mediaKind === 'image'
       ? isProcessing
+        ? 'Memproses Foto…'
+        : hasHighResPhoto || likelyMobile
+          ? 'Simpan Foto HD'
+          : 'Simpan Foto'
+      : isProcessing
         ? 'Memproses HD…'
-        : 'Simpan File HD'
-      : mediaKind === 'image'
-        ? isProcessing
-          ? 'Memproses Foto…'
-          : 'Unduh Foto'
-        : 'Unduh Video';
-
-  const downloadedText =
-    mediaKind === 'image' ? 'Foto HD berhasil disimpan' : 'Video HD berhasil disimpan';
+        : 'Simpan Video HD';
 
   const formatShort =
     outputMime && outputMime.startsWith('image/')
@@ -200,7 +233,7 @@ export function ExportSharePanel({
         data-testid={mediaKind === 'image' ? 'download-photo-btn' : 'download-video-btn'}
         disabled={!canExport}
         onClick={() => void handleDownload()}
-        className="min-h-[46px] w-full font-semibold"
+        className="min-h-[46px] w-full rounded-full font-semibold"
       >
         <Download className="h-4 w-4" aria-hidden="true" />
         <span>{downloadLabel}</span>
@@ -213,7 +246,7 @@ export function ExportSharePanel({
           data-testid="whatsapp-share-btn"
           disabled={!canExport || sharing}
           onClick={() => void handleSharePlatform('whatsapp')}
-          className="min-h-[44px] w-full"
+          className="min-h-[44px] w-full rounded-full"
         >
           <Share2 className="h-4 w-4 text-[var(--accent-highlight)]" aria-hidden="true" />
           <span>{preparingFullRes ? `Merender ${renderResTag} penuh…` : 'Bagikan'}</span>
@@ -226,7 +259,7 @@ export function ExportSharePanel({
             data-testid="whatsapp-share-btn"
             disabled={!canExport || sharing}
             onClick={() => void handleSharePlatform('whatsapp')}
-            className="min-h-[40px] px-2 text-[11px] font-semibold"
+            className="min-h-[40px] rounded-full px-2 text-[11px] font-semibold"
           >
             WhatsApp
           </Button>
@@ -236,7 +269,7 @@ export function ExportSharePanel({
             data-testid="instagram-share-btn"
             disabled={!canExport || sharing}
             onClick={() => void handleSharePlatform('instagram')}
-            className="min-h-[40px] px-2 text-[11px] font-semibold"
+            className="min-h-[40px] rounded-full px-2 text-[11px] font-semibold"
           >
             Instagram
           </Button>
@@ -246,7 +279,7 @@ export function ExportSharePanel({
             data-testid="tiktok-share-btn"
             disabled={!canExport || sharing}
             onClick={() => void handleSharePlatform('tiktok')}
-            className="min-h-[40px] px-2 text-[11px] font-semibold"
+            className="min-h-[40px] rounded-full px-2 text-[11px] font-semibold"
           >
             TikTok
           </Button>
@@ -281,33 +314,33 @@ export function ExportSharePanel({
           data-testid="download-zip-btn"
           disabled={zipping || preparingFullRes}
           onClick={() => void handleZipDownload()}
-          className="min-h-[44px] w-full tabular-nums"
+          className="min-h-[44px] w-full rounded-full tabular-nums"
         >
           <FileArchive className="h-4 w-4 text-[var(--accent-highlight)]" aria-hidden="true" />
           <span>
             {zipping
-              ? 'Membuat arsip ZIP…'
-              : `Unduh Semua (ZIP · ${finishedBatchItems.length} file)`}
+              ? batchStatusLabel || 'Membuat arsip ZIP…'
+              : `Simpan Semua (ZIP · ${finishedBatchItems.length} file)`}
           </span>
         </Button>
       )}
 
-      {downloadConfirmed && (
+      {savedSummaryMsg && (
         <p
           data-testid="download-confirmed-msg"
-          className="flex items-center justify-center gap-1.5 pt-0.5 text-xs font-medium text-[var(--status-ok-ink)]"
+          className="flex items-center justify-center gap-1.5 rounded-full border border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] px-3 py-1 text-center text-[11px] font-semibold text-[var(--status-ok-ink)] tabular-nums"
         >
-          <Check className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>{downloadedText}</span>
+          <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span>{savedSummaryMsg}</span>
         </p>
       )}
 
       {zipDoneMsg && (
         <p
           data-testid="zip-confirmed-msg"
-          className="flex items-center justify-center gap-1.5 pt-0.5 text-xs font-medium text-[var(--status-ok-ink)]"
+          className="flex items-center justify-center gap-1.5 rounded-full border border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] px-3 py-1 text-center text-[11px] font-semibold text-[var(--status-ok-ink)] tabular-nums"
         >
-          <Check className="h-3.5 w-3.5" aria-hidden="true" />
+          <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>{zipDoneMsg}</span>
         </p>
       )}
@@ -318,10 +351,10 @@ export function ExportSharePanel({
             helperSpec.id === 'whatsapp' ? 'whatsapp-web-helper' : 'platform-share-helper'
           }
           data-platform={helperSpec.id}
-          className="mt-1 flex flex-col gap-2 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3 text-xs text-[var(--text-secondary)]"
+          className="mt-1 flex flex-col gap-2 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3 text-xs text-[var(--text-secondary)]"
         >
           <p className="leading-relaxed">{helperSpec.helperText}</p>
-          <p className="rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-1.5 text-[11px] leading-relaxed text-[var(--text-primary)]">
+          <p className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-1.5 text-[11px] leading-relaxed text-[var(--text-primary)]">
             {helperSpec.tipText}
           </p>
           <a
@@ -333,7 +366,7 @@ export function ExportSharePanel({
                 ? 'open-whatsapp-web-link'
                 : `open-${helperSpec.id}-link`
             }
-            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg border border-[var(--border-active)] bg-[var(--bg-surface)] px-3 text-xs font-semibold text-[var(--accent-highlight)] transition-colors hover:bg-[var(--bg-subtle)]"
+            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-full border border-[var(--border-active)] bg-[var(--bg-surface)] px-3 text-xs font-semibold text-[var(--accent-highlight)] transition-colors hover:bg-[var(--bg-subtle)]"
           >
             <span>{helperSpec.openLabel}</span>
             <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />

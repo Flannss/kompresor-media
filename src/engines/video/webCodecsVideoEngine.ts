@@ -343,7 +343,11 @@ export async function runWebCodecsVideoTranscode(
 
     return {
       outputBlob: new Blob([target.buffer], { type: formatMeta.mime }),
-      outputFileName: buildVideoExportFileName(file.name, edit.outputFormat),
+      outputFileName: buildVideoExportFileName(
+        file.name,
+        edit.outputFormat,
+        edit.targetResolution
+      ),
       outputWidth: targetDims.width,
       outputHeight: targetDims.height,
       durationSec: trim.durationSec,

@@ -80,15 +80,14 @@ const LiveSubtitleOverlay = memo(function LiveSubtitleOverlay({
   return (
     <div
       data-testid="live-subtitle-overlay"
-      className={`pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 rounded-lg bg-[var(--surface-badge)] px-3 py-1.5 text-center text-xs font-semibold text-white shadow sm:text-sm ${
-        position === 'top'
-          ? 'top-4'
-          : position === 'center'
-            ? 'top-1/2 -translate-y-1/2'
-            : isSingleMode
-              ? 'bottom-12'
-              : 'bottom-4'
-      }`}
+      className={`pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 rounded-lg bg-[var(--surface-badge)] px-3 py-1.5 text-center text-xs font-semibold text-white shadow sm:text-sm ${position === 'top'
+        ? 'top-4'
+        : position === 'center'
+          ? 'top-1/2 -translate-y-1/2'
+          : isSingleMode
+            ? 'bottom-12'
+            : 'bottom-4'
+        }`}
     >
       {activeCues.map((c) => c.text).join('\n')}
     </div>
@@ -389,7 +388,7 @@ export function VideoCompareStage({
         sec.currentTime = clampedTarget;
       }
       if (!pri.paused && sec.paused) {
-        void sec.play().catch(() => {});
+        void sec.play().catch(() => { });
       } else if (pri.paused && !sec.paused) {
         sec.pause();
       }
@@ -509,10 +508,10 @@ export function VideoCompareStage({
       if (sec) {
         sec.currentTime = canPlayProcessedResult ? pri.currentTime + trimOffsetSec : pri.currentTime;
         sec.playbackRate = playbackRate;
-        void sec.play().catch(() => {});
+        void sec.play().catch(() => { });
       }
       pri.playbackRate = playbackRate;
-      void pri.play().catch(() => {});
+      void pri.play().catch(() => { });
     } else {
       pri.pause();
       sec?.pause();
@@ -630,11 +629,10 @@ export function VideoCompareStage({
                   setIsPlaying(false);
                   onChangeCompareViewMode(id);
                 }}
-                className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-colors disabled:opacity-45 ${
-                  active
-                    ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                }`}
+                className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-colors disabled:opacity-45 ${active
+                  ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  }`}
               >
                 <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>{label}</span>
@@ -650,11 +648,10 @@ export function VideoCompareStage({
                 type="button"
                 data-testid="video-view-original-btn"
                 onClick={() => setSingleSourceChoice('original')}
-                className={`min-h-[36px] rounded-lg px-2.5 py-1 font-medium transition-colors ${
-                  singleSourceChoice === 'original'
-                    ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                    : 'text-[var(--text-secondary)]'
-                }`}
+                className={`min-h-[36px] rounded-lg px-2.5 py-1 font-medium transition-colors ${singleSourceChoice === 'original'
+                  ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                  : 'text-[var(--text-secondary)]'
+                  }`}
               >
                 Asli
               </button>
@@ -662,11 +659,10 @@ export function VideoCompareStage({
                 type="button"
                 data-testid="video-view-result-btn"
                 onClick={() => setSingleSourceChoice('result')}
-                className={`min-h-[36px] rounded-lg px-2.5 py-1 font-medium transition-colors ${
-                  singleSourceChoice === 'result'
-                    ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                    : 'text-[var(--text-secondary)]'
-                }`}
+                className={`min-h-[36px] rounded-lg px-2.5 py-1 font-medium transition-colors ${singleSourceChoice === 'result'
+                  ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                  : 'text-[var(--text-secondary)]'
+                  }`}
               >
                 Hasil
               </button>
@@ -692,11 +688,10 @@ export function VideoCompareStage({
                   onHoldOriginalChange(false);
                 }
               }}
-              className={`km-glass-lite inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all select-none ${
-                holdOriginalActive
-                  ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
+              className={`km-glass-lite inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all select-none ${holdOriginalActive
+                ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
             >
               <Eye className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Tahan: Lihat Asli</span>
@@ -717,7 +712,7 @@ export function VideoCompareStage({
       {/* Main Stage Surface (clean studio matte, never checkerboard) */}
       <div
         data-testid="video-stage-surface"
-        className={`relative flex w-full max-w-[820px] min-w-0 items-center justify-center overflow-hidden rounded-2xl border border-[var(--glass-border)] p-2 transition-colors ${getBackdropClasses(safeBackdrop)}`}
+        className={`relative flex w-full max-w-[820px] min-w-0 items-center justify-center overflow-hidden rounded-[22px] border border-[var(--border-hairline)] p-2 transition-colors ${getBackdropClasses(safeBackdrop)}`}
         style={{ boxShadow: 'var(--stage-shadow)' }}
       >
         {effectiveViewMode === 'single' && (
@@ -817,7 +812,7 @@ export function VideoCompareStage({
                   }}
                   onPlay={() => {
                     setIsPlaying(true);
-                    void secondaryVideoRef.current?.play().catch(() => {});
+                    void secondaryVideoRef.current?.play().catch(() => { });
                   }}
                   onPause={() => {
                     setIsPlaying(false);
@@ -887,7 +882,7 @@ export function VideoCompareStage({
                 }}
                 onPlay={() => {
                   setIsPlaying(true);
-                  void secondaryVideoRef.current?.play().catch(() => {});
+                  void secondaryVideoRef.current?.play().catch(() => { });
                 }}
                 onPause={() => {
                   setIsPlaying(false);

@@ -484,14 +484,14 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
 }
 
 /**
- * Generates ONE tiny 96px base thumbnail Blob. All filter cards apply GPU CSS filters
- * directly on this single shared thumbnail, avoiding multiple heavy Canvas pixel loops.
+ * Generates ONE lightweight <= 160px base thumbnail Blob shared by filter swatches
+ * and QueuePanel thumbnails, avoiding full-resolution decode duplication in RAM.
  */
 export async function runBaseThumbnailPipeline<TCanvas extends CanvasSurfaceLike>(
   bitmap: ImageBitmap,
   adapter: CanvasAdapter<TCanvas>
 ): Promise<Blob> {
-  const thumbDims = computeTargetDimensions(bitmap.width, bitmap.height, 96);
+  const thumbDims = computeTargetDimensions(bitmap.width, bitmap.height, 160);
   const baseCanvas = adapter.createCanvas(thumbDims.width, thumbDims.height);
   try {
     const baseCtx = baseCanvas.getContext('2d');
@@ -501,7 +501,7 @@ export async function runBaseThumbnailPipeline<TCanvas extends CanvasSurfaceLike
     baseCtx.imageSmoothingEnabled = true;
     baseCtx.imageSmoothingQuality = 'medium';
     baseCtx.drawImage(bitmap, 0, 0, thumbDims.width, thumbDims.height);
-    return await adapter.encodeBlob(baseCanvas, 'image/jpeg', 0.78);
+    return await adapter.encodeBlob(baseCanvas, 'image/jpeg', 0.8);
   } finally {
     releaseCanvasSurface(baseCanvas);
   }

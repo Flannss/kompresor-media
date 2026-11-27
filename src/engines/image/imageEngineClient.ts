@@ -203,7 +203,11 @@ export async function processImage(
       requestId: normalizedRequest.requestId,
       backend: 'worker-offscreen-canvas',
       outputBlob,
-      outputFileName: buildExportFileName(normalizedRequest.file.name, response.outputMime),
+      outputFileName: buildExportFileName(
+        normalizedRequest.file.name,
+        response.outputMime,
+        normalizedRequest.edit.targetResolution
+      ),
       outputMime: response.outputMime,
       outputWidth: response.outputWidth,
       outputHeight: response.outputHeight,

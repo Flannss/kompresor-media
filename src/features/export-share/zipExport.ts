@@ -1,26 +1,32 @@
-import { triggerObjectUrlDownload } from './shareHelper';
+import { sanitizeArchiveFileName } from '../../shared/utils/sanitizeFileName';
+import { SAFARI_SAFE_REVOKE_DELAY_MS, triggerObjectUrlDownload } from './shareHelper';
 
 export interface ZipEntryInput {
   fileName: string;
   blob: Blob;
 }
 
-function deduplicateFileName(name: string, usedNames: Set<string>): string {
-  if (!usedNames.has(name)) {
-    usedNames.add(name);
-    return name;
+export function sanitizeZipFileName(name: string): string {
+  return sanitizeArchiveFileName(name, 'media-kompresor');
+}
+
+export function deduplicateFileName(name: string, usedLowerNames: Set<string>): string {
+  const safeName = sanitizeZipFileName(name);
+  if (!usedLowerNames.has(safeName.toLowerCase())) {
+    usedLowerNames.add(safeName.toLowerCase());
+    return safeName;
   }
 
-  const dotIdx = name.lastIndexOf('.');
-  const base = dotIdx > 0 ? name.slice(0, dotIdx) : name;
-  const ext = dotIdx > 0 ? name.slice(dotIdx) : '';
+  const dotIdx = safeName.lastIndexOf('.');
+  const base = dotIdx > 0 ? safeName.slice(0, dotIdx) : safeName;
+  const ext = dotIdx > 0 ? safeName.slice(dotIdx) : '';
 
   let counter = 2;
-  while (usedNames.has(`${base} (${counter})${ext}`)) {
+  while (usedLowerNames.has(`${base}-${counter}${ext}`.toLowerCase())) {
     counter += 1;
   }
-  const unique = `${base} (${counter})${ext}`;
-  usedNames.add(unique);
+  const unique = `${base}-${counter}${ext}`;
+  usedLowerNames.add(unique.toLowerCase());
   return unique;
 }
 
@@ -34,11 +40,11 @@ export async function buildZipBlob(items: ZipEntryInput[]): Promise<Blob> {
   }
 
   const { zipSync } = await import('fflate');
-  const usedNames = new Set<string>();
+  const usedLowerNames = new Set<string>();
   const entries: Record<string, Uint8Array> = {};
 
   for (const item of items) {
-    const safeName = deduplicateFileName(item.fileName, usedNames);
+    const safeName = deduplicateFileName(item.fileName, usedLowerNames);
     const bytes = new Uint8Array(await item.blob.arrayBuffer());
     entries[safeName] = bytes;
   }
@@ -53,11 +59,12 @@ export async function exportQueueAsZip(
   items: ZipEntryInput[],
   zipFileName = 'kompresor-media-hasil.zip'
 ): Promise<number> {
+  const safeZipName = sanitizeZipFileName(zipFileName);
   const blob = await buildZipBlob(items);
   const url = URL.createObjectURL(blob);
-  triggerObjectUrlDownload(url, zipFileName);
+  triggerObjectUrlDownload(url, safeZipName);
   setTimeout(() => {
     URL.revokeObjectURL(url);
-  }, 500);
+  }, SAFARI_SAFE_REVOKE_DELAY_MS);
   return blob.size;
 }

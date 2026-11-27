@@ -1,3 +1,4 @@
+import { sanitizeExportBaseName } from '../../shared/utils/sanitizeFileName';
 import type {
   VideoClarityModel,
   VideoEditState,
@@ -159,10 +160,14 @@ export function resolveCustomVideoParams(
 
 export function buildVideoExportFileName(
   originalName: string,
-  outputFormat: VideoOutputFormat = 'mp4'
+  outputFormat: VideoOutputFormat = 'mp4',
+  targetResolution?: VideoTargetResolution
 ): string {
-  const dotIdx = originalName.lastIndexOf('.');
-  const rawBase = dotIdx > 0 ? originalName.slice(0, dotIdx) : originalName;
-  const cleanBase = rawBase.trim() || 'video';
-  return `${cleanBase}-kompresor.${outputFormat}`;
+  const leaf = originalName.split(/[\\/]/).pop() ?? originalName;
+  const dotIdx = leaf.lastIndexOf('.');
+  const rawBase = dotIdx > 0 ? leaf.slice(0, dotIdx) : leaf;
+  const cleanBase = sanitizeExportBaseName(rawBase, 'video');
+  const suffix =
+    targetResolution && targetResolution !== 'original' ? `hd-${targetResolution}` : 'kompresor';
+  return `${cleanBase}-${suffix}.${outputFormat}`;
 }
