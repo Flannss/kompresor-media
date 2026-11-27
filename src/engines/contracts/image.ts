@@ -1,3 +1,4 @@
+import type { ColorGradeState, EnhancementSuiteState } from './gradeAndEnhance';
 import type { ImageMetadata } from './media';
 
 export type ImagePresetId =
@@ -12,28 +13,7 @@ export type ImageOutputFormat = 'image/jpeg' | 'image/webp' | 'image/png' | 'ima
 
 export type ImageRotation = 0 | 90 | 180 | 270;
 
-export type ImageFilterId =
-  | 'original'
-  | 'crisp'
-  | 'warm'
-  | 'cool'
-  | 'film'
-  | 'cinema'
-  | 'mono';
-
 export type CropAspectId = 'free' | '1:1' | '4:5' | '16:9' | '9:16';
-
-export type EnhanceIntensity = 'light' | 'balanced' | 'sharp';
-export type EnhanceDenoiseMode = 'off' | 'subtle' | 'medium';
-
-export interface ImageEnhanceOptions {
-  enabled: boolean;
-  intensity: EnhanceIntensity;
-  denoise: EnhanceDenoiseMode;
-  /** Clarity micro-contrast amount: 0..100 */
-  clarity: number;
-  upscaleFactor: 1 | 1.5 | 2;
-}
 
 export interface NormalizedCropRect {
   x: number;
@@ -70,8 +50,8 @@ export interface ImageEditState {
   flipV: boolean;
   crop: NormalizedCropRect | null;
   adjustments: ImageColorAdjustments;
-  filterId: ImageFilterId;
-  enhance: ImageEnhanceOptions;
+  colorGrade: ColorGradeState;
+  enhanceSuite: EnhancementSuiteState;
   stripMetadata: boolean;
 }
 

@@ -1,7 +1,7 @@
-import type { ImageFilterId, ImageProcessRequest, ImageProcessResult } from '../contracts';
+import type { ColorGradeId, ImageProcessRequest, ImageProcessResult } from '../contracts';
 import { runMainThreadImageFallback, runMainThreadThumbnailsFallback } from './imageFallback';
 import type { ImageWorkerRequest, ImageWorkerResponse } from './imageProcessor.worker';
-import { buildExportFileName } from './pixelOps';
+import { buildExportFileName, getActiveImageModuleLabels } from './pixelOps';
 
 interface WorkerSlot {
   worker: Worker;
@@ -168,10 +168,7 @@ export async function processImage(
     }
 
     const outputBlob = new Blob([response.outputBuffer], { type: response.outputMime });
-    const activeModules = ['Kompres & Format'];
-    if (request.edit.enhance.enabled) {
-      activeModules.push('Jernihkan HD');
-    }
+    const activeModules = getActiveImageModuleLabels(request.edit);
 
     releaseWorkerSlot(slot);
     return {
@@ -198,7 +195,7 @@ export async function processImage(
 export async function generateFilterThumbnails(
   file: File,
   mimeType: string
-): Promise<Array<{ filterId: ImageFilterId; blob: Blob }>> {
+): Promise<Array<{ gradeId: ColorGradeId; blob: Blob }>> {
   const seq = ++sequenceCounter;
 
   if (typeof Worker === 'undefined') {
@@ -222,7 +219,7 @@ export async function generateFilterThumbnails(
 
     releaseWorkerSlot(slot);
     return response.items.map((item) => ({
-      filterId: item.filterId,
+      gradeId: item.gradeId,
       blob: new Blob([item.buffer], { type: 'image/jpeg' }),
     }));
   } catch {

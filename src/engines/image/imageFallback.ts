@@ -1,11 +1,11 @@
-import type { ImageFilterId, ImageProcessRequest, ImageProcessResult } from '../contracts';
+import type { ColorGradeId, ImageProcessRequest, ImageProcessResult } from '../contracts';
 import {
   runImagePipeline,
   runThumbnailPipeline,
   type Canvas2DContextLike,
   type CanvasAdapter,
 } from './pipelineRunner';
-import { buildExportFileName } from './pixelOps';
+import { buildExportFileName, getActiveImageModuleLabels } from './pixelOps';
 
 const htmlCanvasAdapter: CanvasAdapter<HTMLCanvasElement> = {
   createCanvas(width, height) {
@@ -61,10 +61,7 @@ export async function runMainThreadImageFallback(
       request.previewMaxEdgePx
     );
 
-    const activeModules = ['Kompres & Format'];
-    if (request.edit.enhance.enabled) {
-      activeModules.push('Jernihkan HD');
-    }
+    const activeModules = getActiveImageModuleLabels(request.edit);
 
     return {
       requestId: request.requestId,
@@ -88,7 +85,7 @@ export async function runMainThreadImageFallback(
 
 export async function runMainThreadThumbnailsFallback(
   file: File
-): Promise<Array<{ filterId: ImageFilterId; blob: Blob }>> {
+): Promise<Array<{ gradeId: ColorGradeId; blob: Blob }>> {
   const bitmap = await decodeOrientedBitmap(file);
   try {
     return await runThumbnailPipeline(

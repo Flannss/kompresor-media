@@ -1,6 +1,7 @@
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 import type { VideoProcessProgress, VideoProcessRequest } from '../contracts';
 import { VideoCancelledError } from './videoErrors';
+import { hasActiveColorGrade, hasActiveEnhancements } from '../shared/colorGrades';
 import { adjustCuesForTrim, serializeToSrt, serializeToVtt } from './subtitleParser';
 import { buildFfmpegArgs, getVideoFormatMeta, isAudioMuted } from './videoFilterGraph';
 import { buildVideoExportFileName } from './videoPresets';
@@ -14,6 +15,7 @@ export interface FfmpegTranscodeOutput {
   outputHeight: number;
   durationSec: number;
   notice?: string;
+  engineDetail?: string;
 }
 
 let cachedFfmpeg: FFmpeg | null = null;
@@ -127,8 +129,8 @@ export async function runFfmpegVideoTranscode(
       elapsedMs: performance.now() - t0,
       detail: edit.stabilize.enabled
         ? 'Menstabilkan & memproses video…'
-        : edit.enhance.enabled
-          ? 'Menjernihkan & mengompres video…'
+        : hasActiveEnhancements(edit.enhanceSuite) || hasActiveColorGrade(edit.colorGrade)
+          ? 'Menjernihkan warna & memproses video…'
           : 'Memproses video & audio…',
     });
   };
@@ -242,7 +244,18 @@ export async function runFfmpegVideoTranscode(
             trimEndSec: null,
             muteAudio: isAudioMuted(edit),
             audio: { ...edit.audio, enabled: false },
-            enhance: { ...edit.enhance, enabled: false, upscaleFactor: 1 },
+            enhanceSuite: {
+              ...edit.enhanceSuite,
+              noise: { ...edit.enhanceSuite.noise, enabled: false },
+              sharpen: { ...edit.enhanceSuite.sharpen, enabled: false },
+              colorContrast: { ...edit.enhanceSuite.colorContrast, enabled: false },
+              upscale1080: { ...edit.enhanceSuite.upscale1080, enabled: false },
+            },
+            colorGrade: {
+              ...edit.colorGrade,
+              gradeId: 'original',
+              tone: { temperature: 0, tint: 0, shadows: 0, highlights: 0 },
+            },
             stabilize: { ...edit.stabilize, enabled: false },
             subtitle: { ...edit.subtitle, cues: shiftedCues },
           },
@@ -266,7 +279,7 @@ export async function runFfmpegVideoTranscode(
       finalDuration = burned.durationSec;
     } else if (wantsHardsub && !canBurnHardsubViaWebCodecs) {
       notice =
-        'Subtitle disertakan sebagai trek subtitle (Softsub) karena penyandian frame cepat tidak aktif di perangkat ini.';
+        'Subtitle disertakan sebagai trek teks terpisah karena penyandian cepat tidak aktif di perangkat ini.';
     }
 
     onProgress({
@@ -277,6 +290,11 @@ export async function runFfmpegVideoTranscode(
       elapsedMs: performance.now() - t0,
     });
 
+    const engineDetailParts = [
+      built.filterGraph.vfChain ? `vf=${built.filterGraph.vfChain}` : '',
+      built.filterGraph.afChain ? `af=${built.filterGraph.afChain}` : '',
+    ].filter(Boolean);
+
     return {
       outputBlob,
       outputFileName: buildVideoExportFileName(file.name, edit.outputFormat),
@@ -284,6 +302,7 @@ export async function runFfmpegVideoTranscode(
       outputHeight: finalHeight,
       durationSec: finalDuration,
       notice,
+      engineDetail: engineDetailParts.length > 0 ? engineDetailParts.join(' · ') : 'ffmpeg-wasm-st (1-pass)',
     };
   } catch (err) {
     await instance.deleteFile(inputName).catch(() => {});

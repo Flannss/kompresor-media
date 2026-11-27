@@ -66,7 +66,8 @@ export function App() {
   const toggleFlipH = useMediaStore((s) => s.toggleFlipH);
   const toggleFlipV = useMediaStore((s) => s.toggleFlipV);
   const applyCrop = useMediaStore((s) => s.applyCrop);
-  const selectFilter = useMediaStore((s) => s.selectFilter);
+  const selectColorGrade = useMediaStore((s) => s.selectColorGrade);
+  const setVideoFilterThumbnails = useMediaStore((s) => s.setVideoFilterThumbnails);
   const undoPhotoEdit = useMediaStore((s) => s.undoPhotoEdit);
   const redoPhotoEdit = useMediaStore((s) => s.redoPhotoEdit);
   const resetPhotoEdits = useMediaStore((s) => s.resetPhotoEdits);
@@ -212,7 +213,8 @@ export function App() {
                 onFlipH={toggleFlipH}
                 onFlipV={toggleFlipV}
                 onApplyCrop={applyCrop}
-                onSelectFilter={selectFilter}
+                onSelectColorGrade={selectColorGrade}
+                onVideoThumbnailsReady={setVideoFilterThumbnails}
                 onUndoPhoto={undoPhotoEdit}
                 onRedoPhoto={redoPhotoEdit}
                 onResetPhoto={resetPhotoEdits}

@@ -1,11 +1,11 @@
 import type {
-  EnhanceDenoiseMode,
   ImageColorAdjustments,
-  ImageFilterId,
+  ImageEditState,
   ImageOutputFormat,
   ImageRotation,
   NormalizedCropRect,
 } from '../contracts';
+import { hasActiveColorGrade } from '../shared/colorGrades';
 
 export interface Dimensions {
   width: number;
@@ -18,21 +18,6 @@ export interface PixelCropRect {
   sw: number;
   sh: number;
 }
-
-export interface FilterPresetMeta {
-  id: ImageFilterId;
-  label: string;
-}
-
-export const FILTER_PRESETS: readonly FilterPresetMeta[] = [
-  { id: 'original', label: 'Asli' },
-  { id: 'crisp', label: 'Jernih' },
-  { id: 'warm', label: 'Hangat' },
-  { id: 'cool', label: 'Sejuk' },
-  { id: 'film', label: 'Film' },
-  { id: 'cinema', label: 'Sinema' },
-  { id: 'mono', label: 'Monokrom' },
-] as const;
 
 export function computeRotatedDimensions(
   width: number,
@@ -85,33 +70,6 @@ export function computeTargetDimensions(
 }
 
 /**
- * Computes output dimensions accounting for optional Jernihkan HD upscale (capped at maxCapPx).
- */
-export function computeEnhancedTargetDimensions(
-  srcWidth: number,
-  srcHeight: number,
-  maxEdgePx: number | null,
-  upscaleFactor: 1 | 1.5 | 2,
-  maxCapPx = 2560
-): Dimensions {
-  if (upscaleFactor <= 1) {
-    return computeTargetDimensions(srcWidth, srcHeight, maxEdgePx);
-  }
-  const longest = Math.max(srcWidth, srcHeight);
-  const desiredLongest = Math.round(longest * upscaleFactor);
-  const effectiveCap = maxEdgePx !== null ? Math.min(maxEdgePx, maxCapPx) : maxCapPx;
-  const targetLongest = Math.min(effectiveCap, desiredLongest);
-  if (targetLongest <= longest) {
-    return computeTargetDimensions(srcWidth, srcHeight, maxEdgePx);
-  }
-  const scale = targetLongest / longest;
-  return {
-    width: Math.max(1, Math.round(srcWidth * scale)),
-    height: Math.max(1, Math.round(srcHeight * scale)),
-  };
-}
-
-/**
  * Generates progressive halving dimensions when downscaling more than 2x to reduce aliasing.
  */
 export function computeProgressiveSteps(
@@ -151,22 +109,22 @@ function clampByte(v: number): number {
 }
 
 /**
- * Fast 3x3 edge-preserving denoise smoothing flat noise while protecting strong contours.
+ * Fast 3x3 edge-preserving denoise smoothing noise while protecting strong edges.
+ * Accepts numeric lumaStrength (1..10) and chromaSmooth (1..8) from KM-T006 Noise module.
  */
-export function applyEdgePreservingDenoise(
+export function applyEdgePreservingDenoiseParams(
   imageData: ImageData,
-  mode: EnhanceDenoiseMode
+  grainStrength: number,
+  colorSmooth: number
 ): void {
-  if (mode === 'off') {
-    return;
-  }
   const { width, height, data } = imageData;
-  if (width < 3 || height < 3) {
+  if (width < 3 || height < 3 || grainStrength <= 0) {
     return;
   }
 
-  const threshold = mode === 'medium' ? 28 : 16;
-  const blend = mode === 'medium' ? 0.58 : 0.36;
+  const threshold = Math.min(48, 8 + grainStrength * 3.5);
+  const lumaBlend = Math.min(0.75, 0.14 + (grainStrength / 10) * 0.56);
+  const chromaBlend = Math.min(0.85, 0.18 + (colorSmooth / 8) * 0.62);
   const src = new Uint8ClampedArray(data);
   const stride = width * 4;
 
@@ -205,41 +163,20 @@ export function applyEdgePreservingDenoise(
         const avgR = sumR / count;
         const avgG = sumG / count;
         const avgB = sumB / count;
-        data[idx] = clampByte(cr + (avgR - cr) * blend);
-        data[idx + 1] = clampByte(cg + (avgG - cg) * blend);
-        data[idx + 2] = clampByte(cb + (avgB - cb) * blend);
+        const origLuma = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb;
+        const avgLuma = 0.2126 * avgR + 0.7152 * avgG + 0.0722 * avgB;
+
+        const outLuma = origLuma + (avgLuma - origLuma) * lumaBlend;
+        const dr = (avgR - avgLuma - (cr - origLuma)) * chromaBlend;
+        const dg = (avgG - avgLuma - (cg - origLuma)) * chromaBlend;
+        const db = (avgB - avgLuma - (cb - origLuma)) * chromaBlend;
+
+        data[idx] = clampByte(outLuma + (cr - origLuma) + dr);
+        data[idx + 1] = clampByte(outLuma + (cg - origLuma) + dg);
+        data[idx + 2] = clampByte(outLuma + (cb - origLuma) + db);
       }
       data[idx + 3] = src[idx + 3];
     }
-  }
-}
-
-/**
- * Applies micro-contrast luminance clarity enhancement (0..100) while preserving alpha.
- */
-export function applyClarity(imageData: ImageData, clarityAmount: number): void {
-  const level = Math.min(100, Math.max(0, clarityAmount));
-  if (level <= 0) {
-    return;
-  }
-
-  const data = imageData.data;
-  const boost = (level / 100) * 0.28;
-
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-
-    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    const norm = luma / 255;
-    // Gentle midtone S-curve contrast push
-    const midWeight = 4 * norm * (1 - norm);
-    const delta = (norm - 0.5) * boost * midWeight * 255;
-
-    data[i] = clampByte(r + delta);
-    data[i + 1] = clampByte(g + delta);
-    data[i + 2] = clampByte(b + delta);
   }
 }
 
@@ -287,80 +224,14 @@ export function applyColorAdjustments(
 }
 
 /**
- * Applies one of the 7 built-in studio color filters in-place.
+ * Applies 3x3 unsharp luminance convolution after resize, clamped cleanly to [0, 255].
+ * When antiArtifact=true, chroma stays smooth to avoid harsh color haloing.
  */
-export function applyFilterPreset(imageData: ImageData, filterId: ImageFilterId): void {
-  if (filterId === 'original') {
-    return;
-  }
-
-  const data = imageData.data;
-
-  for (let i = 0; i < data.length; i += 4) {
-    let r = data[i];
-    let g = data[i + 1];
-    let b = data[i + 2];
-
-    switch (filterId) {
-      case 'crisp': {
-        r = (r - 128) * 1.12 + 130;
-        g = (g - 128) * 1.12 + 130;
-        b = (b - 128) * 1.12 + 130;
-        const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        r = luma + (r - luma) * 1.07;
-        g = luma + (g - luma) * 1.07;
-        b = luma + (b - luma) * 1.07;
-        break;
-      }
-      case 'warm': {
-        r = r * 1.07 + 7;
-        g = g * 1.02 + 3;
-        b = b * 0.91 - 4;
-        break;
-      }
-      case 'cool': {
-        r = r * 0.91 - 3;
-        g = g * 1.01 + 2;
-        b = b * 1.08 + 7;
-        break;
-      }
-      case 'film': {
-        const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        r = luma + (r - luma) * 0.86;
-        g = luma + (g - luma) * 0.86;
-        b = luma + (b - luma) * 0.86;
-        r = r * 0.92 + 16;
-        g = g * 0.9 + 14;
-        b = b * 0.88 + 12;
-        break;
-      }
-      case 'cinema': {
-        const luma = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-        r = (r - 128) * 1.15 + 128 + (luma > 0.5 ? 10 : -8);
-        g = (g - 128) * 1.12 + 128 + (luma <= 0.5 ? 4 : 0);
-        b = (b - 128) * 1.12 + 128 + (luma <= 0.5 ? 11 : -8);
-        break;
-      }
-      case 'mono': {
-        const gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        const contrasted = (gray - 128) * 1.14 + 128;
-        r = contrasted;
-        g = contrasted;
-        b = contrasted;
-        break;
-      }
-    }
-
-    data[i] = clampByte(r);
-    data[i + 1] = clampByte(g);
-    data[i + 2] = clampByte(b);
-  }
-}
-
-/**
- * Applies subtle 3x3 unsharp convolution after resize, clamped cleanly to [0, 255].
- */
-export function applySharpen(imageData: ImageData, sharpenAmount: number): void {
+export function applySharpen(
+  imageData: ImageData,
+  sharpenAmount: number,
+  antiArtifact = true
+): void {
   const level = Math.min(100, Math.max(0, sharpenAmount));
   if (level <= 0) {
     return;
@@ -372,8 +243,6 @@ export function applySharpen(imageData: ImageData, sharpenAmount: number): void 
   }
 
   const alpha = (level / 100) * 0.65;
-  const centerWeight = 1 + 4 * alpha;
-  const sideWeight = -alpha;
   const src = new Uint8ClampedArray(data);
   const rowStride = width * 4;
 
@@ -386,11 +255,26 @@ export function applySharpen(imageData: ImageData, sharpenAmount: number): void 
       const left = idx - 4;
       const right = idx + 4;
 
-      for (let c = 0; c < 3; c += 1) {
-        const value =
-          src[idx + c] * centerWeight +
-          (src[top + c] + src[bottom + c] + src[left + c] + src[right + c]) * sideWeight;
-        data[idx + c] = clampByte(value);
+      if (antiArtifact) {
+        const lCenter = 0.2126 * src[idx] + 0.7152 * src[idx + 1] + 0.0722 * src[idx + 2];
+        const lNeighbors =
+          (0.2126 * (src[top] + src[bottom] + src[left] + src[right]) +
+            0.7152 * (src[top + 1] + src[bottom + 1] + src[left + 1] + src[right + 1]) +
+            0.0722 * (src[top + 2] + src[bottom + 2] + src[left + 2] + src[right + 2])) /
+          4;
+        const delta = (lCenter - lNeighbors) * (alpha * 2.2);
+        data[idx] = clampByte(src[idx] + delta);
+        data[idx + 1] = clampByte(src[idx + 1] + delta);
+        data[idx + 2] = clampByte(src[idx + 2] + delta);
+      } else {
+        const centerWeight = 1 + 4 * alpha;
+        const sideWeight = -alpha;
+        for (let c = 0; c < 3; c += 1) {
+          const value =
+            src[idx + c] * centerWeight +
+            (src[top + c] + src[bottom + c] + src[left + c] + src[right + c]) * sideWeight;
+          data[idx + c] = clampByte(value);
+        }
       }
       data[idx + 3] = src[idx + 3];
     }
@@ -427,4 +311,14 @@ export function formatOutputMimeShort(mime: ImageOutputFormat): string {
   if (mime === 'image/png') return 'PNG';
   if (mime === 'image/avif') return 'AVIF';
   return 'JPG';
+}
+
+export function getActiveImageModuleLabels(edit: ImageEditState): string[] {
+  const labels = ['Kompres'];
+  if (edit.enhanceSuite.noise.enabled) labels.push('Noise');
+  if (edit.enhanceSuite.sharpen.enabled) labels.push('Tajam');
+  if (edit.enhanceSuite.colorContrast.enabled) labels.push('Warna');
+  if (edit.enhanceSuite.upscale1080.enabled) labels.push('1080p');
+  if (hasActiveColorGrade(edit.colorGrade)) labels.push('Filter');
+  return labels;
 }

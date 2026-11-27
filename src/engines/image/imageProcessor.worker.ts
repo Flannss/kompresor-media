@@ -1,4 +1,4 @@
-import type { ImageEditState, ImageFilterId, ImageOutputFormat } from '../contracts';
+import type { ColorGradeId, ImageEditState, ImageOutputFormat } from '../contracts';
 import {
   runImagePipeline,
   runThumbnailPipeline,
@@ -56,7 +56,7 @@ export type ImageWorkerResponse =
       seq: number;
       ok: true;
       fallbackRequired: false;
-      items: Array<{ filterId: ImageFilterId; buffer: ArrayBuffer }>;
+      items: Array<{ gradeId: ColorGradeId; buffer: ArrayBuffer }>;
     }
   | {
       type: 'process' | 'thumbnails';
@@ -139,7 +139,7 @@ workerScope.onmessage = async (event: MessageEvent<ImageWorkerRequest>) => {
         thumbItems.map(async (item) => {
           const buffer = await item.blob.arrayBuffer();
           transfers.push(buffer);
-          return { filterId: item.filterId, buffer };
+          return { gradeId: item.gradeId, buffer };
         })
       );
       workerScope.postMessage(

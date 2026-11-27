@@ -1,35 +1,35 @@
 import { useState } from 'react';
 import {
-  Check,
+  ChevronDown,
   Crop,
   FlipHorizontal2,
   FlipVertical2,
-  Focus,
   RotateCw,
 } from 'lucide-react';
 import { Button } from '../../design-system/components/Button';
 import { SegmentedTabs } from '../../design-system/components/SegmentedTabs';
 import { Slider } from '../../design-system/components/Slider';
 import type {
-  EnhanceDenoiseMode,
-  EnhanceIntensity,
+  ColorGradeId,
   ImageEditState,
-  ImageFilterId,
   ImageOutputFormat,
   ImageProcessResult,
 } from '../../engines/contracts';
-import { FILTER_PRESETS } from '../../engines/image/pixelOps';
+import { hasActiveColorGrade, hasActiveEnhancements } from '../../engines/shared/colorGrades';
 import { MEDIA_PRESETS, type MediaPresetId } from '../../presets/mediaPresets';
+import { EnhanceAndGradePanel } from '../workspace/EnhanceAndGradePanel';
 
-type PhotoTabId = 'optimasi' | 'edit' | 'filter';
+type PhotoTabId = 'utama' | 'tampilan' | 'edit';
 
 export interface PhotoControlPanelProps {
   selectedPresetId: MediaPresetId;
   imageEdit: ImageEditState;
   imageProcessResult: ImageProcessResult | null;
-  filterThumbnails: Partial<Record<ImageFilterId, string>>;
+  filterThumbnails: Partial<Record<ColorGradeId, string>>;
   avifSupported: boolean;
   isCropping: boolean;
+  holdOriginalActive: boolean;
+  onHoldOriginalChange: (held: boolean) => void;
   onSelectPreset: (id: MediaPresetId) => void;
   onUpdateImageEdit: (
     patch: Partial<Omit<ImageEditState, 'presetId'>>,
@@ -40,13 +40,13 @@ export interface PhotoControlPanelProps {
   onRotate90: () => void;
   onFlipH: () => void;
   onFlipV: () => void;
-  onSelectFilter: (filterId: ImageFilterId) => void;
+  onSelectColorGrade: (gradeId: ColorGradeId) => void;
 }
 
 const PHOTO_TABS = [
-  { id: 'optimasi' as const, label: 'Optimasi' },
+  { id: 'utama' as const, label: 'Utama' },
+  { id: 'tampilan' as const, label: 'Tampilan' },
   { id: 'edit' as const, label: 'Edit' },
-  { id: 'filter' as const, label: 'Filter' },
 ];
 
 const MAX_EDGE_OPTIONS: ReadonlyArray<{ value: number | null; label: string }> = [
@@ -65,24 +65,6 @@ const TARGET_SIZE_OPTIONS: ReadonlyArray<{ value: number | null; label: string }
   { value: 4096, label: '≤ 4 MB' },
 ];
 
-const ENHANCE_INTENSITIES: ReadonlyArray<{ value: EnhanceIntensity; label: string }> = [
-  { value: 'light', label: 'Ringan' },
-  { value: 'balanced', label: 'Seimbang' },
-  { value: 'sharp', label: 'Tajam' },
-];
-
-const DENOISE_MODES: ReadonlyArray<{ value: EnhanceDenoiseMode; label: string }> = [
-  { value: 'off', label: 'Mati' },
-  { value: 'subtle', label: 'Halus' },
-  { value: 'medium', label: 'Sedang' },
-];
-
-const UPSCALE_FACTORS: ReadonlyArray<{ value: 1 | 1.5 | 2; label: string }> = [
-  { value: 1, label: 'Asli' },
-  { value: 1.5, label: '1.5×' },
-  { value: 2, label: '2× HD' },
-];
-
 export function PhotoControlPanel({
   selectedPresetId,
   imageEdit,
@@ -90,6 +72,8 @@ export function PhotoControlPanel({
   filterThumbnails,
   avifSupported,
   isCropping,
+  holdOriginalActive,
+  onHoldOriginalChange,
   onSelectPreset,
   onUpdateImageEdit,
   onCommitSnapshot,
@@ -97,11 +81,15 @@ export function PhotoControlPanel({
   onRotate90,
   onFlipH,
   onFlipV,
-  onSelectFilter,
+  onSelectColorGrade,
 }: PhotoControlPanelProps) {
-  const [activeTab, setActiveTab] = useState<PhotoTabId>('optimasi');
+  const [activeTab, setActiveTab] = useState<PhotoTabId>('utama');
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
   const isLosslessPng = imageEdit.outputFormat === 'image/png';
   const hasTargetSize = !isLosslessPng && imageEdit.targetSizeKB !== null;
+  const enhanceActive = hasActiveEnhancements(imageEdit.enhanceSuite);
+  const gradeActive = hasActiveColorGrade(imageEdit.colorGrade);
 
   const formatOptions: ReadonlyArray<{ value: ImageOutputFormat; label: string }> = avifSupported
     ? [
@@ -117,213 +105,81 @@ export function PhotoControlPanel({
       ];
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Composable Active Module Pills */}
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-          Modul Aktif
+    <div className="flex flex-col gap-3.5">
+      {/* Subtle Active Pill Summary */}
+      <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+        <span className="rounded-lg border border-[var(--border-active)] bg-[var(--bg-subtle)] px-2 py-0.5 font-semibold text-[var(--text-primary)]">
+          Kompres &amp; Format
         </span>
-        <div className="flex flex-wrap gap-1.5">
-          <span className="inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border border-[var(--border-active)] bg-[var(--bg-subtle)] px-2.5 text-xs font-semibold text-[var(--text-primary)]">
-            <Check className="h-3.5 w-3.5 text-[var(--accent-highlight)]" aria-hidden="true" />
-            <span>Kompres &amp; Format</span>
-          </span>
+        {enhanceActive && (
           <button
             type="button"
-            data-testid="toggle-photo-enhance-btn"
-            aria-pressed={imageEdit.enhance.enabled}
-            onClick={() => {
-              onUpdateImageEdit(
-                { enhance: { ...imageEdit.enhance, enabled: !imageEdit.enhance.enabled } },
-                { commitHistory: true, preservePreset: true }
-              );
-              setActiveTab('optimasi');
-            }}
-            className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-2.5 text-xs font-semibold transition-all active:scale-[0.97] ${
-              imageEdit.enhance.enabled
-                ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)] hover:text-[var(--text-primary)]'
-            }`}
+            onClick={() => setActiveTab('tampilan')}
+            className="rounded-lg border border-[var(--border-active)] bg-[var(--accent-deep)]/50 px-2 py-0.5 font-semibold text-[var(--text-primary)]"
           >
-            <Focus className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Jernihkan HD</span>
+            Jernihkan HD
           </button>
-        </div>
+        )}
+        {gradeActive && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('tampilan')}
+            className="rounded-lg border border-[var(--border-active)] bg-[var(--accent-primary)]/20 px-2 py-0.5 font-semibold text-[var(--accent-highlight)]"
+          >
+            Filter Aktif
+          </button>
+        )}
       </div>
 
+      {/* Strictly 3 Top-Level Tabs */}
       <SegmentedTabs
         items={PHOTO_TABS}
         value={activeTab}
         onChange={setActiveTab}
-        ariaLabel="Mode pengeditan foto"
+        ariaLabel="Menu studio foto"
       />
 
-      {activeTab === 'optimasi' && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-1">
-          <div className="flex flex-col gap-4">
-            <div>
-              <h2 className="text-xs font-semibold text-[var(--text-primary)]">Pilih Tujuan</h2>
-              <div
-                className="mt-2 grid grid-cols-2 gap-2"
-                role="radiogroup"
-                aria-label="Pilih tujuan penggunaan foto"
-              >
-                {MEDIA_PRESETS.map((preset) => {
-                  const selected = preset.id === selectedPresetId;
-                  return (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      data-testid={`preset-${preset.id}`}
-                      onClick={() => onSelectPreset(preset.id)}
-                      className={`flex min-h-[54px] flex-col items-start justify-center rounded-xl border px-3 py-2 text-left transition-all duration-150 active:scale-[0.985] ${
-                        selected
-                          ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] text-[var(--text-primary)]'
-                          : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
-                      }`}
-                    >
-                      <span className="text-xs font-semibold text-[var(--text-primary)]">
-                        {preset.label}
-                      </span>
-                      <span className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">
-                        {preset.targetLimitLabel}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+      {activeTab === 'utama' && (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <h2 className="text-xs font-semibold text-[var(--text-primary)]">Pilih Tujuan</h2>
+            <div
+              className="grid grid-cols-2 gap-2"
+              role="radiogroup"
+              aria-label="Pilih tujuan penggunaan foto"
+            >
+              {MEDIA_PRESETS.map((preset) => {
+                const selected = preset.id === selectedPresetId;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    data-testid={`preset-${preset.id}`}
+                    onClick={() => onSelectPreset(preset.id)}
+                    className={`flex min-h-[52px] flex-col items-start justify-center rounded-xl border px-3 py-2 text-left transition-all duration-150 active:scale-[0.985] ${
+                      selected
+                        ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] text-[var(--text-primary)]'
+                        : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
+                    }`}
+                  >
+                    <span className="text-xs font-semibold text-[var(--text-primary)]">
+                      {preset.label}
+                    </span>
+                    <span className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">
+                      {preset.targetLimitLabel}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-
-            {imageEdit.enhance.enabled && (
-              <div
-                data-testid="photo-enhance-card"
-                className="flex flex-col gap-3 rounded-2xl border border-[var(--border-active)] bg-[var(--bg-subtle)] p-3.5"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold text-[var(--text-primary)]">
-                    Jernihkan HD
-                  </span>
-                  <span className="text-[10px] font-medium text-[var(--accent-highlight)]">
-                    Denoise &amp; Ketajaman Mikro
-                  </span>
-                </div>
-
-                <div>
-                  <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
-                    Intensitas
-                  </span>
-                  <div className="mt-1 grid grid-cols-3 gap-1.5">
-                    {ENHANCE_INTENSITIES.map((opt) => {
-                      const active = imageEdit.enhance.intensity === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          data-testid={`photo-enhance-intensity-${opt.value}`}
-                          onClick={() =>
-                            onUpdateImageEdit(
-                              { enhance: { ...imageEdit.enhance, intensity: opt.value } },
-                              { commitHistory: true, preservePreset: true }
-                            )
-                          }
-                          className={`min-h-[34px] rounded-lg border text-xs font-medium transition-colors ${
-                            active
-                              ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                              : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)]'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
-                    Reduksi Noise
-                  </span>
-                  <div className="mt-1 grid grid-cols-3 gap-1.5">
-                    {DENOISE_MODES.map((opt) => {
-                      const active = imageEdit.enhance.denoise === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() =>
-                            onUpdateImageEdit(
-                              { enhance: { ...imageEdit.enhance, denoise: opt.value } },
-                              { commitHistory: true, preservePreset: true }
-                            )
-                          }
-                          className={`min-h-[34px] rounded-lg border text-xs font-medium transition-colors ${
-                            active
-                              ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                              : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)]'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <Slider
-                  label="Kejernihan Kontras"
-                  testId="slider-photo-clarity"
-                  min={0}
-                  max={100}
-                  defaultValue={28}
-                  value={imageEdit.enhance.clarity}
-                  onChange={(val) =>
-                    onUpdateImageEdit(
-                      { enhance: { ...imageEdit.enhance, clarity: val } },
-                      { commitHistory: false, preservePreset: true }
-                    )
-                  }
-                  onCommit={() => onCommitSnapshot()}
-                />
-
-                <div>
-                  <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
-                    Perbesar HD (Maks 2560 px)
-                  </span>
-                  <div className="mt-1 grid grid-cols-3 gap-1.5">
-                    {UPSCALE_FACTORS.map((opt) => {
-                      const active = imageEdit.enhance.upscaleFactor === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() =>
-                            onUpdateImageEdit(
-                              { enhance: { ...imageEdit.enhance, upscaleFactor: opt.value } },
-                              { commitHistory: true, preservePreset: true }
-                            )
-                          }
-                          className={`min-h-[34px] rounded-lg border text-xs font-medium tabular-nums transition-colors ${
-                            active
-                              ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                              : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)]'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
-          <div className="flex flex-col gap-3.5 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5">
+          <div className="space-y-3 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5">
             <div>
               <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
-                Format
+                Format Output
               </span>
               <div
                 className={`mt-1.5 grid gap-1.5 ${
@@ -351,67 +207,6 @@ export function PhotoControlPanel({
                 })}
               </div>
             </div>
-
-            <div>
-              <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
-                Ukuran Maksimal
-              </span>
-              <div className="mt-1.5 grid grid-cols-3 gap-1.5">
-                {MAX_EDGE_OPTIONS.map((opt) => {
-                  const active = imageEdit.maxEdgePx === opt.value;
-                  return (
-                    <button
-                      key={opt.label}
-                      type="button"
-                      data-testid={`max-edge-${opt.value ?? 'original'}`}
-                      aria-pressed={active}
-                      onClick={() => onUpdateImageEdit({ maxEdgePx: opt.value })}
-                      className={`min-h-[36px] rounded-lg border text-xs font-medium tabular-nums transition-all active:scale-[0.98] ${
-                        active
-                          ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                          : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {!isLosslessPng && (
-              <div>
-                <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
-                  Batas Ukuran
-                </span>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {TARGET_SIZE_OPTIONS.map((opt) => {
-                    const active = imageEdit.targetSizeKB === opt.value;
-                    return (
-                      <button
-                        key={opt.label}
-                        type="button"
-                        data-testid={`target-size-${opt.value ?? 'auto'}`}
-                        aria-pressed={active}
-                        onClick={() =>
-                          onUpdateImageEdit(
-                            { targetSizeKB: opt.value },
-                            { commitHistory: true, preservePreset: true }
-                          )
-                        }
-                        className={`min-h-[34px] rounded-lg border px-2.5 text-[11px] font-medium tabular-nums transition-all active:scale-[0.98] ${
-                          active
-                            ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                            : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
 
             <Slider
               label="Kualitas"
@@ -442,14 +237,120 @@ export function PhotoControlPanel({
               onCommit={() => onCommitSnapshot()}
               hint={
                 hasTargetSize
-                  ? 'Kualitas dijaga setajam mungkin agar ukuran tetap di bawah batas.'
+                  ? 'Kualitas diatur otomatis agar ukuran file tetap di bawah batas target.'
                   : isLosslessPng
-                    ? 'Format PNG menyimpan piksel tanpa kompresi kualitas.'
+                    ? 'Format PNG menyimpan gambar asli tanpa menurunkan kualitas.'
                     : undefined
               }
             />
+
+            {/* Progressive Disclosure for Max Dimensions & Target Size */}
+            <div className="border-t border-[var(--border-hairline)] pt-2.5">
+              <button
+                type="button"
+                data-testid="photo-size-advanced-btn"
+                onClick={() => setAdvancedOpen((v) => !v)}
+                className="flex w-full items-center justify-between text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              >
+                <span>Atur Ukuran &amp; Batas File</span>
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
+                  aria-hidden="true"
+                />
+              </button>
+
+              {advancedOpen && (
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
+                      Ukuran Maksimal
+                    </span>
+                    <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                      {MAX_EDGE_OPTIONS.map((opt) => {
+                        const active = imageEdit.maxEdgePx === opt.value;
+                        return (
+                          <button
+                            key={opt.label}
+                            type="button"
+                            data-testid={`max-edge-${opt.value ?? 'original'}`}
+                            aria-pressed={active}
+                            onClick={() => onUpdateImageEdit({ maxEdgePx: opt.value })}
+                            className={`min-h-[34px] rounded-lg border text-xs font-medium tabular-nums transition-all ${
+                              active
+                                ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                                : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {!isLosslessPng && (
+                    <div>
+                      <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
+                        Batas Ukuran
+                      </span>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {TARGET_SIZE_OPTIONS.map((opt) => {
+                          const active = imageEdit.targetSizeKB === opt.value;
+                          return (
+                            <button
+                              key={opt.label}
+                              type="button"
+                              data-testid={`target-size-${opt.value ?? 'auto'}`}
+                              aria-pressed={active}
+                              onClick={() =>
+                                onUpdateImageEdit(
+                                  { targetSizeKB: opt.value },
+                                  { commitHistory: true, preservePreset: true }
+                                )
+                              }
+                              className={`min-h-[32px] rounded-lg border px-2.5 text-[11px] font-medium tabular-nums transition-all ${
+                                active
+                                  ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                                  : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
+      )}
+
+      {activeTab === 'tampilan' && (
+        <EnhanceAndGradePanel
+          mediaKind="image"
+          enhanceSuite={imageEdit.enhanceSuite}
+          colorGrade={imageEdit.colorGrade}
+          filterThumbnails={filterThumbnails}
+          holdOriginalActive={holdOriginalActive}
+          onHoldOriginalChange={onHoldOriginalChange}
+          onUpdateEnhanceSuite={(nextSuite) =>
+            onUpdateImageEdit(
+              { enhanceSuite: nextSuite },
+              { commitHistory: true, preservePreset: true }
+            )
+          }
+          onUpdateColorGrade={(nextGrade, commitHistory = false) =>
+            onUpdateImageEdit(
+              { colorGrade: nextGrade },
+              { commitHistory, preservePreset: true }
+            )
+          }
+          onSelectColorGrade={onSelectColorGrade}
+          onCommitSliderSnapshot={onCommitSnapshot}
+        />
       )}
 
       {activeTab === 'edit' && (
@@ -576,50 +477,6 @@ export function PhotoControlPanel({
               onCommit={() => onCommitSnapshot()}
             />
           </div>
-        </div>
-      )}
-
-      {activeTab === 'filter' && (
-        <div
-          data-testid="filter-grid"
-          className="grid grid-cols-3 gap-2 md:grid-cols-4 lg:grid-cols-3"
-          role="radiogroup"
-          aria-label="Pilih filter warna foto"
-        >
-          {FILTER_PRESETS.map((preset) => {
-            const active = imageEdit.filterId === preset.id;
-            const thumbUrl = filterThumbnails[preset.id];
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                data-testid={`filter-${preset.id}`}
-                onClick={() => onSelectFilter(preset.id)}
-                className={`flex flex-col items-center gap-1.5 rounded-xl border p-1.5 transition-all active:scale-[0.97] ${
-                  active
-                    ? 'border-[var(--border-active)] bg-[var(--bg-subtle)]'
-                    : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] hover:border-[var(--border-active)]'
-                }`}
-              >
-                <div className="h-14 w-full overflow-hidden rounded-lg bg-[var(--bg-app)]">
-                  {thumbUrl ? (
-                    <img
-                      src={thumbUrl}
-                      alt={preset.label}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="h-full w-full animate-pulse bg-[var(--bg-subtle)]" />
-                  )}
-                </div>
-                <span className="text-[11px] font-semibold text-[var(--text-primary)]">
-                  {preset.label}
-                </span>
-              </button>
-            );
-          })}
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-import type { EnhanceDenoiseMode, EnhanceIntensity } from './image';
+import type { ColorGradeState, EnhancementSuiteState } from './gradeAndEnhance';
 import type { VideoMetadata } from './media';
 
 export type VideoPresetId =
@@ -25,15 +25,6 @@ export type AudioBitrateKbps = 96 | 128 | 192 | 320;
 export type SubtitleRenderMode = 'hardsub' | 'softsub';
 export type SubtitleSize = 'small' | 'medium' | 'large';
 export type SubtitlePosition = 'bottom' | 'center' | 'top';
-
-export interface VideoEnhanceOptions {
-  enabled: boolean;
-  intensity: EnhanceIntensity;
-  denoise: EnhanceDenoiseMode;
-  /** Contrast & saturation micro-clarity enhancement (0..100). */
-  clarity: number;
-  upscaleFactor: 1 | 1.5 | 2;
-}
 
 export interface VideoStabilizeOptions {
   enabled: boolean;
@@ -87,7 +78,8 @@ export interface VideoEditState {
   trimStartSec: number;
   trimEndSec: number | null;
   muteAudio: boolean;
-  enhance: VideoEnhanceOptions;
+  enhanceSuite: EnhancementSuiteState;
+  colorGrade: ColorGradeState;
   stabilize: VideoStabilizeOptions;
   audio: VideoAudioOptions;
   subtitle: VideoSubtitleOptions;
@@ -134,5 +126,6 @@ export interface VideoProcessResult {
   outputBytes: number;
   durationMs: number;
   activeModules: string[];
+  engineDetail?: string;
   notice?: string;
 }

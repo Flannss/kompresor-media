@@ -121,6 +121,7 @@ export async function processVideo(
     outputHeight: number;
     durationSec: number;
     notice?: string;
+    engineDetail?: string;
   };
 
   if (useFfmpeg) {
@@ -171,6 +172,7 @@ export async function processVideo(
     durationMs: performance.now() - t0,
     activeModules: getActiveVideoModuleLabels(request.edit),
     ...(output.notice ? { notice: output.notice } : {}),
+    ...(output.engineDetail ? { engineDetail: output.engineDetail } : {}),
   };
 
   onProgress({

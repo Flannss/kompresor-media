@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Columns2,
   Download,
+  Eye,
   FlipHorizontal2,
   Play,
   Redo2,
@@ -15,8 +16,8 @@ import {
   X,
 } from 'lucide-react';
 import type {
+  ColorGradeId,
   ImageEditState,
-  ImageFilterId,
   ImageProcessResult,
   MediaMetadata,
   NormalizedCropRect,
@@ -28,16 +29,22 @@ import type {
   VideoProcessResult,
 } from '../../engines/contracts';
 import { computeRotatedDimensions } from '../../engines/image/pixelOps';
-import { findActiveCuesAtTime } from '../../engines/video/subtitleParser';
 import type { MediaPresetId } from '../../presets/mediaPresets';
 import { formatBytes } from '../../shared/utils/formatBytes';
 import { formatDuration } from '../../shared/utils/formatDuration';
 import type { ImageProcessStatus, QueueItem, VideoProcessStatus } from '../../store/useMediaStore';
 import { ExportSharePanel } from '../export-share/ExportSharePanel';
 import { executeWhatsAppShareFlow, triggerObjectUrlDownload } from '../export-share/shareHelper';
-import { MediaInfoBar } from '../upload/MediaInfoBar';
 import type { ZipEntryInput } from '../export-share/zipExport';
+import { MediaInfoBar } from '../upload/MediaInfoBar';
+import {
+  VideoCompareStage,
+  type VideoCompareViewMode,
+} from '../video-studio/VideoCompareStage';
 import type { CapturedFrameInfo } from '../video-studio/VideoControlPanel';
+import { BeforeAfterPreview, type StageBackdrop } from './BeforeAfterPreview';
+import { CoreSummaryCard } from './CoreSummaryCard';
+import { QueuePanel } from './QueuePanel';
 
 const CropOverlay = lazy(() =>
   import('../image-studio/CropOverlay').then((m) => ({ default: m.CropOverlay }))
@@ -48,13 +55,6 @@ const PhotoControlPanel = lazy(() =>
 const VideoControlPanel = lazy(() =>
   import('../video-studio/VideoControlPanel').then((m) => ({ default: m.VideoControlPanel }))
 );
-import {
-  BeforeAfterPreview,
-  getBackdropClasses,
-  type StageBackdrop,
-} from './BeforeAfterPreview';
-import { CoreSummaryCard } from './CoreSummaryCard';
-import { QueuePanel } from './QueuePanel';
 
 export interface WorkspaceStageProps {
   items: QueueItem[];
@@ -78,7 +78,7 @@ export interface WorkspaceStageProps {
   imageProcessResult: ImageProcessResult | null;
   processedImageUrl: string | null;
   imageProcessError: string | null;
-  filterThumbnails: Partial<Record<ImageFilterId, string>>;
+  filterThumbnails: Partial<Record<ColorGradeId, string>>;
 
   videoEdit: VideoEditState;
   videoProcessStatus: VideoProcessStatus;
@@ -97,7 +97,8 @@ export interface WorkspaceStageProps {
   onFlipH: () => void;
   onFlipV: () => void;
   onApplyCrop: (crop: NormalizedCropRect | null) => void;
-  onSelectFilter: (filterId: ImageFilterId) => void;
+  onSelectColorGrade: (gradeId: ColorGradeId) => void;
+  onVideoThumbnailsReady: (itemId: string, thumbs: Partial<Record<ColorGradeId, string>>) => void;
   onUndoPhoto: () => void;
   onRedoPhoto: () => void;
   onResetPhoto: () => void;
@@ -163,7 +164,8 @@ export function WorkspaceStage({
   onFlipH,
   onFlipV,
   onApplyCrop,
-  onSelectFilter,
+  onSelectColorGrade,
+  onVideoThumbnailsReady,
   onUndoPhoto,
   onRedoPhoto,
   onResetPhoto,
@@ -179,7 +181,7 @@ export function WorkspaceStage({
   onDropAddFiles,
   onLoadSingleReplacementFile,
 }: WorkspaceStageProps) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const [isDraggingOverStage, setIsDraggingOverStage] = useState(false);
   const [backdrop, setBackdrop] = useState<StageBackdrop>('dark');
 
@@ -187,11 +189,12 @@ export function WorkspaceStage({
   const [compareMode, setCompareMode] = useState(false);
   const [splitPct, setSplitPct] = useState(50);
   const [showOriginalPhoto, setShowOriginalPhoto] = useState(false);
+  const [holdOriginalMedia, setHoldOriginalMedia] = useState(false);
   const [orientedCropUrl, setOrientedCropUrl] = useState<string | null>(null);
 
-  const [videoViewMode, setVideoViewMode] = useState<'original' | 'result'>('original');
-  const [videoTimeSec, setVideoTimeSec] = useState(0);
-  const [videoPreviewUnsupported, setVideoPreviewUnsupported] = useState(false);
+  const [videoCompareViewMode, setVideoCompareViewMode] =
+    useState<VideoCompareViewMode>('single');
+  const [seekRequestSec, setSeekRequestSec] = useState<{ sec: number; seq: number } | null>(null);
   const [capturedFrame, setCapturedFrame] = useState<CapturedFrameInfo | null>(null);
 
   const isImage = metadata.kind === 'image';
@@ -225,9 +228,8 @@ export function WorkspaceStage({
     setIsCropping(false);
     setCompareMode(false);
     setShowOriginalPhoto(false);
-    setVideoViewMode(processedVideoUrl ? 'result' : 'original');
-    setVideoTimeSec(0);
-    setVideoPreviewUnsupported(false);
+    setHoldOriginalMedia(false);
+    setSeekRequestSec(null);
     setCapturedFrame((prev) => {
       if (prev) {
         setTimeout(() => URL.revokeObjectURL(prev.url), 50);
@@ -235,15 +237,6 @@ export function WorkspaceStage({
       return null;
     });
   }, [objectUrl]);
-
-  useEffect(() => {
-    setVideoPreviewUnsupported(false);
-    if (processedVideoUrl) {
-      setVideoViewMode('result');
-    } else {
-      setVideoViewMode('original');
-    }
-  }, [processedVideoUrl]);
 
   useEffect(() => {
     return () => {
@@ -320,20 +313,6 @@ export function WorkspaceStage({
     metadata.height,
   ]);
 
-  const activeVideoSrc =
-    !isImage && videoViewMode === 'result' && processedVideoUrl ? processedVideoUrl : objectUrl;
-
-  useEffect(() => {
-    const videoEl = videoRef.current;
-    return () => {
-      if (videoEl) {
-        videoEl.pause();
-        videoEl.removeAttribute('src');
-        videoEl.load();
-      }
-    };
-  }, [activeVideoSrc]);
-
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -361,17 +340,13 @@ export function WorkspaceStage({
   };
 
   const handleSeekVideoPreview = (timeSec: number) => {
-    setVideoViewMode('original');
-    const videoEl = videoRef.current;
-    if (!videoEl) return;
     if (!Number.isNaN(timeSec) && Number.isFinite(timeSec)) {
-      videoEl.currentTime = Math.max(0, timeSec);
-      setVideoTimeSec(Math.max(0, timeSec));
+      setSeekRequestSec({ sec: Math.max(0, timeSec), seq: Date.now() });
     }
   };
 
   const handleCaptureFrame = () => {
-    const videoEl = videoRef.current;
+    const videoEl = videoElementRef.current;
     if (!videoEl || videoEl.videoWidth <= 0 || videoEl.videoHeight <= 0) {
       return;
     }
@@ -413,16 +388,6 @@ export function WorkspaceStage({
     metadata.height,
     imageEdit.rotationDeg
   );
-
-  // Live synced subtitle cues on original preview (or softsub output)
-  const showSubtitleOverlay =
-    !isImage &&
-    videoEdit.subtitle.enabled &&
-    videoEdit.subtitle.cues.length > 0 &&
-    (videoViewMode === 'original' || videoEdit.subtitle.mode === 'softsub');
-  const activeSubtitleCues = showSubtitleOverlay
-    ? findActiveCuesAtTime(videoEdit.subtitle.cues, videoTimeSec)
-    : [];
 
   const activeExportBlob = isImage
     ? (imageProcessResult?.outputBlob ?? null)
@@ -504,69 +469,30 @@ export function WorkspaceStage({
               compareMode={compareMode}
               splitPct={splitPct}
               onSplitPctChange={setSplitPct}
-              showOriginalOnly={showOriginalPhoto}
+              showOriginalOnly={showOriginalPhoto || holdOriginalMedia}
               backdrop={backdrop}
             />
           )
         ) : (
-          <div
-            className={`relative flex max-h-[56vh] w-full max-w-[820px] items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-hairline)] p-1 transition-colors ${getBackdropClasses(backdrop)}`}
-            style={{ boxShadow: 'var(--stage-shadow)' }}
-          >
-            {videoPreviewUnsupported && processedVideoUrl ? (
-              <div
-                data-testid="video-preview-fallback-box"
-                className="flex flex-col items-center gap-2 px-6 py-12 text-center text-xs text-[var(--text-secondary)]"
-              >
-                <p className="font-semibold text-[var(--text-primary)]">
-                  File {videoEdit.outputFormat.toUpperCase()} selesai diproses (
-                  {formatBytes(videoProcessResult?.outputBytes ?? 0)})
-                </p>
-                <p>
-                  Browser ini tidak memutar pratinjau {videoEdit.outputFormat.toUpperCase()} langsung
-                  di pemutar web, namun file hasil siap diunduh dan diputar di pemutar media perangkat.
-                </p>
-              </div>
-            ) : (
-              <video
-                ref={videoRef}
-                key={activeVideoSrc}
-                data-testid="preview-video"
-                src={activeVideoSrc}
-                controls
-                playsInline
-                preload="metadata"
-                onTimeUpdate={(e) => setVideoTimeSec(e.currentTarget.currentTime)}
-                onError={() => {
-                  if (videoViewMode === 'result' && processedVideoUrl) {
-                    setVideoPreviewUnsupported(true);
-                  }
-                }}
-                className="max-h-[54vh] w-full rounded-xl object-contain"
-              />
-            )}
-
-            {processedVideoUrl && !videoPreviewUnsupported && (
-              <span className="pointer-events-none absolute left-3 top-3 rounded-md bg-[#000521]/75 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-xs">
-                {videoViewMode === 'result' ? 'Hasil' : 'Asli'}
-              </span>
-            )}
-
-            {activeSubtitleCues.length > 0 && !videoPreviewUnsupported && (
-              <div
-                data-testid="live-subtitle-overlay"
-                className={`pointer-events-none absolute left-1/2 -translate-x-1/2 rounded-lg bg-[#000521]/82 px-3 py-1.5 text-center text-xs font-semibold text-white shadow sm:text-sm ${
-                  videoEdit.subtitle.position === 'top'
-                    ? 'top-4'
-                    : videoEdit.subtitle.position === 'center'
-                      ? 'top-1/2 -translate-y-1/2'
-                      : 'bottom-12'
-                }`}
-              >
-                {activeSubtitleCues.map((c) => c.text).join('\n')}
-              </div>
-            )}
-          </div>
+          <VideoCompareStage
+            itemId={activeItemId}
+            objectUrl={objectUrl}
+            processedVideoUrl={processedVideoUrl}
+            videoEdit={videoEdit}
+            videoProcessResult={videoProcessResult}
+            backdrop={backdrop}
+            compareViewMode={videoCompareViewMode}
+            onChangeCompareViewMode={setVideoCompareViewMode}
+            holdOriginalActive={holdOriginalMedia}
+            onHoldOriginalChange={setHoldOriginalMedia}
+            hasGeneratedThumbnails={Object.keys(filterThumbnails).length > 0}
+            onVideoThumbnailsReady={onVideoThumbnailsReady}
+            seekRequestSec={seekRequestSec}
+            onVideoTimeChange={() => {}}
+            videoElementRef={(el) => {
+              videoElementRef.current = el;
+            }}
+          />
         )}
 
         {/* Summary pill */}
@@ -637,6 +563,21 @@ export function WorkspaceStage({
                   )
                 )}
 
+                {processedImageUrl && (
+                  <button
+                    type="button"
+                    data-testid="photo-hold-original-btn"
+                    onPointerDown={() => setHoldOriginalMedia(true)}
+                    onPointerUp={() => setHoldOriginalMedia(false)}
+                    onPointerLeave={() => setHoldOriginalMedia(false)}
+                    onPointerCancel={() => setHoldOriginalMedia(false)}
+                    className="inline-flex h-8 items-center gap-1 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] select-none"
+                  >
+                    <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>Tahan: Asli</span>
+                  </button>
+                )}
+
                 <span className="h-4 w-px bg-[var(--border-hairline)]" aria-hidden="true" />
 
                 <button
@@ -704,49 +645,15 @@ export function WorkspaceStage({
                 </button>
               </>
             ) : (
-              <>
-                {processedVideoUrl && (
-                  <>
-                    <div className="inline-flex rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-xs">
-                      <button
-                        type="button"
-                        data-testid="video-view-original-btn"
-                        onClick={() => setVideoViewMode('original')}
-                        className={`rounded-lg px-2.5 py-1 font-medium transition-colors ${
-                          videoViewMode === 'original'
-                            ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                            : 'text-[var(--text-secondary)]'
-                        }`}
-                      >
-                        Asli
-                      </button>
-                      <button
-                        type="button"
-                        data-testid="video-view-result-btn"
-                        onClick={() => setVideoViewMode('result')}
-                        className={`rounded-lg px-2.5 py-1 font-medium transition-colors ${
-                          videoViewMode === 'result'
-                            ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                            : 'text-[var(--text-secondary)]'
-                        }`}
-                      >
-                        Hasil
-                      </button>
-                    </div>
-                    <span className="h-4 w-px bg-[var(--border-hairline)]" aria-hidden="true" />
-                  </>
-                )}
-
-                <button
-                  type="button"
-                  data-testid="dock-capture-frame-btn"
-                  onClick={handleCaptureFrame}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
-                >
-                  <Camera className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Ambil Frame</span>
-                </button>
-              </>
+              <button
+                type="button"
+                data-testid="dock-capture-frame-btn"
+                onClick={handleCaptureFrame}
+                className="inline-flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
+              >
+                <Camera className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Ambil Frame</span>
+              </button>
             )}
 
             <span className="h-4 w-px bg-[var(--border-hairline)]" aria-hidden="true" />
@@ -784,7 +691,7 @@ export function WorkspaceStage({
         )}
       </section>
 
-      {/* Right Inspector Panel (Responsive: Full width below on Tablet/Mobile, 392px sidebar on Desktop) */}
+      {/* Right Inspector Panel */}
       <aside className="flex w-full shrink-0 flex-col gap-4 border-t border-[var(--border-hairline)] bg-[var(--bg-surface)] p-4 pb-20 sm:p-5 md:pb-6 lg:w-[392px] lg:border-l lg:border-t-0">
         <Suspense
           fallback={
@@ -799,6 +706,8 @@ export function WorkspaceStage({
               filterThumbnails={filterThumbnails}
               avifSupported={avifSupported}
               isCropping={isCropping}
+              holdOriginalActive={holdOriginalMedia}
+              onHoldOriginalChange={setHoldOriginalMedia}
               onSelectPreset={onSelectPreset}
               onUpdateImageEdit={onUpdateImageEdit}
               onCommitSnapshot={onCommitPhotoSnapshot}
@@ -806,13 +715,16 @@ export function WorkspaceStage({
               onRotate90={onRotatePhoto90}
               onFlipH={onFlipH}
               onFlipV={onFlipV}
-              onSelectFilter={onSelectFilter}
+              onSelectColorGrade={onSelectColorGrade}
             />
           ) : (
             <VideoControlPanel
               metadata={metadata}
               selectedPresetId={selectedPresetId}
               videoEdit={videoEdit}
+              filterThumbnails={filterThumbnails}
+              holdOriginalActive={holdOriginalMedia}
+              onHoldOriginalChange={setHoldOriginalMedia}
               videoProcessStatus={videoProcessStatus}
               videoProgress={videoProgress}
               videoProcessResult={videoProcessResult}
@@ -822,6 +734,7 @@ export function WorkspaceStage({
               finishedBatchItems={finishedBatchItems}
               onSelectPreset={onSelectPreset}
               onUpdateVideoEdit={onUpdateVideoEdit}
+              onSelectColorGrade={onSelectColorGrade}
               onStartProcess={() => onStartVideoProcess('auto')}
               onCancelProcess={onCancelVideoProcess}
               onSeekPreview={handleSeekVideoPreview}
@@ -844,8 +757,7 @@ export function WorkspaceStage({
         <CoreSummaryCard
           metadata={metadata}
           selectedPresetId={selectedPresetId}
-          imageOutputMime={imageEdit.outputFormat}
-          imageEnhanceEnabled={imageEdit.enhance.enabled}
+          imageEdit={imageEdit}
           imageProcessResult={imageProcessResult}
           videoEdit={videoEdit}
           videoProcessResult={videoProcessResult}
@@ -865,7 +777,7 @@ export function WorkspaceStage({
           </div>
         )}
 
-        {/* Collapsed Detail teknis Disclosure */}
+        {/* Collapsed Detail teknis Disclosure (raw technical parameters strictly tucked here) */}
         <details
           data-testid="file-details-accordion"
           className="group mt-auto border-t border-[var(--border-hairline)] pt-3.5"
@@ -894,7 +806,7 @@ export function WorkspaceStage({
 
             <dt className="text-[var(--text-muted)]">Format asli</dt>
             <dd className="text-right font-medium text-[var(--text-primary)]">
-              {validation.signatureLabel}
+              {validation.signatureLabel} ({metadata.mimeType})
             </dd>
 
             <dt className="text-[var(--text-muted)]">Resolusi asli</dt>
@@ -912,7 +824,16 @@ export function WorkspaceStage({
               {formatBytes(metadata.sizeBytes)}
             </dd>
 
-            {!isImage && (
+            {isImage ? (
+              imageProcessResult && (
+                <>
+                  <dt className="text-[var(--text-muted)]">Mesin proses</dt>
+                  <dd className="text-right font-medium text-[var(--text-primary)]">
+                    {imageProcessResult.backend} ({imageProcessResult.outputMime})
+                  </dd>
+                </>
+              )
+            ) : (
               <>
                 <dt className="text-[var(--text-muted)]">Durasi</dt>
                 <dd className="text-right font-medium text-[var(--text-primary)]">
@@ -923,6 +844,29 @@ export function WorkspaceStage({
                 <dd className="text-right font-medium text-[var(--text-primary)]">
                   {metadata.hasAudioHint === true ? 'Ada trek audio' : 'Tidak terdeteksi'}
                 </dd>
+
+                <dt className="text-[var(--text-muted)]">Parameter video</dt>
+                <dd className="text-right font-medium text-[var(--text-primary)]">
+                  CRF {videoEdit.crf} · Bitrate {Math.round(videoEdit.targetBitrateBps / 1000)} kbps ·
+                  Audio {videoEdit.audio.bitrateKbps} kbps
+                </dd>
+
+                {videoProcessResult && (
+                  <>
+                    <dt className="text-[var(--text-muted)]">Mesin / Muxer</dt>
+                    <dd className="text-right font-medium text-[var(--text-primary)]">
+                      {videoProcessResult.backend} ({videoProcessResult.outputMime})
+                    </dd>
+                    {videoProcessResult.engineDetail && (
+                      <>
+                        <dt className="text-[var(--text-muted)]">Rantai filter</dt>
+                        <dd className="break-all text-right font-mono text-[10px] text-[var(--text-secondary)]">
+                          {videoProcessResult.engineDetail}
+                        </dd>
+                      </>
+                    )}
+                  </>
+                )}
               </>
             )}
           </dl>

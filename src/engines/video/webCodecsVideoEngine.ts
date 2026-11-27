@@ -4,8 +4,9 @@ import type {
   VideoCodec,
 } from 'mediabunny';
 import type { SubtitleCue, VideoProcessProgress, VideoProcessRequest } from '../contracts';
-import { VideoCancelledError } from './videoErrors';
+import { compute1080pTargetDimensions } from '../shared/colorGrades';
 import { drawHardsubCuesOnCanvas, findActiveCuesAtTime } from './subtitleParser';
+import { VideoCancelledError } from './videoErrors';
 import {
   getEffectiveAudioBitrateKbps,
   getVideoFormatMeta,
@@ -125,12 +126,18 @@ export async function runWebCodecsVideoTranscode(
     canEncodeVideo,
   } = mediabunny;
 
-  const targetDims = computeEvenScaledDimensions(
-    sourceMetadata.width,
-    sourceMetadata.height,
-    edit.maxHeightPx,
-    edit.enhance.enabled ? edit.enhance.upscaleFactor : 1
-  );
+  const targetDims = edit.enhanceSuite.upscale1080.enabled
+    ? compute1080pTargetDimensions(
+        sourceMetadata.width,
+        sourceMetadata.height,
+        edit.enhanceSuite.upscale1080.keepAspect
+      )
+    : computeEvenScaledDimensions(
+        sourceMetadata.width,
+        sourceMetadata.height,
+        edit.maxHeightPx,
+        1
+      );
 
   const videoQuality = new Quality({
     bitrate: edit.targetBitrateBps,

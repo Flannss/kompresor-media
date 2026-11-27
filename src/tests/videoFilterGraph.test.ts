@@ -24,14 +24,18 @@ describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
     expect(shouldUseFfmpegBackend(base)).toBe(false);
   });
 
-  it('routes MOV/MKV, enhance, stabilizer, audio filters, and softsub via single-pass FFmpeg', () => {
+  it('routes MOV/MKV, enhanceSuite, colorGrade, stabilizer, audio filters, and softsub via single-pass FFmpeg', () => {
     const mov = structuredClone(getMediaPreset('whatsapp-hd').video);
     mov.outputFormat = 'mov';
     expect(shouldUseFfmpegBackend(mov)).toBe(true);
 
     const enhanced = structuredClone(getMediaPreset('whatsapp-hd').video);
-    enhanced.enhance.enabled = true;
+    enhanced.enhanceSuite.noise.enabled = true;
     expect(shouldUseFfmpegBackend(enhanced)).toBe(true);
+
+    const graded = structuredClone(getMediaPreset('whatsapp-hd').video);
+    graded.colorGrade.gradeId = 'teal-orange';
+    expect(shouldUseFfmpegBackend(graded)).toBe(true);
 
     const stabilized = structuredClone(getMediaPreset('whatsapp-hd').video);
     stabilized.stabilize.enabled = true;
@@ -42,17 +46,42 @@ describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
     expect(shouldUseFfmpegBackend(eq)).toBe(true);
   });
 
-  it('builds verified single-pass -vf and -af filter chains when combining all modules', () => {
+  it('builds single-pass -vf in strict hqdn3d -> scale -> deshake -> color -> unsharp order with anti-deadlock flags', () => {
     const edit = structuredClone(getMediaPreset('whatsapp-hd').video);
     edit.outputFormat = 'mkv';
     edit.maxHeightPx = 720;
     edit.fpsCap = 30;
-    edit.enhance = {
-      enabled: true,
-      intensity: 'sharp',
-      denoise: 'medium',
-      clarity: 50,
-      upscaleFactor: 1,
+    edit.enhanceSuite = {
+      noise: {
+        enabled: true,
+        level: 'balanced',
+        grainStrength: 4,
+        colorSmooth: 3,
+        motionStability: 6,
+      },
+      sharpen: {
+        enabled: true,
+        strength: 1.05,
+        kernelSize: 5,
+        antiArtifact: true,
+      },
+      colorContrast: {
+        enabled: true,
+        contrast: 10,
+        brightness: 4,
+        saturation: 10,
+        shadowBright: 8,
+      },
+      upscale1080: {
+        enabled: false,
+        method: 'lanczos',
+        keepAspect: true,
+      },
+    };
+    edit.colorGrade = {
+      gradeId: 'teal-orange',
+      intensity: 100,
+      tone: { temperature: 0, tint: 0, shadows: 0, highlights: 0 },
     };
     edit.stabilize = { enabled: true, mode: 'medium' };
     edit.audio = {
@@ -78,12 +107,24 @@ describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
     const fg = buildFfmpegFilterGraph({ width: 1920, height: 1080, durationSec: 8 }, edit);
     expect(fg.targetWidth).toBe(1280);
     expect(fg.targetHeight).toBe(720);
-    expect(fg.vfChain).toContain('deshake=rx=32:ry=32:edge=mirror');
-    expect(fg.vfChain).toContain('hqdn3d=4.0:3.0:6.0:4.5');
+    expect(fg.vfChain).toContain('hqdn3d=4.0:3.0:6.0:4.3');
     expect(fg.vfChain).toContain('scale=1280:720:flags=lanczos');
-    expect(fg.vfChain).toContain('unsharp=5:5:1.05:3:3:0.0');
+    expect(fg.vfChain).toContain('deshake=rx=32:ry=32:edge=mirror');
     expect(fg.vfChain).toContain('eq=contrast=');
+    expect(fg.vfChain).toContain('colorbalance=');
+    expect(fg.vfChain).toContain('unsharp=5:5:1.05:3:3:0.0');
     expect(fg.vfChain).toContain('fps=30');
+
+    // Enforce signal chain ordering: hqdn3d before scale, scale before deshake, unsharp after scale
+    const idxDenoise = fg.vfChain.indexOf('hqdn3d=');
+    const idxScale = fg.vfChain.indexOf('scale=');
+    const idxDeshake = fg.vfChain.indexOf('deshake=');
+    const idxColor = fg.vfChain.indexOf('colorbalance=');
+    const idxUnsharp = fg.vfChain.indexOf('unsharp=');
+    expect(idxDenoise).toBeLessThan(idxScale);
+    expect(idxScale).toBeLessThan(idxDeshake);
+    expect(idxDeshake).toBeLessThan(idxColor);
+    expect(idxColor).toBeLessThan(idxUnsharp);
 
     expect(fg.afChain).toContain('highpass=f=85');
     expect(fg.afChain).toContain('afftdn=nf=-25');
@@ -99,6 +140,10 @@ describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
       edit,
       subtitleInputFileName: 'subs.srt',
     });
+    expect(built.args).toContain('-threads');
+    expect(built.args[built.args.indexOf('-threads') + 1]).toBe('1');
+    expect(built.args).toContain('-filter_threads');
+    expect(built.args[built.args.indexOf('-filter_threads') + 1]).toBe('1');
     expect(built.args).toContain('matroska');
     expect(built.args).toContain('srt');
     expect(built.args).toContain('aac');
@@ -106,7 +151,10 @@ describe('videoFilterGraph composable FFmpeg builder & smart routing', () => {
     expect(built.outputFileNameOnFs).toBe('output.mkv');
     expect(getActiveVideoModuleLabels(edit)).toEqual([
       'Kompres',
-      'Jernihkan HD',
+      'Noise',
+      'Tajam',
+      'Warna',
+      'Filter',
       'Stabilkan',
       'Audio',
       'Subtitle',

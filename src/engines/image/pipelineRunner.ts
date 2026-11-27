@@ -1,16 +1,18 @@
-import type { ImageEditState, ImageFilterId, ImageOutputFormat } from '../contracts';
+import type { ColorGradeId, ImageEditState, ImageOutputFormat } from '../contracts';
 import {
-  applyClarity,
+  applyColorGradeToImageData,
+  COLOR_GRADE_PRESETS,
+  compute1080pTargetDimensions,
+  hasActiveColorGrade,
+} from '../shared/colorGrades';
+import {
   applyColorAdjustments,
-  applyEdgePreservingDenoise,
-  applyFilterPreset,
+  applyEdgePreservingDenoiseParams,
   applySharpen,
   computeCropPixels,
-  computeEnhancedTargetDimensions,
   computeProgressiveSteps,
   computeRotatedDimensions,
   computeTargetDimensions,
-  FILTER_PRESETS,
 } from './pixelOps';
 
 export interface Canvas2DContextLike {
@@ -56,7 +58,7 @@ export interface PipelineOutput {
 }
 
 export interface ThumbnailOutputItem {
-  filterId: ImageFilterId;
+  gradeId: ColorGradeId;
   blob: Blob;
 }
 
@@ -235,15 +237,10 @@ async function solveTargetSize<TCanvas extends CanvasSurfaceLike>(
 }
 
 function getEffectiveSharpenAmount(edit: ImageEditState): number {
-  if (!edit.enhance.enabled) {
+  if (!edit.enhanceSuite.sharpen.enabled) {
     return edit.sharpenAmount;
   }
-  const enhanceBonus =
-    edit.enhance.intensity === 'sharp'
-      ? 35
-      : edit.enhance.intensity === 'balanced'
-        ? 22
-        : 12;
+  const enhanceBonus = Math.round(edit.enhanceSuite.sharpen.strength * 28);
   return Math.min(100, edit.sharpenAmount + enhanceBonus);
 }
 
@@ -282,13 +279,11 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
     currentCanvas = croppedCanvas;
   }
 
-  let targetDims = edit.enhance.enabled
-    ? computeEnhancedTargetDimensions(
+  let targetDims = edit.enhanceSuite.upscale1080.enabled
+    ? compute1080pTargetDimensions(
         currentCanvas.width,
         currentCanvas.height,
-        edit.maxEdgePx,
-        edit.enhance.upscaleFactor,
-        2560
+        edit.enhanceSuite.upscale1080.keepAspect
       )
     : computeTargetDimensions(currentCanvas.width, currentCanvas.height, edit.maxEdgePx);
 
@@ -304,24 +299,29 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
     edit.adjustments.contrast !== 0 ||
     edit.adjustments.saturation !== 0 ||
     edit.adjustments.temperature !== 0 ||
-    edit.filterId !== 'original' ||
+    hasActiveColorGrade(edit.colorGrade) ||
     effectiveSharpen > 0 ||
-    (edit.enhance.enabled &&
-      (edit.enhance.denoise !== 'off' || edit.enhance.clarity > 0));
+    edit.enhanceSuite.noise.enabled ||
+    edit.enhanceSuite.colorContrast.enabled;
 
   if (needsPixelPass) {
     const ctx = currentCanvas.getContext('2d');
     if (ctx) {
       const imgData = ctx.getImageData(0, 0, currentCanvas.width, currentCanvas.height);
-      if (edit.enhance.enabled && edit.enhance.denoise !== 'off') {
-        applyEdgePreservingDenoise(imgData, edit.enhance.denoise);
+      if (edit.enhanceSuite.noise.enabled) {
+        applyEdgePreservingDenoiseParams(
+          imgData,
+          edit.enhanceSuite.noise.grainStrength,
+          edit.enhanceSuite.noise.colorSmooth
+        );
       }
       applyColorAdjustments(imgData, edit.adjustments);
-      if (edit.enhance.enabled && edit.enhance.clarity > 0) {
-        applyClarity(imgData, edit.enhance.clarity);
-      }
-      applyFilterPreset(imgData, edit.filterId);
-      applySharpen(imgData, effectiveSharpen);
+      applyColorGradeToImageData(
+        imgData,
+        edit.colorGrade,
+        edit.enhanceSuite.colorContrast.enabled ? edit.enhanceSuite.colorContrast : undefined
+      );
+      applySharpen(imgData, effectiveSharpen, edit.enhanceSuite.sharpen.antiArtifact);
       ctx.putImageData(imgData, 0, 0);
     }
   }
@@ -354,7 +354,7 @@ export async function runThumbnailPipeline<TCanvas extends CanvasSurfaceLike>(
   bitmap: ImageBitmap,
   adapter: CanvasAdapter<TCanvas>
 ): Promise<ThumbnailOutputItem[]> {
-  const thumbDims = computeTargetDimensions(bitmap.width, bitmap.height, 96);
+  const thumbDims = computeTargetDimensions(bitmap.width, bitmap.height, 160);
   const baseCanvas = adapter.createCanvas(thumbDims.width, thumbDims.height);
   const baseCtx = baseCanvas.getContext('2d');
   if (!baseCtx) {
@@ -366,7 +366,7 @@ export async function runThumbnailPipeline<TCanvas extends CanvasSurfaceLike>(
   const basePixels = baseCtx.getImageData(0, 0, thumbDims.width, thumbDims.height);
 
   const items: ThumbnailOutputItem[] = [];
-  for (const preset of FILTER_PRESETS) {
+  for (const preset of COLOR_GRADE_PRESETS) {
     const workCanvas = adapter.createCanvas(thumbDims.width, thumbDims.height);
     const workCtx = workCanvas.getContext('2d');
     if (!workCtx) {
@@ -377,10 +377,14 @@ export async function runThumbnailPipeline<TCanvas extends CanvasSurfaceLike>(
       basePixels.width,
       basePixels.height
     );
-    applyFilterPreset(copy, preset.id);
+    applyColorGradeToImageData(copy, {
+      gradeId: preset.id,
+      intensity: 100,
+      tone: { temperature: 0, tint: 0, shadows: 0, highlights: 0 },
+    });
     workCtx.putImageData(copy, 0, 0);
-    const blob = await adapter.encodeBlob(workCanvas, 'image/jpeg', 0.78);
-    items.push({ filterId: preset.id, blob });
+    const blob = await adapter.encodeBlob(workCanvas, 'image/jpeg', 0.8);
+    items.push({ gradeId: preset.id, blob });
   }
 
   return items;

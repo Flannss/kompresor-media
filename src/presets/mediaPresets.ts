@@ -1,15 +1,17 @@
 import type {
   ImageColorAdjustments,
   ImageEditState,
-  ImageEnhanceOptions,
   ImagePresetId,
   VideoAudioOptions,
   VideoEditState,
-  VideoEnhanceOptions,
   VideoPresetId,
   VideoStabilizeOptions,
   VideoSubtitleOptions,
 } from '../engines/contracts';
+import {
+  createDefaultColorGrade,
+  createDefaultEnhanceSuite,
+} from '../engines/shared/colorGrades';
 
 export type MediaPresetId = ImagePresetId & VideoPresetId;
 
@@ -30,40 +32,14 @@ export const DEFAULT_IMAGE_ADJUSTMENTS: ImageColorAdjustments = {
   temperature: 0,
 };
 
-export const DEFAULT_IMAGE_ENHANCE: ImageEnhanceOptions = {
-  enabled: false,
-  intensity: 'balanced',
-  denoise: 'subtle',
-  clarity: 28,
-  upscaleFactor: 1,
-};
-
-export const DEFAULT_VIDEO_ENHANCE: VideoEnhanceOptions = {
-  enabled: false,
-  intensity: 'balanced',
-  denoise: 'subtle',
-  clarity: 24,
-  upscaleFactor: 1,
-};
-
 export const DEFAULT_VIDEO_STABILIZE: VideoStabilizeOptions = {
   enabled: false,
   mode: 'light',
 };
 
-export const DEFAULT_VIDEO_AUDIO: VideoAudioOptions = {
-  enabled: false,
-  muteAudio: false,
-  volumeDb: 0,
-  normalize: false,
-  vocalClarity: false,
-  bassDb: 0,
-  trebleDb: 0,
-  fadeInOut: false,
-  bitrateKbps: 160 as unknown as 192,
-};
-
-export function createDefaultVideoAudio(bitrateKbps: 96 | 128 | 192 | 320 = 192): VideoAudioOptions {
+export function createDefaultVideoAudio(
+  bitrateKbps: 96 | 128 | 192 | 320 = 192
+): VideoAudioOptions {
   return {
     enabled: false,
     muteAudio: false,
@@ -105,8 +81,8 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
       flipV: false,
       crop: null,
       adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
-      filterId: 'original',
-      enhance: { ...DEFAULT_IMAGE_ENHANCE },
+      colorGrade: createDefaultColorGrade(),
+      enhanceSuite: createDefaultEnhanceSuite(),
       stripMetadata: true,
     },
     video: {
@@ -124,7 +100,8 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
       trimStartSec: 0,
       trimEndSec: null,
       muteAudio: false,
-      enhance: { ...DEFAULT_VIDEO_ENHANCE },
+      enhanceSuite: createDefaultEnhanceSuite(),
+      colorGrade: createDefaultColorGrade(),
       stabilize: { ...DEFAULT_VIDEO_STABILIZE },
       audio: createDefaultVideoAudio(192),
       subtitle: { ...DEFAULT_VIDEO_SUBTITLE, cues: [] },
@@ -148,8 +125,8 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
       flipV: false,
       crop: null,
       adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
-      filterId: 'original',
-      enhance: { ...DEFAULT_IMAGE_ENHANCE },
+      colorGrade: createDefaultColorGrade(),
+      enhanceSuite: createDefaultEnhanceSuite(),
       stripMetadata: true,
     },
     video: {
@@ -167,7 +144,8 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
       trimStartSec: 0,
       trimEndSec: null,
       muteAudio: false,
-      enhance: { ...DEFAULT_VIDEO_ENHANCE },
+      enhanceSuite: createDefaultEnhanceSuite(),
+      colorGrade: createDefaultColorGrade(),
       stabilize: { ...DEFAULT_VIDEO_STABILIZE },
       audio: createDefaultVideoAudio(128),
       subtitle: { ...DEFAULT_VIDEO_SUBTITLE, cues: [] },
@@ -191,8 +169,8 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
       flipV: false,
       crop: null,
       adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
-      filterId: 'original',
-      enhance: { ...DEFAULT_IMAGE_ENHANCE },
+      colorGrade: createDefaultColorGrade(),
+      enhanceSuite: createDefaultEnhanceSuite(),
       stripMetadata: true,
     },
     video: {
@@ -210,7 +188,8 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
       trimStartSec: 0,
       trimEndSec: null,
       muteAudio: false,
-      enhance: { ...DEFAULT_VIDEO_ENHANCE },
+      enhanceSuite: createDefaultEnhanceSuite(),
+      colorGrade: createDefaultColorGrade(),
       stabilize: { ...DEFAULT_VIDEO_STABILIZE },
       audio: createDefaultVideoAudio(128),
       subtitle: { ...DEFAULT_VIDEO_SUBTITLE, cues: [] },
@@ -234,8 +213,8 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
       flipV: false,
       crop: null,
       adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
-      filterId: 'original',
-      enhance: { ...DEFAULT_IMAGE_ENHANCE },
+      colorGrade: createDefaultColorGrade(),
+      enhanceSuite: createDefaultEnhanceSuite(),
       stripMetadata: true,
     },
     video: {
@@ -253,7 +232,8 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
       trimStartSec: 0,
       trimEndSec: null,
       muteAudio: false,
-      enhance: { ...DEFAULT_VIDEO_ENHANCE },
+      enhanceSuite: createDefaultEnhanceSuite(),
+      colorGrade: createDefaultColorGrade(),
       stabilize: { ...DEFAULT_VIDEO_STABILIZE },
       audio: createDefaultVideoAudio(192),
       subtitle: { ...DEFAULT_VIDEO_SUBTITLE, cues: [] },
@@ -261,8 +241,8 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
   },
   {
     id: 'web-light',
-    label: 'Web Ringan',
-    shortLabel: 'Web Ringan',
+    label: 'Ringan',
+    shortLabel: 'Ringan',
     summary: 'Ukuran file sangat hemat untuk formulir, dokumen daring, dan web.',
     targetLimitLabel: 'Hemat kuota · WebP / 480p',
     image: {
@@ -277,8 +257,8 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
       flipV: false,
       crop: null,
       adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
-      filterId: 'original',
-      enhance: { ...DEFAULT_IMAGE_ENHANCE },
+      colorGrade: createDefaultColorGrade(),
+      enhanceSuite: createDefaultEnhanceSuite(),
       stripMetadata: true,
     },
     video: {
@@ -296,7 +276,8 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
       trimStartSec: 0,
       trimEndSec: null,
       muteAudio: false,
-      enhance: { ...DEFAULT_VIDEO_ENHANCE },
+      enhanceSuite: createDefaultEnhanceSuite(),
+      colorGrade: createDefaultColorGrade(),
       stabilize: { ...DEFAULT_VIDEO_STABILIZE },
       audio: createDefaultVideoAudio(96),
       subtitle: { ...DEFAULT_VIDEO_SUBTITLE, cues: [] },
@@ -306,7 +287,7 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
     id: 'custom',
     label: 'Atur Sendiri',
     shortLabel: 'Atur Sendiri',
-    summary: 'Kendali penuh format (JPG/WebP/PNG/AVIF, MP4/MOV/WebM/MKV), resolusi & modul.',
+    summary: 'Kendali penuh format file, resolusi, dan kualitas.',
     targetLimitLabel: 'Kendali manual penuh',
     image: {
       presetId: 'custom',
@@ -320,8 +301,8 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
       flipV: false,
       crop: null,
       adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
-      filterId: 'original',
-      enhance: { ...DEFAULT_IMAGE_ENHANCE },
+      colorGrade: createDefaultColorGrade(),
+      enhanceSuite: createDefaultEnhanceSuite(),
       stripMetadata: true,
     },
     video: {
@@ -339,7 +320,8 @@ export const MEDIA_PRESETS: readonly MediaPresetSpec[] = [
       trimStartSec: 0,
       trimEndSec: null,
       muteAudio: false,
-      enhance: { ...DEFAULT_VIDEO_ENHANCE },
+      enhanceSuite: createDefaultEnhanceSuite(),
+      colorGrade: createDefaultColorGrade(),
       stabilize: { ...DEFAULT_VIDEO_STABILIZE },
       audio: createDefaultVideoAudio(128),
       subtitle: { ...DEFAULT_VIDEO_SUBTITLE, cues: [] },

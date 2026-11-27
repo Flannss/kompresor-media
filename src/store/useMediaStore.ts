@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import type {
+  ColorGradeId,
+  ColorGradeState,
+  EnhancementSuiteState,
   ImageEditState,
-  ImageFilterId,
   ImageProcessResult,
   ImageRotation,
   MediaMetadata,
@@ -50,7 +52,7 @@ export interface QueueItem {
   videoResult: VideoProcessResult | null;
   outputUrl: string | null;
   errorMessage: string | null;
-  filterThumbnails: Partial<Record<ImageFilterId, string>>;
+  filterThumbnails: Partial<Record<ColorGradeId, string>>;
   processSeq: number;
 }
 
@@ -76,7 +78,7 @@ function revokeIfPresent(url: string | null | undefined): number {
   return 0;
 }
 
-function revokeThumbMap(thumbs: Partial<Record<ImageFilterId, string>>): number {
+function revokeThumbMap(thumbs: Partial<Record<ColorGradeId, string>>): number {
   let count = 0;
   for (const url of Object.values(thumbs)) {
     if (url) {
@@ -94,11 +96,28 @@ function clearItemTimers(itemId: string): void {
   }
 }
 
+export function cloneEnhanceSuite(suite: EnhancementSuiteState): EnhancementSuiteState {
+  return {
+    noise: { ...suite.noise },
+    sharpen: { ...suite.sharpen },
+    colorContrast: { ...suite.colorContrast },
+    upscale1080: { ...suite.upscale1080 },
+  };
+}
+
+export function cloneColorGrade(grade: ColorGradeState): ColorGradeState {
+  return {
+    ...grade,
+    tone: { ...grade.tone },
+  };
+}
+
 export function cloneImageEdit(edit: ImageEditState): ImageEditState {
   return {
     ...edit,
     adjustments: { ...edit.adjustments },
-    enhance: { ...edit.enhance },
+    enhanceSuite: cloneEnhanceSuite(edit.enhanceSuite),
+    colorGrade: cloneColorGrade(edit.colorGrade),
     crop: edit.crop ? { ...edit.crop } : null,
   };
 }
@@ -106,7 +125,8 @@ export function cloneImageEdit(edit: ImageEditState): ImageEditState {
 export function cloneVideoEdit(edit: VideoEditState): VideoEditState {
   return {
     ...edit,
-    enhance: { ...edit.enhance },
+    enhanceSuite: cloneEnhanceSuite(edit.enhanceSuite),
+    colorGrade: cloneColorGrade(edit.colorGrade),
     stabilize: { ...edit.stabilize },
     audio: { ...edit.audio },
     subtitle: {
@@ -172,7 +192,7 @@ export interface MediaStoreState {
   imageProcessResult: ImageProcessResult | null;
   processedImageUrl: string | null;
   imageProcessError: string | null;
-  filterThumbnails: Partial<Record<ImageFilterId, string>>;
+  filterThumbnails: Partial<Record<ColorGradeId, string>>;
 
   videoEdit: VideoEditState;
   videoProcessStatus: VideoProcessStatus;
@@ -199,7 +219,8 @@ export interface MediaStoreState {
   toggleFlipH: () => void;
   toggleFlipV: () => void;
   applyCrop: (crop: NormalizedCropRect | null) => void;
-  selectFilter: (filterId: ImageFilterId) => void;
+  selectColorGrade: (gradeId: ColorGradeId) => void;
+  setVideoFilterThumbnails: (itemId: string, thumbs: Partial<Record<ColorGradeId, string>>) => void;
   undoPhotoEdit: () => void;
   redoPhotoEdit: () => void;
   resetPhotoEdits: () => void;
@@ -806,9 +827,9 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
           const exists = get().items.find((i) => i.id === activeAfter.id);
           if (!exists) return;
           const revoked = revokeThumbMap(exists.filterThumbnails);
-          const nextMap: Partial<Record<ImageFilterId, string>> = {};
+          const nextMap: Partial<Record<ColorGradeId, string>> = {};
           for (const entry of thumbList) {
-            nextMap[entry.filterId] = URL.createObjectURL(entry.blob);
+            nextMap[entry.gradeId] = URL.createObjectURL(entry.blob);
           }
           set((state) => {
             const items = state.items.map((it) =>
@@ -857,9 +878,9 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       void generateFilterThumbnails(target.file, target.metadata.mimeType).then((thumbList) => {
         const exists = get().items.find((i) => i.id === target.id);
         if (!exists) return;
-        const nextMap: Partial<Record<ImageFilterId, string>> = {};
+        const nextMap: Partial<Record<ColorGradeId, string>> = {};
         for (const entry of thumbList) {
-          nextMap[entry.filterId] = URL.createObjectURL(entry.blob);
+          nextMap[entry.gradeId] = URL.createObjectURL(entry.blob);
         }
         set((state) => {
           const items = state.items.map((it) =>
@@ -951,7 +972,8 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       nextVideo.trimStartSec = cur.trimStartSec;
       nextVideo.trimEndSec = cur.trimEndSec;
       nextVideo.muteAudio = cur.muteAudio;
-      nextVideo.enhance = { ...cur.enhance };
+      nextVideo.enhanceSuite = cloneEnhanceSuite(cur.enhanceSuite);
+      nextVideo.colorGrade = cloneColorGrade(cur.colorGrade);
       nextVideo.stabilize = { ...cur.stabilize };
       nextVideo.audio = { ...cur.audio };
       nextVideo.subtitle = {
@@ -975,8 +997,8 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       flipV: curImg.flipV,
       crop: curImg.crop ? { ...curImg.crop } : null,
       adjustments: { ...curImg.adjustments },
-      filterId: curImg.filterId,
-      enhance: { ...curImg.enhance },
+      colorGrade: cloneColorGrade(curImg.colorGrade),
+      enhanceSuite: cloneEnhanceSuite(curImg.enhanceSuite),
     };
 
     const pushed = pushSnapshot(active.photoHistory, active.photoHistoryIndex, nextEdit);
@@ -1064,7 +1086,12 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
         adjustments: patch.adjustments
           ? { ...cur.adjustments, ...patch.adjustments }
           : { ...cur.adjustments },
-        enhance: patch.enhance ? { ...cur.enhance, ...patch.enhance } : { ...cur.enhance },
+        enhanceSuite: patch.enhanceSuite
+          ? cloneEnhanceSuite(patch.enhanceSuite)
+          : cloneEnhanceSuite(cur.enhanceSuite),
+        colorGrade: patch.colorGrade
+          ? cloneColorGrade(patch.colorGrade)
+          : cloneColorGrade(cur.colorGrade),
         crop: patch.crop !== undefined ? (patch.crop ? { ...patch.crop } : null) : cur.crop,
         presetId: nextPreset,
       };
@@ -1168,8 +1195,43 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     get().updateImageEdit({ crop }, { commitHistory: true, preservePreset: true });
   },
 
-  selectFilter: (filterId) => {
-    get().updateImageEdit({ filterId }, { commitHistory: true, preservePreset: true });
+  selectColorGrade: (gradeId) => {
+    const active = get().items.find((i) => i.id === get().activeItemId);
+    if (active && active.metadata.kind === 'video') {
+      get().updateVideoEdit({
+        colorGrade: {
+          ...active.videoEdit.colorGrade,
+          gradeId,
+        },
+      });
+      return;
+    }
+    const curGrade = active ? active.imageEdit.colorGrade : get().imageEdit.colorGrade;
+    get().updateImageEdit(
+      {
+        colorGrade: {
+          ...curGrade,
+          gradeId,
+        },
+      },
+      { commitHistory: true, preservePreset: true }
+    );
+  },
+
+  setVideoFilterThumbnails: (itemId, thumbs) => {
+    const exists = get().items.find((i) => i.id === itemId);
+    if (!exists) return;
+    const revoked = revokeThumbMap(exists.filterThumbnails);
+    set((state) => {
+      const items = state.items.map((it) =>
+        it.id === itemId ? { ...it, filterThumbnails: thumbs } : it
+      );
+      return {
+        items,
+        revokedUrlCount: state.revokedUrlCount + revoked,
+        ...(state.activeItemId === itemId ? { filterThumbnails: thumbs } : {}),
+      };
+    });
   },
 
   undoPhotoEdit: () => {
@@ -1282,7 +1344,12 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
       ...cur,
       ...patch,
       ...qualityParams,
-      enhance: patch.enhance ? { ...cur.enhance, ...patch.enhance } : { ...cur.enhance },
+      enhanceSuite: patch.enhanceSuite
+        ? cloneEnhanceSuite(patch.enhanceSuite)
+        : cloneEnhanceSuite(cur.enhanceSuite),
+      colorGrade: patch.colorGrade
+        ? cloneColorGrade(patch.colorGrade)
+        : cloneColorGrade(cur.colorGrade),
       stabilize: patch.stabilize
         ? { ...cur.stabilize, ...patch.stabilize }
         : { ...cur.stabilize },

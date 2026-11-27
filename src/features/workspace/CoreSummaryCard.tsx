@@ -1,10 +1,15 @@
 import type {
+  ImageEditState,
   ImageProcessResult,
   MediaMetadata,
   VideoEditState,
   VideoProcessResult,
 } from '../../engines/contracts';
-import { computeReductionPct, formatOutputMimeShort } from '../../engines/image/pixelOps';
+import {
+  computeReductionPct,
+  formatOutputMimeShort,
+  getActiveImageModuleLabels,
+} from '../../engines/image/pixelOps';
 import { getActiveVideoModuleLabels } from '../../engines/video/videoFilterGraph';
 import { getMediaPreset, type MediaPresetId } from '../../presets/mediaPresets';
 import { formatBytes } from '../../shared/utils/formatBytes';
@@ -12,8 +17,7 @@ import { formatBytes } from '../../shared/utils/formatBytes';
 export interface CoreSummaryCardProps {
   metadata: MediaMetadata;
   selectedPresetId: MediaPresetId;
-  imageOutputMime: 'image/jpeg' | 'image/webp' | 'image/png' | 'image/avif';
-  imageEnhanceEnabled: boolean;
+  imageEdit: ImageEditState;
   imageProcessResult: ImageProcessResult | null;
   videoEdit: VideoEditState;
   videoProcessResult: VideoProcessResult | null;
@@ -22,8 +26,7 @@ export interface CoreSummaryCardProps {
 export function CoreSummaryCard({
   metadata,
   selectedPresetId,
-  imageOutputMime,
-  imageEnhanceEnabled,
+  imageEdit,
   imageProcessResult,
   videoEdit,
   videoProcessResult,
@@ -60,12 +63,11 @@ export function CoreSummaryCard({
   }
 
   const outputFormatText = isImage
-    ? `${formatOutputMimeShort(imageOutputMime)} · ${presetSpec.shortLabel}`
+    ? `${formatOutputMimeShort(imageEdit.outputFormat)} · ${presetSpec.shortLabel}`
     : `${videoEdit.outputFormat.toUpperCase()} · ${presetSpec.shortLabel}`;
 
   const activeModules = isImage
-    ? imageProcessResult?.activeModules ??
-      (imageEnhanceEnabled ? ['Kompres', 'Jernihkan HD'] : ['Kompres'])
+    ? imageProcessResult?.activeModules ?? getActiveImageModuleLabels(imageEdit)
     : videoProcessResult?.activeModules ?? getActiveVideoModuleLabels(videoEdit);
 
   const elapsedSecText = isImage

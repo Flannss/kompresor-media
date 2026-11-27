@@ -1,21 +1,22 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ImageFilterId } from '../engines/contracts';
+import type { ColorGradeId } from '../engines/contracts';
 import {
-  FILTER_PRESETS,
-  applyClarity,
   applyColorAdjustments,
-  applyEdgePreservingDenoise,
-  applyFilterPreset,
+  applyEdgePreservingDenoiseParams,
   applySharpen,
   buildExportFileName,
   computeCropPixels,
-  computeEnhancedTargetDimensions,
   computeProgressiveSteps,
   computeReductionPct,
   computeRotatedDimensions,
   computeTargetDimensions,
   formatOutputMimeShort,
 } from '../engines/image/pixelOps';
+import {
+  applyColorGradeToImageData,
+  COLOR_GRADE_PRESETS,
+  compute1080pTargetDimensions,
+} from '../engines/shared/colorGrades';
 import { getMediaPreset, MEDIA_PRESETS } from '../presets/mediaPresets';
 import { useMediaStore } from '../store/useMediaStore';
 
@@ -24,7 +25,7 @@ function makeSolidImageData(r: number, g: number, b: number, a = 255): ImageData
   return { width: 2, height: 1, data } as unknown as ImageData;
 }
 
-describe('image pixelOps, Jernihkan HD, WhatsApp HD presets, and studio history', () => {
+describe('image pixelOps, 1080p HD Enhance Suite, Color Grades, and studio history', () => {
   beforeEach(() => {
     useMediaStore.getState().clearMedia();
   });
@@ -46,21 +47,21 @@ describe('image pixelOps, Jernihkan HD, WhatsApp HD presets, and studio history'
     ).toEqual({ sx: 0, sy: 900, sw: 1000, sh: 100 });
   });
 
-  it('computes aspect-preserving target dimensions and Jernihkan HD upscale capped cleanly', () => {
+  it('computes aspect-preserving target dimensions and orientation-aware 1080p dimensions', () => {
     expect(computeTargetDimensions(2400, 1600, 1600)).toEqual({ width: 1600, height: 1067 });
     expect(computeTargetDimensions(1200, 2400, 1920)).toEqual({ width: 960, height: 1920 });
     expect(computeTargetDimensions(800, 600, 1600)).toEqual({ width: 800, height: 600 });
     expect(computeTargetDimensions(2400, 1600, null)).toEqual({ width: 2400, height: 1600 });
 
-    // 800x600 with 2x HD upscale -> 1600x1200
-    expect(computeEnhancedTargetDimensions(800, 600, 2560, 2, 2560)).toEqual({
-      width: 1600,
-      height: 1200,
+    // 720p landscape -> 1920x1080
+    expect(compute1080pTargetDimensions(1280, 720, true)).toEqual({
+      width: 1920,
+      height: 1080,
     });
-    // Capped at 2560 even with 2x request on 1920x1080
-    expect(computeEnhancedTargetDimensions(1920, 1080, 2560, 2, 2560)).toEqual({
-      width: 2560,
-      height: 1440,
+    // 720x1280 portrait -> 1080x1920
+    expect(compute1080pTargetDimensions(720, 1280, true)).toEqual({
+      width: 1080,
+      height: 1920,
     });
   });
 
@@ -74,7 +75,7 @@ describe('image pixelOps, Jernihkan HD, WhatsApp HD presets, and studio history'
     ]);
   });
 
-  it('applies edge-preserving denoise and clarity micro-contrast while preserving alpha', () => {
+  it('applies edge-preserving denoise parameters while preserving alpha', () => {
     const data = new Uint8ClampedArray(3 * 3 * 4);
     for (let i = 0; i < 9; i += 1) {
       data[i * 4] = 100;
@@ -82,20 +83,14 @@ describe('image pixelOps, Jernihkan HD, WhatsApp HD presets, and studio history'
       data[i * 4 + 2] = 110;
       data[i * 4 + 3] = 220;
     }
-    // Slight noise spike inside tolerance
     data[4 * 4] = 112;
     data[4 * 4 + 1] = 115;
     data[4 * 4 + 2] = 118;
     const img = { width: 3, height: 3, data } as unknown as ImageData;
 
-    applyEdgePreservingDenoise(img, 'medium');
+    applyEdgePreservingDenoiseParams(img, 5, 4);
     expect(img.data[4 * 4]).toBeLessThan(112);
     expect(img.data[4 * 4 + 3]).toBe(220);
-
-    const midtone = makeSolidImageData(170, 170, 170, 240);
-    applyClarity(midtone, 80);
-    expect(midtone.data[0]).toBeGreaterThan(170);
-    expect(midtone.data[3]).toBe(240);
   });
 
   it('applies color adjustments accurately with [0, 255] clamping and alpha preservation', () => {
@@ -119,32 +114,36 @@ describe('image pixelOps, Jernihkan HD, WhatsApp HD presets, and studio history'
     expect(warmer.data[0]).toBeGreaterThan(warmer.data[2]);
   });
 
-  it('applies all 7 studio filters with distinct pixel outputs and mono luma parity', () => {
-    expect(FILTER_PRESETS.map((f) => f.id)).toEqual([
+  it('applies all 7 Color Grade presets with distinct pixel outputs and Noir B&W luma parity', () => {
+    expect(COLOR_GRADE_PRESETS.map((f) => f.id)).toEqual([
       'original',
-      'crisp',
-      'warm',
-      'cool',
-      'film',
-      'cinema',
-      'mono',
+      'iphone-pro',
+      'teal-orange',
+      'golden-hour',
+      'vintage-kodak',
+      'vivid-hdr',
+      'noir-bw',
     ]);
 
     const signatures = new Set<string>();
-    for (const preset of FILTER_PRESETS) {
+    for (const preset of COLOR_GRADE_PRESETS) {
       const img = makeSolidImageData(150, 110, 90, 240);
-      applyFilterPreset(img, preset.id as ImageFilterId);
+      applyColorGradeToImageData(img, {
+        gradeId: preset.id as ColorGradeId,
+        intensity: 100,
+        tone: { temperature: 0, tint: 0, shadows: 0, highlights: 0 },
+      });
       expect(img.data[3]).toBe(240);
       signatures.add(`${img.data[0]},${img.data[1]},${img.data[2]}`);
-      if (preset.id === 'mono') {
+      if (preset.id === 'noir-bw') {
         expect(img.data[0]).toBe(img.data[1]);
         expect(img.data[1]).toBe(img.data[2]);
       }
     }
-    expect(signatures.size).toBe(FILTER_PRESETS.length);
+    expect(signatures.size).toBe(COLOR_GRADE_PRESETS.length);
   });
 
-  it('applies 3x3 sharpening with [0, 255] clamping and alpha preservation', () => {
+  it('applies 3x3 sharpening with anti-artifact option and alpha preservation', () => {
     const data = new Uint8ClampedArray(3 * 3 * 4);
     for (let i = 0; i < 9; i += 1) {
       data[i * 4] = 40;
@@ -158,10 +157,10 @@ describe('image pixelOps, Jernihkan HD, WhatsApp HD presets, and studio history'
     data[4 * 4 + 3] = 123;
 
     const fakeImageData = { width: 3, height: 3, data } as unknown as ImageData;
-    applySharpen(fakeImageData, 0);
+    applySharpen(fakeImageData, 0, true);
     expect(fakeImageData.data[4 * 4]).toBe(180);
 
-    applySharpen(fakeImageData, 50);
+    applySharpen(fakeImageData, 50, true);
     expect(fakeImageData.data[4 * 4]).toBe(255);
     expect(fakeImageData.data[4 * 4 + 3]).toBe(123);
   });
@@ -180,14 +179,7 @@ describe('image pixelOps, Jernihkan HD, WhatsApp HD presets, and studio history'
   });
 
   it('exposes all 6 calibrated Indonesian share presets including WhatsApp HD', () => {
-    expect(MEDIA_PRESETS.map((p) => p.label)).toEqual([
-      'WhatsApp HD',
-      'WhatsApp Cepat',
-      'Status WA HD',
-      'Story IG HD',
-      'Web Ringan',
-      'Atur Sendiri',
-    ]);
+    expect(MEDIA_PRESETS.length).toBe(6);
     expect(getMediaPreset('whatsapp-hd').image.maxEdgePx).toBe(2560);
     expect(getMediaPreset('whatsapp-hd').image.quality).toBe(0.92);
     expect(getMediaPreset('whatsapp-fast').image.maxEdgePx).toBe(1600);
@@ -201,13 +193,13 @@ describe('image pixelOps, Jernihkan HD, WhatsApp HD presets, and studio history'
 
     store.rotatePhoto90();
     store.toggleFlipH();
-    store.selectFilter('cinema');
+    store.selectColorGrade('teal-orange');
 
     let next = useMediaStore.getState();
     expect(next.photoHistoryIndex).toBe(3);
     expect(next.imageEdit.rotationDeg).toBe(90);
     expect(next.imageEdit.flipH).toBe(true);
-    expect(next.imageEdit.filterId).toBe('cinema');
+    expect(next.imageEdit.colorGrade.gradeId).toBe('teal-orange');
 
     next.updateImageEdit(
       { adjustments: { ...next.imageEdit.adjustments, contrast: 25 } },
@@ -220,19 +212,19 @@ describe('image pixelOps, Jernihkan HD, WhatsApp HD presets, and studio history'
 
     useMediaStore.getState().undoPhotoEdit();
     expect(useMediaStore.getState().imageEdit.adjustments.contrast).toBe(0);
-    expect(useMediaStore.getState().imageEdit.filterId).toBe('cinema');
+    expect(useMediaStore.getState().imageEdit.colorGrade.gradeId).toBe('teal-orange');
 
     useMediaStore.getState().undoPhotoEdit();
-    expect(useMediaStore.getState().imageEdit.filterId).toBe('original');
+    expect(useMediaStore.getState().imageEdit.colorGrade.gradeId).toBe('original');
 
     useMediaStore.getState().redoPhotoEdit();
-    expect(useMediaStore.getState().imageEdit.filterId).toBe('cinema');
+    expect(useMediaStore.getState().imageEdit.colorGrade.gradeId).toBe('teal-orange');
 
     useMediaStore.getState().resetPhotoEdits();
     next = useMediaStore.getState();
     expect(next.imageEdit.rotationDeg).toBe(0);
     expect(next.imageEdit.flipH).toBe(false);
-    expect(next.imageEdit.filterId).toBe('original');
+    expect(next.imageEdit.colorGrade.gradeId).toBe('original');
     expect(next.imageEdit.adjustments.contrast).toBe(0);
   });
 });

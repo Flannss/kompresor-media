@@ -4,6 +4,12 @@ import type {
   VideoOutputFormat,
   VideoOutputMime,
 } from '../contracts';
+import {
+  buildColorGradeFfmpegFilters,
+  compute1080pTargetDimensions,
+  hasActiveColorGrade,
+  hasActiveEnhancements,
+} from '../shared/colorGrades';
 import { clampTrimRange, computeEvenScaledDimensions } from './videoPresets';
 
 export interface VideoFormatMeta {
@@ -51,7 +57,11 @@ export function getEffectiveAudioBitrateKbps(edit: VideoEditState): number {
 export function getActiveVideoModuleLabels(edit: VideoEditState): string[] {
   const labels: string[] = [];
   if (edit.compressEnabled) labels.push('Kompres');
-  if (edit.enhance.enabled) labels.push('Jernihkan HD');
+  if (edit.enhanceSuite.noise.enabled) labels.push('Noise');
+  if (edit.enhanceSuite.sharpen.enabled) labels.push('Tajam');
+  if (edit.enhanceSuite.colorContrast.enabled) labels.push('Warna');
+  if (edit.enhanceSuite.upscale1080.enabled) labels.push('1080p');
+  if (hasActiveColorGrade(edit.colorGrade)) labels.push('Filter');
   if (edit.stabilize.enabled) labels.push('Stabilkan');
   if (edit.audio.enabled || edit.muteAudio) labels.push('Audio');
   if (edit.subtitle.enabled && edit.subtitle.cues.length > 0) labels.push('Subtitle');
@@ -60,14 +70,18 @@ export function getActiveVideoModuleLabels(edit: VideoEditState): string[] {
 }
 
 /**
- * Decides whether the composable pipeline requires FFmpeg WASM filters/muxers,
- * vs running fast hardware-accelerated WebCodecs + mediabunny.
+ * Smart hybrid router: picks hardware WebCodecs + mediabunny for standard MP4/WebM
+ * compression/trim/mute/hardsub, and switches to single-pass FFmpeg WASM whenever
+ * MOV/MKV, Enhancement Suite, Color Grading/Tone, Stabilizer, Audio DSP, or Softsub are active.
  */
 export function shouldUseFfmpegBackend(edit: VideoEditState): boolean {
   if (edit.outputFormat === 'mov' || edit.outputFormat === 'mkv') {
     return true;
   }
-  if (edit.enhance.enabled || edit.stabilize.enabled) {
+  if (hasActiveEnhancements(edit.enhanceSuite) || hasActiveColorGrade(edit.colorGrade)) {
+    return true;
+  }
+  if (edit.stabilize.enabled) {
     return true;
   }
   if (hasNonDefaultAudioProcessing(edit)) {
@@ -94,67 +108,91 @@ export interface BuiltFfmpegFilterGraph {
 }
 
 /**
- * Builds verified FFmpeg -vf and -af chains compiled cleanly into @ffmpeg/core 0.12.10:
- * deshake, hqdn3d, scale (lanczos), unsharp, eq, fps, highpass, lowpass, afftdn, bass, treble, volume, dynaudnorm, afade.
+ * Optimal LUT-free single-pass FFmpeg signal pipeline:
+ * 1. hqdn3d noise reduction (BEFORE scaling)
+ * 2. scale (lanczos/bicubic + orientation-aware 1920x1080 / 1080x1920 when enabled)
+ * 3. deshake stabilizer (if active)
+ * 4. eq + colorchannelmixer + colorbalance + curves (100% LUT-free grade & tone)
+ * 5. unsharp detail sharpen (AFTER scaling, chroma untouched when antiArtifact=true)
+ * 6. fps cap (when selected)
  */
 export function buildFfmpegFilterGraph(
   sourceMetadata: Pick<VideoMetadata, 'width' | 'height' | 'durationSec'>,
   edit: VideoEditState
 ): BuiltFfmpegFilterGraph {
   const trim = clampTrimRange(edit.trimStartSec, edit.trimEndSec, sourceMetadata.durationSec);
-  const upscale = edit.enhance.enabled ? edit.enhance.upscaleFactor : 1;
-  const dims = computeEvenScaledDimensions(
-    sourceMetadata.width,
-    sourceMetadata.height,
-    edit.maxHeightPx,
-    upscale
-  );
+  const { noise, sharpen, colorContrast, upscale1080 } = edit.enhanceSuite;
+
+  const dims = upscale1080.enabled
+    ? compute1080pTargetDimensions(
+        sourceMetadata.width,
+        sourceMetadata.height,
+        upscale1080.keepAspect
+      )
+    : computeEvenScaledDimensions(
+        sourceMetadata.width,
+        sourceMetadata.height,
+        edit.maxHeightPx,
+        1
+      );
 
   const vFilters: string[] = [];
 
+  // Step 1: Denoise BEFORE scaling to prevent amplifying grain
+  if (noise.enabled) {
+    const lumaSpatial = noise.grainStrength.toFixed(1);
+    const chromaSpatial = noise.colorSmooth.toFixed(1);
+    const lumaTemp = Math.max(1, noise.motionStability).toFixed(1);
+    const chromaTemp = Math.max(1, Number((noise.motionStability * 0.72).toFixed(1))).toFixed(1);
+    vFilters.push(`hqdn3d=${lumaSpatial}:${chromaSpatial}:${lumaTemp}:${chromaTemp}`);
+  }
+
+  // Step 2: Scaling (with aspect lock or clean center-fill to 16:9 / 9:16 1080p)
+  const scaleFlags = upscale1080.enabled ? upscale1080.method : 'lanczos';
+  const needsScale =
+    upscale1080.enabled ||
+    dims.width !== sourceMetadata.width ||
+    dims.height !== sourceMetadata.height ||
+    vFilters.length === 0;
+
+  if (needsScale) {
+    if (upscale1080.enabled && !upscale1080.keepAspect) {
+      vFilters.push(
+        `scale=${dims.width}:${dims.height}:force_original_aspect_ratio=increase:flags=${scaleFlags}`,
+        `crop=${dims.width}:${dims.height}`
+      );
+    } else {
+      vFilters.push(`scale=${dims.width}:${dims.height}:flags=${scaleFlags}`);
+    }
+  }
+
+  // Step 3: Deshake stabilizer (if active)
   if (edit.stabilize.enabled) {
     const r = edit.stabilize.mode === 'medium' ? 32 : 16;
     vFilters.push(`deshake=rx=${r}:ry=${r}:edge=mirror`);
   }
 
-  if (edit.enhance.enabled && edit.enhance.denoise !== 'off') {
-    if (edit.enhance.denoise === 'medium') {
-      vFilters.push('hqdn3d=4.0:3.0:6.0:4.5');
-    } else {
-      vFilters.push('hqdn3d=2.2:1.6:3.5:2.5');
-    }
+  // Step 4: Color Grading, Color/Contrast Enhancement & Manual Tone Adjustments (LUT-free)
+  const colorSegments = buildColorGradeFfmpegFilters(
+    edit.colorGrade,
+    colorContrast.enabled ? colorContrast : undefined
+  );
+  vFilters.push(...colorSegments);
+
+  // Step 5: Detail sharpening strictly AFTER scaling
+  if (sharpen.enabled) {
+    const k = sharpen.kernelSize;
+    const strength = Math.min(2.0, Math.max(0.2, sharpen.strength)).toFixed(2);
+    const chromaAmount = sharpen.antiArtifact ? '0.0' : '0.15';
+    vFilters.push(`unsharp=${k}:${k}:${strength}:3:3:${chromaAmount}`);
   }
 
-  const needsScale =
-    dims.width !== sourceMetadata.width ||
-    dims.height !== sourceMetadata.height ||
-    edit.enhance.enabled ||
-    vFilters.length === 0;
-  if (needsScale) {
-    const flags = edit.enhance.enabled ? ':flags=lanczos' : '';
-    vFilters.push(`scale=${dims.width}:${dims.height}${flags}`);
-  }
-
-  if (edit.enhance.enabled) {
-    const lumaAmt =
-      edit.enhance.intensity === 'sharp'
-        ? '1.05'
-        : edit.enhance.intensity === 'balanced'
-          ? '0.70'
-          : '0.40';
-    vFilters.push(`unsharp=5:5:${lumaAmt}:3:3:0.0`);
-
-    if (edit.enhance.clarity > 0) {
-      const contrast = (1 + (edit.enhance.clarity / 100) * 0.12).toFixed(3);
-      const saturation = (1 + (edit.enhance.clarity / 100) * 0.09).toFixed(3);
-      vFilters.push(`eq=contrast=${contrast}:saturation=${saturation}`);
-    }
-  }
-
+  // Step 6: FPS cap
   if (edit.fpsCap && edit.fpsCap > 0) {
     vFilters.push(`fps=${edit.fpsCap}`);
   }
 
+  // Audio DSP filtergraph
   const aFilters: string[] = [];
   if (!isAudioMuted(edit) && edit.audio.enabled) {
     const a = edit.audio;
@@ -212,7 +250,7 @@ export function buildFfmpegArgs(params: {
   const fg = buildFfmpegFilterGraph(sourceMetadata, edit);
 
   const crf = edit.compressEnabled
-    ? edit.enhance.enabled
+    ? hasActiveEnhancements(edit.enhanceSuite)
       ? Math.max(18, edit.crf - 2)
       : edit.crf
     : 19;
@@ -223,6 +261,9 @@ export function buildFfmpegArgs(params: {
     args.push('-ss', fg.trimStartSec.toFixed(3));
   }
   args.push('-i', inputFileNameOnFs);
+
+  // Strict single-thread anti-deadlock protection for mobile & desktop WASM
+  args.push('-threads', '1', '-filter_threads', '1');
 
   const attachSoftsub =
     Boolean(subtitleInputFileName) &&
