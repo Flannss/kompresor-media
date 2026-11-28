@@ -61,24 +61,24 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           data-testid="error-boundary-card"
           className="bg-slate-stage flex min-h-screen w-full items-center justify-center p-4"
         >
-          <div className="km-glass-strong w-full max-w-md rounded-[26px] border border-[var(--status-err-border)] p-6 shadow-[var(--stage-shadow)]">
-            <div className="mb-3 flex items-center gap-2">
+          <div className="glass-sheet-modal w-full max-w-md space-y-3 rounded-[26px] border border-[var(--status-err-border)] p-6">
+            <div className="flex items-center gap-2.5">
               <span className="text-xs font-semibold tracking-tight text-[var(--text-primary)]">
                 Kompresor Media
               </span>
-              <span className="rounded-full border border-[var(--border-strong)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+              <span className="glass-inner-rim rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
                 BY AMDZ
               </span>
             </div>
-            <h1 className="font-editorial text-lg font-semibold text-[var(--text-primary)]">
+            <h1 className="font-editorial text-lg font-semibold leading-snug text-[var(--text-primary)]">
               {this.state.isChunkError
                 ? 'Pembaruan studio tersedia'
                 : 'Studio mengalami gangguan ringan'}
             </h1>
-            <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">
+            <p className="text-xs leading-relaxed text-[var(--text-secondary)]">
               {this.state.message}
             </p>
-            <div className="mt-5 flex flex-wrap gap-2.5">
+            <div className="flex flex-wrap gap-2.5 pt-2">
               <Button
                 variant="primary"
                 size="md"

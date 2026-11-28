@@ -37,6 +37,7 @@ import { computeRotatedDimensions } from '../../engines/image/pixelOps';
 import { resolveCustomVideoParams } from '../../engines/video/videoPresets';
 import type { MediaPresetId } from '../../presets/mediaPresets';
 import type { DeviceProfile } from '../../shared/utils/deviceCapability';
+import { handleGlassPointerMove } from '../../shared/utils/glassSheen';
 import { formatBytes } from '../../shared/utils/formatBytes';
 import { formatDuration } from '../../shared/utils/formatDuration';
 import type { ImageProcessStatus, QueueItem, VideoProcessStatus } from '../../store/useMediaStore';
@@ -672,18 +673,19 @@ export function WorkspaceStage({
           videoProcessResult={videoProcessResult}
         />
 
-        {/* Studio Stage Dock (km-glass-lite: zero backdrop-blur over video/mobile for 60fps compositing) */}
+        {/* Studio Stage Dock (glass-dynamic-pill: adaptive blur outside video canvas, disabled under data-glass-lite) */}
         {!isCropping && (
           <div
             data-testid="studio-stage-dock"
-            className="km-glass-lite my-0.5 flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-[22px] border px-2 py-1.5 sm:my-0 sm:rounded-full"
+            onPointerMove={handleGlassPointerMove}
+            className="glass-dynamic-pill my-1 flex max-w-full flex-wrap items-center justify-center gap-2 rounded-[22px] border px-3 py-2 sm:my-0 sm:rounded-full"
           >
             {isImage ? (
               <>
                 <div
                   role="group"
                   aria-label="Zoom Detail"
-                  className="inline-flex items-center gap-0.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-[11px]"
+                  className="glass-inner-rim relative z-10 inline-flex items-center gap-0.5 rounded-full border p-0.5 text-[11px]"
                 >
                   {(
                     [
@@ -698,7 +700,7 @@ export function WorkspaceStage({
                       data-testid={`photo-zoom-${z.id}-btn`}
                       aria-pressed={photoZoom === z.id}
                       onClick={() => setPhotoZoom(z.id)}
-                      className={`min-h-[34px] rounded-full px-2.5 py-1 font-medium tabular-nums transition-colors ${
+                      className={`min-h-[34px] rounded-full px-2.5 py-1 font-medium tabular-nums ${
                         photoZoom === z.id
                           ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -712,7 +714,7 @@ export function WorkspaceStage({
                   <div
                     role="group"
                     aria-label="Mode Pratinjau Foto"
-                    className="inline-flex items-center gap-0.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-[11px]"
+                    className="glass-inner-rim relative z-10 inline-flex items-center gap-0.5 rounded-full border p-0.5 text-[11px]"
                   >
                     <button
                       type="button"
@@ -722,7 +724,7 @@ export function WorkspaceStage({
                         setShowOriginalPhoto(false);
                         setPhotoViewMode('single');
                       }}
-                      className={`inline-flex min-h-[34px] items-center gap-1 rounded-full px-2.5 py-1 font-medium transition-colors ${
+                      className={`inline-flex min-h-[34px] items-center gap-1 rounded-full px-2.5 py-1 font-medium ${
                         photoViewMode === 'single'
                           ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -741,7 +743,7 @@ export function WorkspaceStage({
                           setShowOriginalPhoto(false);
                           setPhotoViewMode((v) => (v === 'split' ? 'single' : 'split'));
                         }}
-                        className={`inline-flex min-h-[34px] items-center gap-1 rounded-full px-2.5 py-1 font-medium transition-colors ${
+                        className={`inline-flex min-h-[34px] items-center gap-1 rounded-full px-2.5 py-1 font-medium ${
                           photoViewMode === 'split'
                             ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                             : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -762,7 +764,7 @@ export function WorkspaceStage({
                           v === 'side-by-side' ? 'single' : 'side-by-side'
                         );
                       }}
-                      className={`inline-flex min-h-[34px] items-center gap-1 rounded-full px-2.5 py-1 font-medium transition-colors ${
+                      className={`inline-flex min-h-[34px] items-center gap-1 rounded-full px-2.5 py-1 font-medium ${
                         photoViewMode === 'side-by-side'
                           ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -775,12 +777,12 @@ export function WorkspaceStage({
                 )}
 
                 {processedImageUrl && !canSplitCompare && photoViewMode === 'single' && (
-                  <div className="inline-flex rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-[11px]">
+                  <div className="glass-inner-rim relative z-10 inline-flex rounded-xl border p-0.5 text-[11px]">
                     <button
                       type="button"
                       data-testid="view-original-btn"
                       onClick={() => setShowOriginalPhoto(true)}
-                      className={`min-h-[32px] rounded-lg px-2 py-1 font-medium transition-colors ${
+                      className={`min-h-[32px] rounded-lg px-2 py-1 font-medium ${
                         showOriginalPhoto
                           ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'text-[var(--text-secondary)]'
@@ -792,7 +794,7 @@ export function WorkspaceStage({
                       type="button"
                       data-testid="view-result-btn"
                       onClick={() => setShowOriginalPhoto(false)}
-                      className={`min-h-[32px] rounded-lg px-2 py-1 font-medium transition-colors ${
+                      className={`min-h-[32px] rounded-lg px-2 py-1 font-medium ${
                         !showOriginalPhoto
                           ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'text-[var(--text-secondary)]'
@@ -811,21 +813,21 @@ export function WorkspaceStage({
                     onPointerUp={() => setHoldOriginalMedia(false)}
                     onPointerLeave={() => setHoldOriginalMedia(false)}
                     onPointerCancel={() => setHoldOriginalMedia(false)}
-                    className="inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] select-none"
+                    className="relative z-10 inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] select-none"
                   >
                     <Eye className="h-3.5 w-3.5" aria-hidden="true" />
                     <span>Tahan: Asli</span>
                   </button>
                 )}
 
-                <span className="h-4 w-px bg-[var(--border-hairline)]" aria-hidden="true" />
+                <span className="relative z-10 h-4 w-px bg-[var(--border-hairline)]" aria-hidden="true" />
 
                 <button
                   type="button"
                   data-testid="dock-rotate-btn"
                   onClick={onRotatePhoto90}
                   title="Putar 90°"
-                  className="inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
+                  className="relative z-10 inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
                 >
                   <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
                   <span className="hidden sm:inline">Putar 90°</span>
@@ -837,7 +839,7 @@ export function WorkspaceStage({
                   aria-pressed={imageEdit.flipH}
                   onClick={onFlipH}
                   title="Balik Horizontal"
-                  className={`inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2.5 text-xs font-medium transition-all active:scale-[0.97] ${
+                  className={`relative z-10 inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium transition-all active:scale-[0.97] ${
                     imageEdit.flipH
                       ? 'bg-[var(--bg-subtle)] text-[var(--text-primary)] ring-1 ring-[var(--border-strong)]'
                       : 'text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]'
@@ -847,7 +849,7 @@ export function WorkspaceStage({
                   <span className="hidden sm:inline">Balik H</span>
                 </button>
 
-                <span className="h-4 w-px bg-[var(--border-hairline)]" aria-hidden="true" />
+                <span className="relative z-10 h-4 w-px bg-[var(--border-hairline)]" aria-hidden="true" />
 
                 <button
                   type="button"
@@ -855,7 +857,7 @@ export function WorkspaceStage({
                   disabled={!canUndoPhoto}
                   onClick={onUndoPhoto}
                   title="Urungkan (Ctrl+Z)"
-                  className="inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
+                  className="relative z-10 inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
                 >
                   <Undo2 className="h-3.5 w-3.5" aria-hidden="true" />
                   <span className="hidden md:inline">Urungkan</span>
@@ -867,7 +869,7 @@ export function WorkspaceStage({
                   disabled={!canRedoPhoto}
                   onClick={onRedoPhoto}
                   title="Ulangi (Ctrl+Shift+Z)"
-                  className="inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
+                  className="relative z-10 inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
                 >
                   <Redo2 className="h-3.5 w-3.5" aria-hidden="true" />
                   <span className="hidden md:inline">Ulangi</span>
@@ -878,7 +880,7 @@ export function WorkspaceStage({
                   data-testid="dock-reset-btn"
                   onClick={onResetPhoto}
                   title="Atur ulang editan foto"
-                  className="inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
+                  className="relative z-10 inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
                 >
                   <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
                   <span className="hidden md:inline">Atur Ulang</span>
@@ -889,20 +891,20 @@ export function WorkspaceStage({
                 type="button"
                 data-testid="dock-capture-frame-btn"
                 onClick={handleCaptureFrame}
-                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
+                className="relative z-10 inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] active:scale-[0.97]"
               >
                 <Camera className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>Ambil Frame</span>
               </button>
             )}
 
-            <span className="h-4 w-px bg-[var(--border-hairline)]" aria-hidden="true" />
+            <span className="relative z-10 h-4 w-px bg-[var(--border-hairline)]" aria-hidden="true" />
 
             {/* Canvas Backdrop Switcher (Video never uses Transparan checkerboard) */}
             <div
               role="group"
               aria-label="Latar Kanvas"
-              className="inline-flex flex-wrap items-center gap-0.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-0.5 text-[11px]"
+              className="glass-inner-rim relative z-10 inline-flex flex-wrap items-center gap-0.5 rounded-full border p-0.5 text-[11px]"
             >
               {(isImage
                 ? ([
@@ -923,7 +925,7 @@ export function WorkspaceStage({
                   data-testid={`backdrop-${bg.id}-btn`}
                   aria-pressed={backdrop === bg.id}
                   onClick={() => setBackdrop(bg.id)}
-                  className={`min-h-[32px] rounded-full px-2.5 py-1 font-medium transition-colors ${
+                  className={`min-h-[32px] rounded-full px-2.5 py-1 font-medium ${
                     backdrop === bg.id
                       ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -938,11 +940,11 @@ export function WorkspaceStage({
         </div>
       </section>
 
-      {/* Right Inspector Panel: Fixed Header + Independent Middle Scroll + Pinned Export Dock on >= 1024px */}
-      <aside className="km-glass-panel flex w-full shrink-0 flex-col border-t md:grid md:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.9fr)] md:items-start md:gap-6 md:px-7 md:py-5 md:pb-8 lg:flex lg:h-full lg:min-h-0 lg:w-[420px] xl:w-[448px] lg:flex-col lg:items-stretch lg:gap-0 lg:overflow-hidden lg:border-l lg:border-t-0 lg:p-0">
+      {/* Right Inspector Panel: Non-blurred atmospheric surface so inner glass cards never nest backdrop-filter */}
+      <aside className="flex w-full shrink-0 flex-col border-t border-[var(--border-hairline)] bg-[var(--bg-stage)]/72 md:grid md:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.9fr)] md:items-start md:gap-6 md:px-7 md:py-5 md:pb-8 lg:flex lg:h-full lg:min-h-0 lg:w-[420px] xl:w-[448px] lg:flex-col lg:items-stretch lg:gap-0 lg:overflow-hidden lg:border-l lg:border-t-0 lg:p-0">
         <div className="flex min-w-0 flex-col px-3.5 pt-5 pb-4 sm:px-6 sm:pt-6 md:px-0 md:py-0 lg:min-h-0 lg:flex-1 lg:overflow-hidden">
           <div
-            className={`shrink-0 transition-shadow duration-200 lg:border-b lg:border-[var(--glass-border)] lg:bg-[var(--glass-bg-elevated)] lg:px-5 lg:pt-4 lg:pb-3 ${
+            className={`shrink-0 transition-shadow duration-200 lg:border-b lg:border-[var(--glass-border)] lg:bg-[var(--bg-surface-strong)]/88 lg:px-5 lg:pt-4 lg:pb-3.5 ${
               scrollEdges.canScrollUp
                 ? 'lg:shadow-[0_10px_24px_-14px_rgba(2,6,23,0.42)]'
                 : ''
@@ -1147,10 +1149,10 @@ export function WorkspaceStage({
           </div>
         </div>
 
-        {/* Sticky Bottom Export Dock on Desktop >= 1024px (Inline / 2nd Column on Mobile & Tablet) */}
+        {/* Sticky Bottom Export Dock on Desktop >= 1024px (Non-blurred shell containing glass CoreSummaryCard) */}
         <div
           data-testid="desktop-export-dock"
-          className="km-glass-dock flex min-w-0 flex-col gap-3.5 px-3.5 pb-28 sm:px-6 sm:pb-6 md:sticky md:top-20 md:px-0 md:pb-0 lg:static lg:shrink-0 lg:gap-2 lg:border-t lg:px-5 lg:py-2.5"
+          className="flex min-w-0 flex-col gap-3.5 border-[var(--border-hairline)] px-3.5 pb-28 sm:px-6 sm:pb-6 md:sticky md:top-20 md:px-0 md:pb-0 lg:static lg:shrink-0 lg:gap-2.5 lg:border-t lg:bg-[var(--bg-surface-strong)]/90 lg:px-5 lg:py-3"
         >
           {imageProcessError && isImage && (
             <p

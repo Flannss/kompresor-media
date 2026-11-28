@@ -10,6 +10,7 @@ import type {
 } from '../../engines/contracts';
 import { computePlannedPhotoDimensions, computeReductionPct } from '../../engines/image/pixelOps';
 import type { DeviceProfile } from '../../shared/utils/deviceCapability';
+import { handleGlassPointerMove } from '../../shared/utils/glassSheen';
 import type { ImageProcessStatus, VideoProcessStatus } from '../../store/useMediaStore';
 import { formatBytes } from '../../shared/utils/formatBytes';
 import { formatDuration } from '../../shared/utils/formatDuration';
@@ -97,7 +98,7 @@ export function MediaInfoBar({
       return (
         <div
           data-testid="media-summary-strip"
-          className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs font-medium text-[var(--text-primary)] tabular-nums"
+          className="relative z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-xs font-medium leading-snug text-[var(--text-primary)] tabular-nums"
         >
           <span data-testid="media-dimensions">{dimsLabel}</span>
           <span aria-hidden="true" className="text-[var(--text-muted)]">
@@ -157,7 +158,7 @@ export function MediaInfoBar({
     return (
       <div
         data-testid="media-summary-strip"
-        className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs font-medium text-[var(--text-primary)] tabular-nums"
+        className="relative z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-xs font-medium leading-snug text-[var(--text-primary)] tabular-nums"
       >
         <span data-testid="media-dimensions">
           {imageMeta.width} × {imageMeta.height}
@@ -179,7 +180,7 @@ export function MediaInfoBar({
       return (
         <div
           data-testid="media-summary-strip"
-          className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs font-medium text-[var(--text-primary)] tabular-nums"
+          className="relative z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-xs font-medium leading-snug text-[var(--text-primary)] tabular-nums"
         >
           <span data-testid="media-dimensions">
             {videoProcessResult.outputWidth} × {videoProcessResult.outputHeight}
@@ -219,7 +220,7 @@ export function MediaInfoBar({
     return (
       <div
         data-testid="media-summary-strip"
-        className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs font-medium text-[var(--text-primary)] tabular-nums"
+        className="relative z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-xs font-medium leading-snug text-[var(--text-primary)] tabular-nums"
       >
         <span className="max-w-[180px] truncate" title={videoMeta.fileName}>
           {videoMeta.fileName}
@@ -251,13 +252,16 @@ export function MediaInfoBar({
   };
 
   return (
-    <div className="flex w-full max-w-full flex-col items-center gap-2">
-      <div className="km-glass-lite max-w-full rounded-2xl border px-3.5 py-2 shadow-xs sm:rounded-full sm:px-4 sm:py-1.5">
+    <div className="flex w-full max-w-full flex-col items-center gap-2.5">
+      <div
+        onPointerMove={handleGlassPointerMove}
+        className="glass-dynamic-pill max-w-full rounded-2xl px-4 py-2.5 sm:rounded-full sm:px-5 sm:py-2"
+      >
         {metadata.kind === 'image' ? renderPhotoSummary(metadata) : renderVideoSummary(metadata)}
       </div>
 
       {validation.warnings.length > 0 && (
-        <div className="flex items-center gap-1.5 rounded-lg border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-3 py-1.5 text-xs text-[var(--status-warn-ink)]">
+        <div className="glass-sheet-modal flex items-center gap-2 rounded-xl border border-[var(--status-warn-border)] px-3.5 py-2 text-xs leading-relaxed text-[var(--status-warn-ink)]">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>{validation.warnings.join(' ')}</span>
         </div>

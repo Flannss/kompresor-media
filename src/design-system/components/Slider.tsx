@@ -41,16 +41,16 @@ export function Slider({
   };
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between gap-2 text-xs">
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-3 text-xs">
         <span
           onDoubleClick={handleReset}
           title={defaultValue !== undefined ? 'Klik dua kali untuk mengembalikan nilai awal' : undefined}
-          className="select-none font-medium text-[var(--text-secondary)]"
+          className="select-none font-medium leading-snug text-[var(--text-secondary)]"
         >
           {label}
         </span>
-        <span className="rounded-md border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--text-primary)] tabular-nums">
+        <span className="glass-inner-rim shrink-0 rounded-lg border px-2 py-0.5 text-[11px] font-semibold leading-snug text-[var(--text-primary)] tabular-nums">
           {valueLabel ?? value}
         </span>
       </div>
@@ -74,7 +74,7 @@ export function Slider({
         }}
       />
 
-      {hint && <div className="text-[11px] text-[var(--text-muted)]">{hint}</div>}
+      {hint && <div className="mt-0.5 text-[11px] leading-relaxed text-[var(--text-muted)]">{hint}</div>}
     </div>
   );
 }

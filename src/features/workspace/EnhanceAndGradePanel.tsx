@@ -99,10 +99,10 @@ export function EnhanceAndGradePanel({
     colorGrade.tone.highlights !== 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* SECTION 1: Penjernihan & Upscale 1080p HD */}
-      <section className="space-y-2.5">
-        <div className="flex items-center justify-between gap-2">
+      <section className="glass-frosted-card space-y-3.5 rounded-[22px] border p-4">
+        <div className="flex items-center justify-between gap-2.5">
           <h3 className="text-xs font-semibold text-[var(--text-primary)]">
             Penjernihan &amp; Upscale 1080p HD
           </h3>
@@ -126,7 +126,7 @@ export function EnhanceAndGradePanel({
               type="button"
               data-testid={`enhance-recipe-${rec.id}`}
               onClick={() => onUpdateEnhanceSuite(applyEnhanceRecipe(rec.id, enhanceSuite))}
-              className="min-h-[38px] rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-1.5 text-[11px] font-medium leading-tight text-[var(--text-secondary)] transition-colors hover:border-[var(--border-active)] hover:text-[var(--text-primary)]"
+              className="glass-inner-rim min-h-[38px] rounded-full border px-3.5 py-1.5 text-[11px] font-medium leading-tight text-[var(--text-secondary)] transition-colors hover:border-[var(--border-active)] hover:text-[var(--text-primary)]"
             >
               {rec.label}
             </button>
@@ -134,14 +134,14 @@ export function EnhanceAndGradePanel({
         </div>
 
         {/* 4 Clean Expandable Module Cards */}
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {/* Card 1: Kurangi Noise */}
-          <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-2.5">
-            <div className="flex items-center justify-between gap-2">
+          <div className="glass-inner-rim rounded-2xl border p-3">
+            <div className="flex items-center justify-between gap-2.5">
               <button
                 type="button"
                 onClick={() => setExpandedCard((prev) => (prev === 'noise' ? null : 'noise'))}
-                className="flex min-h-[34px] flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
+                className="flex min-h-[34px] flex-1 items-center gap-2 text-left text-xs font-semibold text-[var(--text-primary)]"
               >
                 <ChevronDown
                   className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${expandedCard === 'noise' ? 'rotate-180' : ''
@@ -156,7 +156,7 @@ export function EnhanceAndGradePanel({
                 data-testid="enhance-noise-toggle"
                 aria-checked={enhanceSuite.noise.enabled}
                 onClick={() => toggleCardEnabled('noise')}
-                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${enhanceSuite.noise.enabled
+                className={`min-h-[30px] rounded-full px-3 py-0.5 text-[11px] font-semibold transition-colors ${enhanceSuite.noise.enabled
                   ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                   : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
                   }`}
@@ -166,7 +166,7 @@ export function EnhanceAndGradePanel({
             </div>
 
             {expandedCard === 'noise' && (
-              <div className="mt-2.5 space-y-2.5 border-t border-[var(--border-hairline)] pt-2.5 text-xs">
+              <div className="mt-3 space-y-3 border-t border-[var(--border-hairline)] pt-3 text-xs">
                 <div className="grid grid-cols-3 gap-2">
                   {NOISE_LEVELS.map((lv) => {
                     const active = enhanceSuite.noise.level === lv.id;
@@ -186,9 +186,9 @@ export function EnhanceAndGradePanel({
                             },
                           })
                         }
-                        className={`min-h-[36px] rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-colors ${active
+                        className={`min-h-[36px] rounded-xl border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${active
                           ? 'border-[var(--border-active)] bg-[var(--accent-primary)] [background-image:var(--accent-primary-gradient)] text-[var(--ink-on-accent)] shadow-sm'
-                          : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
+                          : 'glass-inner-rim text-[var(--text-secondary)]'
                           }`}
                       >
                         {lv.label}
@@ -197,7 +197,7 @@ export function EnhanceAndGradePanel({
                   })}
                 </div>
 
-                <label className="block space-y-1">
+                <label className="block space-y-1.5">
                   <div className="flex justify-between text-[11px]">
                     <span className="text-[var(--text-secondary)]">Redam Bintik</span>
                     <span className="font-semibold text-[var(--text-primary)] tabular-nums">
@@ -286,12 +286,12 @@ export function EnhanceAndGradePanel({
           </div>
 
           {/* Card 2: Pertajam Detail */}
-          <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-2.5">
-            <div className="flex items-center justify-between gap-2">
+          <div className="glass-inner-rim rounded-2xl border p-3">
+            <div className="flex items-center justify-between gap-2.5">
               <button
                 type="button"
                 onClick={() => setExpandedCard((prev) => (prev === 'sharpen' ? null : 'sharpen'))}
-                className="flex min-h-[34px] flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
+                className="flex min-h-[34px] flex-1 items-center gap-2 text-left text-xs font-semibold text-[var(--text-primary)]"
               >
                 <ChevronDown
                   className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${expandedCard === 'sharpen' ? 'rotate-180' : ''
@@ -306,7 +306,7 @@ export function EnhanceAndGradePanel({
                 data-testid="enhance-sharpen-toggle"
                 aria-checked={enhanceSuite.sharpen.enabled}
                 onClick={() => toggleCardEnabled('sharpen')}
-                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${enhanceSuite.sharpen.enabled
+                className={`min-h-[30px] rounded-full px-3 py-0.5 text-[11px] font-semibold transition-colors ${enhanceSuite.sharpen.enabled
                   ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                   : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
                   }`}
@@ -316,8 +316,8 @@ export function EnhanceAndGradePanel({
             </div>
 
             {expandedCard === 'sharpen' && (
-              <div className="mt-2.5 space-y-2.5 border-t border-[var(--border-hairline)] pt-2.5 text-xs">
-                <label className="block space-y-1">
+              <div className="mt-3 space-y-3 border-t border-[var(--border-hairline)] pt-3 text-xs">
+                <label className="block space-y-1.5">
                   <div className="flex justify-between text-[11px]">
                     <span className="text-[var(--text-secondary)]">Kekuatan Detail</span>
                     <span className="font-semibold text-[var(--text-primary)] tabular-nums">
@@ -371,9 +371,9 @@ export function EnhanceAndGradePanel({
                             },
                           })
                         }
-                        className={`min-h-[38px] rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${enhanceSuite.sharpen.kernelSize === opt.size
+                        className={`min-h-[38px] rounded-xl border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${enhanceSuite.sharpen.kernelSize === opt.size
                           ? 'border-[var(--border-active)] bg-[var(--accent-primary)] [background-image:var(--accent-primary-gradient)] text-[var(--ink-on-accent)] shadow-sm'
-                          : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
+                          : 'glass-inner-rim text-[var(--text-secondary)]'
                           }`}
                       >
                         {opt.label}
@@ -405,14 +405,14 @@ export function EnhanceAndGradePanel({
           </div>
 
           {/* Card 3: Perbaiki Warna & Kontras */}
-          <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-2.5">
-            <div className="flex items-center justify-between gap-2">
+          <div className="glass-inner-rim rounded-2xl border p-3">
+            <div className="flex items-center justify-between gap-2.5">
               <button
                 type="button"
                 onClick={() =>
                   setExpandedCard((prev) => (prev === 'colorContrast' ? null : 'colorContrast'))
                 }
-                className="flex min-h-[34px] flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
+                className="flex min-h-[34px] flex-1 items-center gap-2 text-left text-xs font-semibold text-[var(--text-primary)]"
               >
                 <ChevronDown
                   className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${expandedCard === 'colorContrast' ? 'rotate-180' : ''
@@ -427,7 +427,7 @@ export function EnhanceAndGradePanel({
                 data-testid="enhance-color-toggle"
                 aria-checked={enhanceSuite.colorContrast.enabled}
                 onClick={() => toggleCardEnabled('colorContrast')}
-                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${enhanceSuite.colorContrast.enabled
+                className={`min-h-[30px] rounded-full px-3 py-0.5 text-[11px] font-semibold transition-colors ${enhanceSuite.colorContrast.enabled
                   ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                   : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
                   }`}
@@ -437,7 +437,7 @@ export function EnhanceAndGradePanel({
             </div>
 
             {expandedCard === 'colorContrast' && (
-              <div className="mt-2.5 space-y-2 border-t border-[var(--border-hairline)] pt-2.5 text-xs">
+              <div className="mt-3 space-y-3 border-t border-[var(--border-hairline)] pt-3 text-xs">
                 {(
                   [
                     { key: 'contrast', label: 'Kontras' },
@@ -448,7 +448,7 @@ export function EnhanceAndGradePanel({
                 ).map(({ key, label }) => {
                   const val = enhanceSuite.colorContrast[key];
                   return (
-                    <label key={key} className="block space-y-0.5">
+                    <label key={key} className="block space-y-1.5">
                       <div className="flex justify-between text-[11px]">
                         <span className="text-[var(--text-secondary)]">{label}</span>
                         <span className="font-semibold text-[var(--text-primary)] tabular-nums">
@@ -482,14 +482,14 @@ export function EnhanceAndGradePanel({
           </div>
 
           {/* Card 4: Upscale ke 1080p HD */}
-          <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-2.5">
-            <div className="flex items-center justify-between gap-2">
+          <div className="glass-inner-rim rounded-2xl border p-3">
+            <div className="flex items-center justify-between gap-2.5">
               <button
                 type="button"
                 onClick={() =>
                   setExpandedCard((prev) => (prev === 'upscale1080' ? null : 'upscale1080'))
                 }
-                className="flex min-h-[34px] flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
+                className="flex min-h-[34px] flex-1 items-center gap-2 text-left text-xs font-semibold text-[var(--text-primary)]"
               >
                 <ChevronDown
                   className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${expandedCard === 'upscale1080' ? 'rotate-180' : ''
@@ -504,7 +504,7 @@ export function EnhanceAndGradePanel({
                 data-testid="enhance-upscale1080-toggle"
                 aria-checked={enhanceSuite.upscale1080.enabled}
                 onClick={() => toggleCardEnabled('upscale1080')}
-                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${enhanceSuite.upscale1080.enabled
+                className={`min-h-[30px] rounded-full px-3 py-0.5 text-[11px] font-semibold transition-colors ${enhanceSuite.upscale1080.enabled
                   ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                   : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
                   }`}
@@ -514,12 +514,12 @@ export function EnhanceAndGradePanel({
             </div>
 
             {expandedCard === 'upscale1080' && (
-              <div className="mt-2.5 space-y-2 border-t border-[var(--border-hairline)] pt-2.5 text-xs">
+              <div className="mt-3 space-y-3 border-t border-[var(--border-hairline)] pt-3 text-xs">
                 <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
                   Meningkatkan ukuran ke 1920×1080 (mendatar) atau 1080×1920 (tegak) agar tampilan
                   tajam di layar besar.
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2.5">
                   {(
                     [
                       { id: 'lanczos', label: 'Detail Maksimal' },
@@ -539,9 +539,9 @@ export function EnhanceAndGradePanel({
                           },
                         })
                       }
-                      className={`min-h-[38px] rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${enhanceSuite.upscale1080.method === opt.id
+                      className={`min-h-[38px] rounded-xl border px-3 py-1.5 text-[11px] font-medium transition-colors ${enhanceSuite.upscale1080.method === opt.id
                         ? 'border-[var(--border-active)] bg-[var(--accent-primary)] [background-image:var(--accent-primary-gradient)] text-[var(--ink-on-accent)] shadow-sm'
-                        : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
+                        : 'glass-inner-rim text-[var(--text-secondary)]'
                         }`}
                     >
                       {opt.label}
@@ -573,8 +573,8 @@ export function EnhanceAndGradePanel({
       </section>
 
       {/* SECTION 2: Filter & Color Grading (Shared 96px thumbnail + instant CSS filters) */}
-      <section className="space-y-2.5 border-t border-[var(--border-hairline)] pt-3.5">
-        <div className="flex items-center justify-between gap-2">
+      <section className="glass-frosted-card space-y-3.5 rounded-[22px] border p-4">
+        <div className="flex items-center justify-between gap-2.5">
           <h3 className="text-xs font-semibold text-[var(--text-primary)]">
             Filter &amp; Color Grading
           </h3>
@@ -586,14 +586,14 @@ export function EnhanceAndGradePanel({
             onPointerUp={() => onHoldOriginalChange(false)}
             onPointerLeave={() => onHoldOriginalChange(false)}
             onPointerCancel={() => onHoldOriginalChange(false)}
-            className="inline-flex min-h-[34px] items-center gap-1 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] select-none"
+            className="glass-inner-rim inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] select-none"
           >
             <Eye className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Tahan: Asli</span>
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2.5">
           {COLOR_GRADE_PRESETS.map((look) => {
             const active = colorGrade.gradeId === look.id;
             const cssFilter = getCssPreviewFilter({
@@ -609,10 +609,10 @@ export function EnhanceAndGradePanel({
                 aria-pressed={active}
                 onClick={() => onSelectColorGrade(look.id)}
                 title={look.description}
-                className={`group flex flex-col overflow-hidden rounded-xl border text-left transition-all duration-150 hover:-translate-y-0.5 ${
+                className={`glass-inner-rim group flex flex-col overflow-hidden rounded-xl border text-left transition-all duration-150 hover:-translate-y-0.5 ${
                   active
-                    ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] ring-1 ring-[var(--border-active)]'
-                    : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] hover:border-[var(--border-active)]'
+                    ? 'border-[var(--border-active)] [background-image:var(--accent-wash-gradient)] ring-1 ring-[var(--border-active)]'
+                    : 'hover:border-[var(--border-active)]'
                 }`}
               >
                 <div className="relative h-16 w-full overflow-hidden bg-[var(--bg-subtle)]">
@@ -648,7 +648,7 @@ export function EnhanceAndGradePanel({
                     className="absolute inset-x-0 bottom-0 h-1 opacity-90"
                   />
                 </div>
-                <div className="px-2 py-1.5">
+                <div className="px-2.5 py-2">
                   <span className="block truncate text-[11px] font-semibold text-[var(--text-primary)]">
                     {look.title}
                   </span>
@@ -691,13 +691,13 @@ export function EnhanceAndGradePanel({
           </label>
         )}
 
-        <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-2.5">
-          <div className="flex items-center justify-between gap-2">
+        <div className="glass-inner-rim rounded-2xl border p-3">
+          <div className="flex items-center justify-between gap-2.5">
             <button
               type="button"
               data-testid="tone-accordion-btn"
               onClick={() => setToneOpen((v) => !v)}
-              className="flex min-h-[34px] flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
+              className="flex min-h-[34px] flex-1 items-center gap-2 text-left text-xs font-semibold text-[var(--text-primary)]"
             >
               <ChevronDown
                 className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${toneOpen ? 'rotate-180' : ''
@@ -727,7 +727,7 @@ export function EnhanceAndGradePanel({
           </div>
 
           {toneOpen && (
-            <div className="mt-2.5 space-y-2 border-t border-[var(--border-hairline)] pt-2.5 text-xs">
+            <div className="mt-3 space-y-3 border-t border-[var(--border-hairline)] pt-3 text-xs">
               {(
                 [
                   { key: 'temperature', label: 'Suhu Warna' },
@@ -738,7 +738,7 @@ export function EnhanceAndGradePanel({
               ).map(({ key, label }) => {
                 const val = colorGrade.tone[key];
                 return (
-                  <label key={key} className="block space-y-0.5">
+                  <label key={key} className="block space-y-1.5">
                     <div className="flex justify-between text-[11px]">
                       <span className="text-[var(--text-secondary)]">{label}</span>
                       <span className="font-semibold text-[var(--text-primary)] tabular-nums">

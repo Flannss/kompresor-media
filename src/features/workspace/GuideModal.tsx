@@ -25,7 +25,7 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -37,11 +37,11 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
         aria-modal="true"
         aria-labelledby="guide-modal-title"
         data-testid="guide-modal"
-        className="km-glass-strong relative flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-[26px] border p-5 shadow-[var(--stage-shadow)] sm:p-6"
+        className="glass-sheet-modal relative flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-[26px] border p-5 sm:p-6"
       >
-        <div className="flex items-start justify-between gap-3 border-b border-[var(--border-hairline)] pb-4">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] text-[var(--text-primary)]">
+        <div className="flex items-start justify-between gap-3.5 border-b border-[var(--border-hairline)] pb-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="glass-inner-rim flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-[var(--text-primary)]">
               <BookOpen className="h-4.5 w-4.5" aria-hidden="true" />
             </div>
             <div className="min-w-0">
@@ -51,7 +51,7 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
               >
                 Panduan Singkat Kompresor Media
               </h2>
-              <p className="text-xs text-[var(--text-muted)]">
+              <p className="mt-0.5 text-xs leading-snug text-[var(--text-muted)]">
                 Ringkas, jernih, dan 100% lokal di perangkat Anda
               </p>
             </div>
@@ -62,16 +62,16 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
             data-testid="close-guide-btn"
             aria-label="Tutup panduan"
             onClick={onClose}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+            className="glass-inner-rim inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 
-        <div className="mt-4 space-y-3 overflow-y-auto pr-1 text-xs leading-relaxed text-[var(--text-secondary)]">
-          <section className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5">
-            <h3 className="font-semibold text-[var(--text-primary)]">1. Alur 3 Langkah</h3>
-            <ol className="mt-1.5 list-decimal space-y-1 pl-4">
+        <div className="mt-4 space-y-3.5 overflow-y-auto pr-1 text-xs leading-relaxed text-[var(--text-secondary)]">
+          <section className="glass-inner-rim rounded-2xl border p-4">
+            <h3 className="font-semibold leading-snug text-[var(--text-primary)]">1. Alur 3 Langkah</h3>
+            <ol className="mt-2 list-decimal space-y-1.5 pl-4 leading-relaxed">
               <li>
                 <strong>Impor:</strong> Pilih file dari Beranda, tarik &amp; lepas ke jendela mana
                 saja, atau tekan <strong>Ctrl+V</strong> / <strong>Cmd+V</strong> untuk menempel
@@ -91,12 +91,12 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
             </ol>
           </section>
 
-          <section className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5">
-            <div className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
+          <section className="glass-inner-rim rounded-2xl border p-4">
+            <div className="flex items-center gap-2 font-semibold leading-snug text-[var(--text-primary)]">
               <Sliders className="h-3.5 w-3.5 text-[var(--text-primary)]" aria-hidden="true" />
               <h3>2. Bedanya Model, Alat &amp; Filter</h3>
             </div>
-            <ul className="mt-1.5 space-y-1">
+            <ul className="mt-2 space-y-1.5 leading-relaxed">
               <li>
                 <strong>Model Kualitas:</strong> Mengatur karakter kejernihan dasar foto/video
                 tanpa mengubah gaya warna asli.
@@ -113,15 +113,15 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
             </ul>
           </section>
 
-          <section className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5">
-            <div className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
+          <section className="glass-inner-rim rounded-2xl border p-4">
+            <div className="flex items-center gap-2 font-semibold leading-snug text-[var(--text-primary)]">
               <Smartphone
                 className="h-3.5 w-3.5 text-[var(--text-secondary)]"
                 aria-hidden="true"
               />
               <h3>3. Tips Kirim HD ke WhatsApp &amp; iPhone</h3>
             </div>
-            <ul className="mt-1.5 space-y-1">
+            <ul className="mt-2 space-y-1.5 leading-relaxed">
               <li>
                 Simpan hasil ke galeri/perangkat lebih dulu, lalu kirim lewat aplikasi WhatsApp
                 dengan ikon <strong>HD</strong> aktif atau kirim sebagai <strong>Dokumen</strong>.
@@ -140,12 +140,12 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
             </ul>
           </section>
 
-          <section className="rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] p-3.5 text-[var(--text-primary)]">
-            <div className="flex items-center gap-1.5 font-semibold">
+          <section className="glass-inner-rim rounded-2xl border p-4 text-[var(--text-primary)]">
+            <div className="flex items-center gap-2 font-semibold leading-snug">
               <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
               <h3>4. Privasi 100% Lokal di Perangkat</h3>
             </div>
-            <p className="mt-1">
+            <p className="mt-1.5 leading-relaxed text-[var(--text-secondary)]">
               Seluruh kompresi, penjernihan, pemotongan, dan pengarsipan ZIP berjalan langsung di
               perangkat Anda. File Anda tidak pernah diunggah ke server mana pun.
             </p>

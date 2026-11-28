@@ -124,7 +124,7 @@ export function QueuePanel({
           </div>
         </div>
 
-        <div className="no-scrollbar flex snap-x items-center gap-2 overflow-x-auto pb-0.5">
+        <div className="no-scrollbar -my-2.5 flex snap-x items-center gap-2.5 overflow-x-auto py-2.5">
           {items.map((item) => {
             const active = item.id === activeItemId;
             const badge = getStatusBadge(item.status);
@@ -133,10 +133,10 @@ export function QueuePanel({
             return (
               <div
                 key={item.id}
-                className={`flex shrink-0 snap-start items-center gap-2 rounded-2xl border p-1.5 transition-colors ${
+                className={`glass-inner-rim flex shrink-0 snap-start items-center gap-2 rounded-2xl border p-2 transition-colors ${
                   active
                     ? 'border-[var(--border-active)] bg-[var(--bg-subtle)]'
-                    : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)]'
+                    : ''
                 }`}
               >
                 <button
@@ -215,8 +215,8 @@ export function QueuePanel({
       {/* Desktop Left Vertical Queue Rail */}
       <aside
         data-testid="queue-rail-desktop"
-        className={`km-glass hidden shrink-0 flex-col border-r transition-all lg:flex lg:h-full lg:overflow-hidden ${
-          collapsed ? 'w-[54px]' : 'w-[222px]'
+        className={`glass-frosted-card hidden shrink-0 flex-col border-0 border-r transition-all lg:flex lg:h-full lg:overflow-hidden ${
+          collapsed ? 'w-[58px]' : 'w-[228px]'
         }`}
       >
         <div className="flex items-center justify-between border-b border-[var(--border-hairline)] px-3 py-3">
@@ -235,7 +235,7 @@ export function QueuePanel({
             data-testid="toggle-queue-rail-btn"
             onClick={() => setCollapsed((v) => !v)}
             aria-label={collapsed ? 'Buka panel antrean' : 'Ciutkan panel antrean'}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)] hover:text-[var(--text-primary)]"
+            className="glass-inner-rim flex h-7 w-7 items-center justify-center rounded-full border text-[var(--text-secondary)] hover:border-[var(--border-active)] hover:text-[var(--text-primary)]"
           >
             {collapsed ? (
               <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -262,13 +262,13 @@ export function QueuePanel({
                   <div
                     key={item.id}
                     data-testid={`queue-card-${item.id}`}
-                    className={`group min-w-0 overflow-hidden rounded-2xl border p-2 transition-colors ${
+                    className={`group min-w-0 overflow-hidden rounded-2xl border p-2.5 transition-colors ${
                       active
-                        ? 'border-[var(--border-active)] bg-[var(--bg-subtle)]'
-                        : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] hover:border-[var(--border-active)]'
+                        ? 'glass-inner-rim border-[var(--border-active)] [background-image:var(--accent-wash-gradient)]'
+                        : 'glass-inner-rim hover:border-[var(--border-active)]'
                     }`}
                   >
-                    <div className="flex min-w-0 items-start gap-2">
+                    <div className="flex min-w-0 items-start gap-2.5">
                       <button
                         type="button"
                         onClick={() => onSelectItem(item.id)}
@@ -319,19 +319,19 @@ export function QueuePanel({
                       </button>
                     </div>
 
-                    <div className="mt-2 flex items-center justify-between gap-1.5">
-                      <div className="flex items-center gap-1">
+                    <div className="mt-2.5 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
                         <span
-                          className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9.5px] font-semibold ${
+                          className={`glass-inner-rim inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
                             isImg
-                              ? 'border-[var(--border-strong)] bg-[var(--bg-subtle)] text-[var(--text-primary)]'
-                              : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)]'
+                              ? 'border-[var(--border-strong)] text-[var(--text-primary)]'
+                              : 'text-[var(--text-secondary)]'
                           }`}
                         >
                           {isImg ? 'Foto' : 'Video'}
                         </span>
                         <span
-                          className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${badge.cls}`}
+                          className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold tabular-nums ${badge.cls}`}
                         >
                           {item.status === 'processing' ? `${item.progress}%` : badge.label}
                         </span>
@@ -343,7 +343,7 @@ export function QueuePanel({
                           data-testid={`queue-dl-${item.id}`}
                           onClick={() => onDownloadItem(item.id)}
                           aria-label={`Unduh ${readyOutputName}`}
-                          className="inline-flex h-6 items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2 text-[10px] font-medium text-[var(--text-primary)] hover:border-[var(--border-active)]"
+                          className="glass-inner-rim inline-flex h-6 items-center gap-1 rounded-full border px-2.5 text-[10px] font-medium text-[var(--text-primary)] hover:border-[var(--border-active)]"
                           title={`Simpan ${readyOutputName}`}
                         >
                           <Download className="h-2.5 w-2.5" aria-hidden="true" />
@@ -353,7 +353,7 @@ export function QueuePanel({
                     </div>
 
                     {item.status === 'processing' && (
-                      <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-[var(--border-hairline)]">
+                      <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-[var(--border-hairline)]">
                         <div
                           className="h-full rounded-full bg-[var(--accent-primary)] transition-all"
                           style={{ width: `${Math.max(8, item.progress)}%` }}
@@ -365,13 +365,13 @@ export function QueuePanel({
               })}
             </div>
 
-            <div className="flex flex-col gap-1.5 border-t border-[var(--border-hairline)] p-2.5">
+            <div className="flex flex-col gap-2 border-t border-[var(--border-hairline)] p-3">
               {canAddMore && (
                 <button
                   type="button"
                   data-testid="queue-add-more-btn"
                   onClick={onAddMoreClick}
-                  className="inline-flex min-h-[34px] items-center justify-center gap-1.5 rounded-full border border-dashed border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--border-active)] hover:text-[var(--text-primary)]"
+                  className="glass-inner-rim inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-full border border-dashed px-3 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--border-active)] hover:text-[var(--text-primary)]"
                 >
                   <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>Tambah file</span>
@@ -383,7 +383,7 @@ export function QueuePanel({
                   type="button"
                   data-testid="queue-apply-all-btn"
                   onClick={onApplyToAll}
-                  className="inline-flex min-h-[34px] items-center justify-center gap-1.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--border-active)]"
+                  className="glass-inner-rim inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-full border px-3 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--border-active)]"
                 >
                   <CopyCheck className="h-3.5 w-3.5 text-[var(--text-primary)]" aria-hidden="true" />
                   <span>Terapkan ke Semua</span>

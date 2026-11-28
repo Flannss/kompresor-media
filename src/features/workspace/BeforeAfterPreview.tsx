@@ -1,4 +1,5 @@
 import { useRef, type PointerEvent } from 'react';
+import { handleGlassPointerMove } from '../../shared/utils/glassSheen';
 
 export type StageBackdrop = 'studio' | 'light' | 'dark' | 'checker';
 export type PhotoCompareViewMode = 'single' | 'split' | 'side-by-side';
@@ -193,8 +194,11 @@ export function BeforeAfterPreview({
       </div>
 
       {isSplitActive && (
-        <label className="flex items-center gap-2 rounded-full border border-[var(--border-hairline)] bg-[var(--surface-dock)] px-3.5 py-1 text-xs text-[var(--text-secondary)] tabular-nums">
-          <span>Geser belah</span>
+        <label
+          onPointerMove={handleGlassPointerMove}
+          className="glass-dynamic-pill flex items-center gap-3 rounded-full px-4 py-1.5 text-xs text-[var(--text-secondary)] tabular-nums"
+        >
+          <span className="relative z-10 font-medium">Geser belah</span>
           <input
             data-testid="compare-slider"
             type="range"
@@ -203,12 +207,12 @@ export function BeforeAfterPreview({
             value={splitPct}
             onChange={(e) => onSplitPctChange(Number(e.target.value))}
             aria-label="Geser pembanding foto asli dan hasil"
-            className="km-range-input w-28"
+            className="km-range-input relative z-10 w-28"
             style={{
               background: `linear-gradient(to right, var(--accent-primary) ${((splitPct - 5) / 90) * 100}%, var(--border-hairline) ${((splitPct - 5) / 90) * 100}%)`,
             }}
           />
-          <span className="w-8 text-right font-semibold text-[var(--text-primary)]">{splitPct}%</span>
+          <span className="relative z-10 w-8 text-right font-semibold text-[var(--text-primary)]">{splitPct}%</span>
         </label>
       )}
     </div>

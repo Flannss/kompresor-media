@@ -6,6 +6,7 @@ import { computeTargetDimensions } from '../../engines/image/pixelOps';
 import { releaseCanvasSurface } from '../../engines/image/pipelineRunner';
 import { findActiveCuesAtTime } from '../../engines/video/subtitleParser';
 import type { DeviceProfile } from '../../shared/utils/deviceCapability';
+import { handleGlassPointerMove } from '../../shared/utils/glassSheen';
 import { formatBytes } from '../../shared/utils/formatBytes';
 import { formatDuration } from '../../shared/utils/formatDuration';
 import { getBackdropClasses, type StageBackdrop } from '../workspace/BeforeAfterPreview';
@@ -598,12 +599,13 @@ export function VideoCompareStage({
       {/* Compare Mode Toolbar (docked cleanly below video stage on mobile, top on sm+) */}
       <div
         data-testid="video-stage-toolbar"
-        className="order-2 my-0.5 flex w-full max-w-[820px] min-w-0 flex-wrap items-center justify-between gap-2 sm:order-1 sm:my-0"
+        className="order-2 my-0.5 flex w-full max-w-[820px] min-w-0 flex-wrap items-center justify-between gap-2.5 sm:order-1 sm:my-0"
       >
         <div
           role="group"
           aria-label="Mode Tampilan Video"
-          className="km-glass-lite inline-flex max-w-full flex-wrap rounded-xl border p-0.5 text-xs"
+          onPointerMove={handleGlassPointerMove}
+          className="glass-dynamic-pill inline-flex max-w-full flex-wrap gap-1 rounded-full p-1 text-xs"
         >
           {(
             [
@@ -629,8 +631,8 @@ export function VideoCompareStage({
                   setIsPlaying(false);
                   onChangeCompareViewMode(id);
                 }}
-                className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-colors disabled:opacity-45 ${active
-                  ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                className={`relative z-10 inline-flex min-h-[38px] items-center gap-1.5 rounded-full px-3 py-1.5 font-medium disabled:opacity-45 ${active
+                  ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)] shadow-xs'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}
               >
@@ -641,14 +643,17 @@ export function VideoCompareStage({
           })}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5">
           {effectiveViewMode === 'single' && canPlayProcessedResult && (
-            <div className="km-glass-lite inline-flex rounded-xl border p-0.5 text-xs">
+            <div
+              onPointerMove={handleGlassPointerMove}
+              className="glass-dynamic-pill inline-flex gap-1 rounded-full p-1 text-xs"
+            >
               <button
                 type="button"
                 data-testid="video-view-original-btn"
                 onClick={() => setSingleSourceChoice('original')}
-                className={`min-h-[36px] rounded-lg px-2.5 py-1 font-medium transition-colors ${singleSourceChoice === 'original'
+                className={`relative z-10 min-h-[36px] rounded-full px-3 py-1 font-medium ${singleSourceChoice === 'original'
                   ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                   : 'text-[var(--text-secondary)]'
                   }`}
@@ -659,7 +664,7 @@ export function VideoCompareStage({
                 type="button"
                 data-testid="video-view-result-btn"
                 onClick={() => setSingleSourceChoice('result')}
-                className={`min-h-[36px] rounded-lg px-2.5 py-1 font-medium transition-colors ${singleSourceChoice === 'result'
+                className={`relative z-10 min-h-[36px] rounded-full px-3 py-1 font-medium ${singleSourceChoice === 'result'
                   ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                   : 'text-[var(--text-secondary)]'
                   }`}
@@ -674,6 +679,7 @@ export function VideoCompareStage({
               type="button"
               data-testid="video-hold-original-btn"
               aria-pressed={holdOriginalActive}
+              onPointerMove={handleGlassPointerMove}
               onPointerDown={() => onHoldOriginalChange(true)}
               onPointerUp={() => onHoldOriginalChange(false)}
               onPointerLeave={() => onHoldOriginalChange(false)}
@@ -688,13 +694,13 @@ export function VideoCompareStage({
                   onHoldOriginalChange(false);
                 }
               }}
-              className={`km-glass-lite inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all select-none ${holdOriginalActive
-                ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+              className={`glass-dynamic-pill inline-flex min-h-[38px] shrink-0 items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all select-none ${holdOriginalActive
+                ? 'text-[var(--text-primary)] ring-1 ring-[var(--border-active)]'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
             >
-              <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Tahan: Lihat Asli</span>
+              <Eye className="relative z-10 h-3.5 w-3.5" aria-hidden="true" />
+              <span className="relative z-10">Tahan: Lihat Asli</span>
             </button>
           )}
         </div>

@@ -226,14 +226,14 @@ export function ExportSharePanel({
   const helperSpec = activeHelperPlatform ? PLATFORM_SHARE_META[activeHelperPlatform] : null;
 
   return (
-    <div className="flex flex-col gap-2.5 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:gap-2 lg:gap-1.5 sm:pb-0">
+    <div className="flex flex-col gap-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:gap-2.5 lg:gap-2 sm:pb-0">
       <Button
         variant="primary"
         size="lg"
         data-testid={mediaKind === 'image' ? 'download-photo-btn' : 'download-video-btn'}
         disabled={!canExport}
         onClick={() => void handleDownload()}
-        className="min-h-[48px] w-full rounded-full font-semibold sm:min-h-[46px] lg:min-h-[42px]"
+        className="min-h-[48px] w-full rounded-full font-semibold sm:min-h-[46px] lg:min-h-[44px]"
       >
         <Download className="h-4 w-4" aria-hidden="true" />
         <span>{downloadLabel}</span>
@@ -246,20 +246,20 @@ export function ExportSharePanel({
           data-testid="whatsapp-share-btn"
           disabled={!canExport || sharing}
           onClick={() => void handleSharePlatform('whatsapp')}
-          className="min-h-[44px] w-full rounded-full"
+          className="glass-inner-rim min-h-[44px] w-full rounded-full"
         >
           <Share2 className="h-4 w-4 text-[var(--text-primary)]" aria-hidden="true" />
           <span>{preparingFullRes ? `Merender ${renderResTag} penuh…` : 'Bagikan'}</span>
         </Button>
       ) : (
-        <div className="grid grid-cols-3 gap-2" role="group" aria-label="Kirim cepat ke aplikasi">
+        <div className="grid grid-cols-3 gap-2.5" role="group" aria-label="Kirim cepat ke aplikasi">
           <Button
             variant="secondary"
             size="sm"
             data-testid="whatsapp-share-btn"
             disabled={!canExport || sharing}
             onClick={() => void handleSharePlatform('whatsapp')}
-            className="min-h-[42px] rounded-full px-2 text-[11px] font-semibold lg:min-h-[34px]"
+            className="glass-inner-rim min-h-[42px] rounded-full px-2.5 text-[11px] font-semibold lg:min-h-[36px]"
           >
             WhatsApp
           </Button>
@@ -269,7 +269,7 @@ export function ExportSharePanel({
             data-testid="instagram-share-btn"
             disabled={!canExport || sharing}
             onClick={() => void handleSharePlatform('instagram')}
-            className="min-h-[42px] rounded-full px-2 text-[11px] font-semibold lg:min-h-[34px]"
+            className="glass-inner-rim min-h-[42px] rounded-full px-2.5 text-[11px] font-semibold lg:min-h-[36px]"
           >
             Instagram
           </Button>
@@ -279,7 +279,7 @@ export function ExportSharePanel({
             data-testid="tiktok-share-btn"
             disabled={!canExport || sharing}
             onClick={() => void handleSharePlatform('tiktok')}
-            className="min-h-[42px] rounded-full px-2 text-[11px] font-semibold lg:min-h-[34px]"
+            className="glass-inner-rim min-h-[42px] rounded-full px-2.5 text-[11px] font-semibold lg:min-h-[36px]"
           >
             TikTok
           </Button>
@@ -289,7 +289,7 @@ export function ExportSharePanel({
       {exportedWidth && exportedHeight && exportedBytes !== null && (
         <p
           data-testid="exported-dimensions-badge"
-          className="break-words rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-2 text-center text-[11px] font-medium leading-snug text-[var(--text-secondary)] tabular-nums lg:py-1 lg:text-[10.5px]"
+          className="glass-inner-rim break-words rounded-2xl border px-3.5 py-2 text-center text-[11px] font-medium leading-relaxed text-[var(--text-secondary)] tabular-nums lg:py-1.5 lg:text-[10.5px]"
         >
           {needsFullResPreparation
             ? `Pratinjau cepat (${exportedWidth}×${exportedHeight}) · Hasil penuh dirender saat simpan`
@@ -300,7 +300,7 @@ export function ExportSharePanel({
       {likelyMobile && isWhatsAppPreset && (
         <p
           data-testid="ios-wa-hd-tip"
-          className="rounded-2xl border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-3 py-2 text-[11px] leading-relaxed text-[var(--status-warn-ink)]"
+          className="rounded-2xl border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-3.5 py-2.5 text-[11px] leading-relaxed text-[var(--status-warn-ink)]"
         >
           Tip iPhone: Simpan file dulu, lalu kirim dari aplikasi WhatsApp dengan tombol HD aktif
           (hindari kirim langsung dari menu Bagikan agar tidak dikompres paksa).
@@ -314,7 +314,7 @@ export function ExportSharePanel({
           data-testid="download-zip-btn"
           disabled={zipping || preparingFullRes}
           onClick={() => void handleZipDownload()}
-          className="min-h-[44px] w-full rounded-full py-2 tabular-nums"
+          className="glass-inner-rim min-h-[44px] w-full rounded-full py-2 tabular-nums"
         >
           <FileArchive className="h-4 w-4 shrink-0 text-[var(--text-primary)]" aria-hidden="true" />
           <span className="truncate">
@@ -328,7 +328,7 @@ export function ExportSharePanel({
       {savedSummaryMsg && (
         <p
           data-testid="download-confirmed-msg"
-          className="flex items-center justify-center gap-1.5 break-words rounded-2xl border border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] px-3.5 py-2 text-center text-[11px] font-semibold leading-snug text-[var(--status-ok-ink)] tabular-nums"
+          className="glass-sheet-modal flex items-center justify-center gap-2 break-words rounded-2xl border border-[var(--status-ok-border)] px-4 py-2.5 text-center text-[11px] font-semibold leading-snug text-[var(--status-ok-ink)] tabular-nums"
         >
           <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>{savedSummaryMsg}</span>
@@ -338,7 +338,7 @@ export function ExportSharePanel({
       {zipDoneMsg && (
         <p
           data-testid="zip-confirmed-msg"
-          className="flex items-center justify-center gap-1.5 break-words rounded-2xl border border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] px-3.5 py-2 text-center text-[11px] font-semibold leading-snug text-[var(--status-ok-ink)] tabular-nums"
+          className="glass-sheet-modal flex items-center justify-center gap-2 break-words rounded-2xl border border-[var(--status-ok-border)] px-4 py-2.5 text-center text-[11px] font-semibold leading-snug text-[var(--status-ok-ink)] tabular-nums"
         >
           <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>{zipDoneMsg}</span>
@@ -351,10 +351,10 @@ export function ExportSharePanel({
             helperSpec.id === 'whatsapp' ? 'whatsapp-web-helper' : 'platform-share-helper'
           }
           data-platform={helperSpec.id}
-          className="mt-1 flex flex-col gap-2 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3 text-xs text-[var(--text-secondary)]"
+          className="glass-inner-rim mt-1 flex flex-col gap-2.5 rounded-2xl border p-3.5 text-xs text-[var(--text-secondary)]"
         >
           <p className="leading-relaxed">{helperSpec.helperText}</p>
-          <p className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-1.5 text-[11px] leading-relaxed text-[var(--text-primary)]">
+          <p className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3 py-2 text-[11px] leading-relaxed text-[var(--text-primary)]">
             {helperSpec.tipText}
           </p>
           <a
@@ -366,7 +366,7 @@ export function ExportSharePanel({
                 ? 'open-whatsapp-web-link'
                 : `open-${helperSpec.id}-link`
             }
-            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-full border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-subtle)]"
+            className="glass-inner-rim inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border px-3.5 text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-subtle)]"
           >
             <span>{helperSpec.openLabel}</span>
             <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
