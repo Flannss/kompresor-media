@@ -44,9 +44,9 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
             <div
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border"
               style={{
-                backgroundColor: 'var(--accent-gold-soft)',
-                borderColor: 'var(--border-strong)',
-                color: 'var(--accent-gold)',
+                backgroundColor: 'var(--accent-craft-soft)',
+                borderColor: 'var(--accent-craft-border)',
+                color: 'var(--accent-craft)',
               }}
             >
               <BookOpen className="h-4.5 w-4.5" aria-hidden="true" />
@@ -100,7 +100,7 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
 
           <section className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5">
             <div className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
-              <Sliders className="h-3.5 w-3.5 text-[var(--accent-olive)]" aria-hidden="true" />
+              <Sliders className="h-3.5 w-3.5 text-[var(--accent-photo)]" aria-hidden="true" />
               <h3>2. Bedanya Model, Alat &amp; Filter</h3>
             </div>
             <ul className="mt-1.5 space-y-1">
@@ -123,7 +123,7 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
           <section className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5">
             <div className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
               <Smartphone
-                className="h-3.5 w-3.5 text-[var(--accent-terracotta)]"
+                className="h-3.5 w-3.5 text-[var(--accent-video)]"
                 aria-hidden="true"
               />
               <h3>3. Tips Kirim HD ke WhatsApp &amp; iPhone</h3>

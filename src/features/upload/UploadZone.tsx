@@ -77,10 +77,32 @@ export function UploadZone({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`bg-warm-stage relative flex min-h-[calc(100vh-54px)] sm:min-h-[calc(100vh-60px)] w-full flex-col items-center justify-between px-4 py-6 transition-colors sm:px-6 sm:py-10 lg:px-10 lg:py-14 ${
+      className={`bg-slate-stage relative flex min-h-[calc(100vh-54px)] sm:min-h-[calc(100vh-60px)] w-full flex-col items-center justify-between overflow-hidden px-4 py-6 transition-colors sm:px-6 sm:py-10 lg:px-10 lg:py-14 ${
         isDragging ? 'ring-2 ring-inset ring-[var(--border-strong)]' : ''
       }`}
     >
+      {/* Subtle Architectural Slate Geometry Layer */}
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 1200 420"
+        fill="none"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-[340px] w-full max-w-6xl opacity-45"
+      >
+        <path
+          d="M 80 340 Q 420 90 680 210 T 1140 70"
+          stroke="var(--border-hairline)"
+          strokeWidth="1.15"
+        />
+        <path
+          d="M 140 380 Q 480 150 760 245 T 1180 120"
+          stroke="var(--border-active)"
+          strokeOpacity="0.32"
+          strokeWidth="1"
+          strokeDasharray="6 8"
+        />
+        <circle cx="980" cy="110" r="140" stroke="var(--accent-photo)" strokeOpacity="0.14" strokeWidth="1" />
+        <circle cx="220" cy="210" r="110" stroke="var(--accent-video)" strokeOpacity="0.14" strokeWidth="1" />
+      </svg>
       {/* Hidden File Inputs */}
       <input
         ref={allInputRef}
@@ -116,7 +138,7 @@ export function UploadZone({
       {isDragging && (
         <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-[var(--bg-app)]/78 p-4">
           <div className="km-glass-strong flex items-center gap-3 rounded-2xl border-2 border-dashed border-[var(--border-strong)] px-7 py-5 text-sm font-semibold text-[var(--text-primary)]">
-            <Upload className="h-5 w-5 text-[var(--accent-gold)]" aria-hidden="true" />
+            <Upload className="h-5 w-5 text-[var(--accent-highlight)]" aria-hidden="true" />
             <span>Lepas file di sini untuk mulai mengedit</span>
           </div>
         </div>
@@ -145,8 +167,16 @@ export function UploadZone({
             ) : (
               <>
                 Optimalkan Foto &amp; Video{' '}
-                <span className="font-editorial italic font-normal text-[var(--accent-primary)]">
+                <span className="font-editorial relative inline-block italic font-normal text-[var(--accent-highlight)]">
                   Tanpa Ribet
+                  <span
+                    aria-hidden="true"
+                    className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full opacity-75"
+                    style={{
+                      background:
+                        'linear-gradient(90deg, var(--accent-primary) 0%, var(--accent-photo) 52%, var(--accent-video) 100%)',
+                    }}
+                  />
                 </span>
               </>
             )}
@@ -188,31 +218,36 @@ export function UploadZone({
 
         {/* Dual Elevated Interactive Studio Entry Cards */}
         <div className="grid w-full grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
-          {/* Card 1: Studio Foto (Muted Olive accent harmony) */}
+          {/* Card 1: Studio Foto (Mineral Teal accent harmony) */}
           <section
             data-testid="entry-photo-card"
             aria-label="Studio Foto"
             className="km-glass-strong group relative flex flex-col justify-between gap-4 overflow-hidden rounded-[26px] border p-5 transition-all duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-[var(--border-strong)] sm:gap-6 sm:p-7 md:p-8"
             style={{ boxShadow: 'var(--shadow-soft)' }}
           >
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -right-14 -top-14 h-44 w-44 rounded-full opacity-60 blur-2xl"
+              style={{ background: 'var(--accent-photo-soft)' }}
+            />
             <svg
               aria-hidden="true"
               viewBox="0 0 120 120"
               fill="none"
-              className="pointer-events-none absolute -right-5 -top-5 h-28 w-28 opacity-[0.18] transition-transform duration-300 group-hover:scale-105"
+              className="pointer-events-none absolute -right-5 -top-5 h-28 w-28 opacity-[0.22] transition-transform duration-300 group-hover:scale-105"
             >
-              <circle cx="60" cy="60" r="46" stroke="var(--accent-olive)" strokeWidth="1.2" />
-              <circle cx="60" cy="60" r="28" stroke="var(--accent-gold)" strokeWidth="1" strokeDasharray="4 4" />
-              <path d="M22 60 A38 38 0 0 1 60 22" stroke="var(--accent-olive)" strokeWidth="1.5" strokeLinecap="round" />
+              <circle cx="60" cy="60" r="46" stroke="var(--accent-photo)" strokeWidth="1.2" />
+              <circle cx="60" cy="60" r="28" stroke="var(--accent-craft)" strokeWidth="1" strokeDasharray="4 4" />
+              <path d="M22 60 A38 38 0 0 1 60 22" stroke="var(--accent-photo)" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <div
                   className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border"
                   style={{
-                    backgroundColor: 'var(--accent-olive-soft)',
-                    borderColor: 'var(--status-ok-border)',
-                    color: 'var(--accent-olive)',
+                    backgroundColor: 'var(--accent-photo-soft)',
+                    borderColor: 'var(--accent-photo-border)',
+                    color: 'var(--accent-photo)',
                   }}
                 >
                   {isAnalyzing ? (
@@ -225,9 +260,9 @@ export function UploadZone({
                 <span
                   className="shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-semibold tabular-nums"
                   style={{
-                    backgroundColor: 'var(--accent-gold-soft)',
-                    borderColor: 'var(--border-hairline)',
-                    color: 'var(--accent-gold)',
+                    backgroundColor: 'var(--accent-craft-soft)',
+                    borderColor: 'var(--accent-craft-border)',
+                    color: 'var(--accent-craft)',
                   }}
                 >
                   RealPhoto · 2K–8K
@@ -270,24 +305,29 @@ export function UploadZone({
             className="km-glass-strong group relative flex flex-col justify-between gap-4 overflow-hidden rounded-[26px] border p-5 transition-all duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-[var(--border-strong)] sm:gap-6 sm:p-7 md:p-8"
             style={{ boxShadow: 'var(--shadow-soft)' }}
           >
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -right-14 -top-14 h-44 w-44 rounded-full opacity-60 blur-2xl"
+              style={{ background: 'var(--accent-video-soft)' }}
+            />
             <svg
               aria-hidden="true"
               viewBox="0 0 120 120"
               fill="none"
-              className="pointer-events-none absolute -right-5 -top-5 h-28 w-28 opacity-[0.18] transition-transform duration-300 group-hover:scale-105"
+              className="pointer-events-none absolute -right-5 -top-5 h-28 w-28 opacity-[0.22] transition-transform duration-300 group-hover:scale-105"
             >
-              <rect x="24" y="30" width="72" height="60" rx="14" stroke="var(--accent-terracotta)" strokeWidth="1.2" />
-              <path d="M52 49 L72 60 L52 71 Z" stroke="var(--accent-gold)" strokeWidth="1.2" strokeLinejoin="round" />
-              <line x1="34" y1="22" x2="86" y2="22" stroke="var(--accent-terracotta)" strokeWidth="1.2" strokeLinecap="round" />
+              <rect x="24" y="30" width="72" height="60" rx="14" stroke="var(--accent-video)" strokeWidth="1.2" />
+              <path d="M52 49 L72 60 L52 71 Z" stroke="var(--accent-craft)" strokeWidth="1.2" strokeLinejoin="round" />
+              <line x1="34" y1="22" x2="86" y2="22" stroke="var(--accent-video)" strokeWidth="1.2" strokeLinecap="round" />
             </svg>
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <div
                   className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border"
                   style={{
-                    backgroundColor: 'var(--accent-terracotta-soft)',
-                    borderColor: 'var(--status-err-border)',
-                    color: 'var(--accent-terracotta)',
+                    backgroundColor: 'var(--accent-video-soft)',
+                    borderColor: 'var(--accent-video-border)',
+                    color: 'var(--accent-video)',
                   }}
                 >
                   {isAnalyzing ? (
@@ -300,9 +340,9 @@ export function UploadZone({
                 <span
                   className="shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-semibold tabular-nums"
                   style={{
-                    backgroundColor: 'var(--accent-gold-soft)',
-                    borderColor: 'var(--border-hairline)',
-                    color: 'var(--accent-gold)',
+                    backgroundColor: 'var(--accent-craft-soft)',
+                    borderColor: 'var(--accent-craft-border)',
+                    color: 'var(--accent-craft)',
                   }}
                 >
                   1080p HD · BT.709
@@ -346,7 +386,7 @@ export function UploadZone({
             className="km-glass flex max-w-full flex-wrap items-center justify-center gap-x-4 gap-y-2 rounded-2xl border px-4 py-3 text-xs text-[var(--text-secondary)] tabular-nums sm:gap-x-5 sm:rounded-full sm:px-6"
           >
             <span className="flex items-center gap-1.5">
-              <span className="font-editorial text-[13px] font-semibold text-[var(--accent-gold)]">
+              <span className="font-editorial text-[13px] font-semibold text-[var(--accent-craft)]">
                 01
               </span>
               <span>Pilih foto atau video</span>
@@ -355,7 +395,7 @@ export function UploadZone({
               ·
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="font-editorial text-[13px] font-semibold text-[var(--accent-gold)]">
+              <span className="font-editorial text-[13px] font-semibold text-[var(--accent-craft)]">
                 02
               </span>
               <span>Atur kualitas &amp; alat</span>
@@ -364,7 +404,7 @@ export function UploadZone({
               ·
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="font-editorial text-[13px] font-semibold text-[var(--accent-gold)]">
+              <span className="font-editorial text-[13px] font-semibold text-[var(--accent-craft)]">
                 03
               </span>
               <span>Unduh atau kirim</span>

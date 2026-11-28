@@ -26,12 +26,12 @@ export function SegmentedTabs<T extends string>({
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className="relative grid rounded-full border border-[var(--border-hairline)] bg-[var(--bg-subtle)] p-1 shadow-[inset_0_1px_2px_rgba(26,18,13,0.06)]"
+      className="relative grid rounded-full border border-[var(--border-hairline)] bg-[var(--bg-subtle)] p-1 shadow-[inset_0_1px_2px_rgba(2,6,23,0.14)]"
       style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
     >
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-1 left-1 rounded-full bg-[var(--bg-surface-strong)] shadow-[var(--shadow-soft)] ring-1 ring-[var(--accent-gold)]/40 transition-transform duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+        className="pointer-events-none absolute inset-y-1 left-1 rounded-full bg-[var(--bg-surface-strong)] shadow-[var(--shadow-soft)] ring-1 ring-[var(--border-active)]/45 transition-transform duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
         style={{
           width: `calc((100% - 8px) / ${items.length})`,
           transform: `translateX(${activeIndex * 100}%)`,

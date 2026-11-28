@@ -144,9 +144,8 @@ export function EnhanceAndGradePanel({
                 className="flex min-h-[34px] flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
               >
                 <ChevronDown
-                  className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${
-                    expandedCard === 'noise' ? 'rotate-180' : ''
-                  }`}
+                  className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${expandedCard === 'noise' ? 'rotate-180' : ''
+                    }`}
                   aria-hidden="true"
                 />
                 <span>Kurangi Noise</span>
@@ -157,11 +156,10 @@ export function EnhanceAndGradePanel({
                 data-testid="enhance-noise-toggle"
                 aria-checked={enhanceSuite.noise.enabled}
                 onClick={() => toggleCardEnabled('noise')}
-                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
-                  enhanceSuite.noise.enabled
-                    ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                    : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
-                }`}
+                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${enhanceSuite.noise.enabled
+                  ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                  : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
+                  }`}
               >
                 {enhanceSuite.noise.enabled ? 'Aktif' : 'Nonaktif'}
               </button>
@@ -190,7 +188,7 @@ export function EnhanceAndGradePanel({
                         }
                         className={`min-h-[36px] rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-colors ${
                           active
-                            ? 'border-[var(--border-active)] bg-[var(--accent-deep)] text-white'
+                            ? 'border-[var(--border-active)] bg-[var(--accent-primary)] [background-image:var(--accent-primary-gradient)] text-[var(--ink-on-accent)] shadow-sm'
                             : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
                         }`}
                       >
@@ -297,9 +295,8 @@ export function EnhanceAndGradePanel({
                 className="flex min-h-[34px] flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
               >
                 <ChevronDown
-                  className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${
-                    expandedCard === 'sharpen' ? 'rotate-180' : ''
-                  }`}
+                  className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${expandedCard === 'sharpen' ? 'rotate-180' : ''
+                    }`}
                   aria-hidden="true"
                 />
                 <span>Pertajam Detail</span>
@@ -310,11 +307,10 @@ export function EnhanceAndGradePanel({
                 data-testid="enhance-sharpen-toggle"
                 aria-checked={enhanceSuite.sharpen.enabled}
                 onClick={() => toggleCardEnabled('sharpen')}
-                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
-                  enhanceSuite.sharpen.enabled
-                    ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                    : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
-                }`}
+                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${enhanceSuite.sharpen.enabled
+                  ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                  : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
+                  }`}
               >
                 {enhanceSuite.sharpen.enabled ? 'Aktif' : 'Nonaktif'}
               </button>
@@ -378,7 +374,7 @@ export function EnhanceAndGradePanel({
                         }
                         className={`min-h-[38px] rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                           enhanceSuite.sharpen.kernelSize === opt.size
-                            ? 'border-[var(--border-active)] bg-[var(--accent-deep)] text-white'
+                            ? 'border-[var(--border-active)] bg-[var(--accent-primary)] [background-image:var(--accent-primary-gradient)] text-[var(--ink-on-accent)] shadow-sm'
                             : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
                         }`}
                       >
@@ -421,9 +417,8 @@ export function EnhanceAndGradePanel({
                 className="flex min-h-[34px] flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
               >
                 <ChevronDown
-                  className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${
-                    expandedCard === 'colorContrast' ? 'rotate-180' : ''
-                  }`}
+                  className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${expandedCard === 'colorContrast' ? 'rotate-180' : ''
+                    }`}
                   aria-hidden="true"
                 />
                 <span>Perbaiki Warna &amp; Kontras</span>
@@ -434,11 +429,10 @@ export function EnhanceAndGradePanel({
                 data-testid="enhance-color-toggle"
                 aria-checked={enhanceSuite.colorContrast.enabled}
                 onClick={() => toggleCardEnabled('colorContrast')}
-                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
-                  enhanceSuite.colorContrast.enabled
-                    ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                    : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
-                }`}
+                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${enhanceSuite.colorContrast.enabled
+                  ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                  : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
+                  }`}
               >
                 {enhanceSuite.colorContrast.enabled ? 'Aktif' : 'Nonaktif'}
               </button>
@@ -500,9 +494,8 @@ export function EnhanceAndGradePanel({
                 className="flex min-h-[34px] flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
               >
                 <ChevronDown
-                  className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${
-                    expandedCard === 'upscale1080' ? 'rotate-180' : ''
-                  }`}
+                  className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${expandedCard === 'upscale1080' ? 'rotate-180' : ''
+                    }`}
                   aria-hidden="true"
                 />
                 <span>Upscale ke 1080p HD</span>
@@ -513,11 +506,10 @@ export function EnhanceAndGradePanel({
                 data-testid="enhance-upscale1080-toggle"
                 aria-checked={enhanceSuite.upscale1080.enabled}
                 onClick={() => toggleCardEnabled('upscale1080')}
-                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
-                  enhanceSuite.upscale1080.enabled
-                    ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-                    : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
-                }`}
+                className={`min-h-[30px] rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${enhanceSuite.upscale1080.enabled
+                  ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                  : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
+                  }`}
               >
                 {enhanceSuite.upscale1080.enabled ? 'Aktif' : 'Nonaktif'}
               </button>
@@ -551,7 +543,7 @@ export function EnhanceAndGradePanel({
                       }
                       className={`min-h-[38px] rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                         enhanceSuite.upscale1080.method === opt.id
-                          ? 'border-[var(--border-active)] bg-[var(--accent-deep)] text-white'
+                          ? 'border-[var(--border-active)] bg-[var(--accent-primary)] [background-image:var(--accent-primary-gradient)] text-[var(--ink-on-accent)] shadow-sm'
                           : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
                       }`}
                     >
@@ -622,7 +614,7 @@ export function EnhanceAndGradePanel({
                 title={look.description}
                 className={`group flex flex-col overflow-hidden rounded-xl border text-left transition-all duration-150 hover:-translate-y-0.5 ${
                   active
-                    ? 'border-[var(--border-active)] bg-[var(--accent-deep)]/25 ring-1 ring-[var(--border-active)]'
+                    ? 'border-[var(--border-active)] bg-[var(--accent-primary)]/14 ring-1 ring-[var(--border-active)]'
                     : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] hover:border-[var(--border-active)]'
                 }`}
               >
@@ -711,9 +703,8 @@ export function EnhanceAndGradePanel({
               className="flex min-h-[34px] flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
             >
               <ChevronDown
-                className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${
-                  toneOpen ? 'rotate-180' : ''
-                }`}
+                className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${toneOpen ? 'rotate-180' : ''
+                  }`}
                 aria-hidden="true"
               />
               <span>Sesuaikan Tone</span>

@@ -368,15 +368,15 @@ describe('KM-T008 Pro Photo Studio (2K-8K RealPhoto, 12 Filters, Adjustments, Ec
     expect(clickSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('defaults theme to Ivory Hangat (km-theme-v3) and warm non-checker studio backdrop', () => {
+  it('defaults theme to Malam Navy (km-theme-v4) and Midnight Slate / Porcelain stage backdrop', () => {
     localStorage.removeItem(THEME_STORAGE_KEY);
-    expect(THEME_STORAGE_KEY).toBe('km-theme-v3');
-    expect(initTheme()).toBe('light');
-    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(THEME_STORAGE_KEY).toBe('km-theme-v4');
+    expect(initTheme()).toBe('dark');
+    expect(document.documentElement.dataset.theme).toBe('dark');
 
     expect(getBackdropClasses('studio')).toBe('bg-[var(--bg-stage-media)]');
-    expect(getBackdropClasses('light')).toBe('bg-[#FFF9F0]');
-    expect(getBackdropClasses('dark')).toBe('bg-[#2A1E17]');
+    expect(getBackdropClasses('light')).toBe('bg-[#F8FAFC]');
+    expect(getBackdropClasses('dark')).toBe('bg-[#0F172A]');
     expect(getBackdropClasses('checker')).toBe('bg-checkerboard');
   });
 });

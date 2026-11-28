@@ -576,7 +576,7 @@ export function WorkspaceStage({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`bg-warm-stage lg:bg-warm-gallery relative flex min-h-0 w-full min-w-0 flex-1 flex-col items-center justify-center px-3 py-3 transition-colors sm:min-h-[50vh] sm:px-7 sm:py-6 md:min-h-[46vh] lg:h-full lg:min-h-0 lg:overflow-hidden lg:px-7 lg:py-4 ${
+        className={`bg-slate-stage lg:bg-slate-gallery relative flex min-h-0 w-full min-w-0 flex-1 flex-col items-center justify-center px-3 py-3 transition-colors sm:min-h-[50vh] sm:px-7 sm:py-6 md:min-h-[46vh] lg:h-full lg:min-h-0 lg:overflow-hidden lg:px-7 lg:py-4 ${
           isDraggingOverStage ? 'ring-2 ring-inset ring-[var(--border-active)]' : ''
         }`}
       >
@@ -939,7 +939,7 @@ export function WorkspaceStage({
           <div
             className={`shrink-0 transition-shadow duration-200 lg:border-b lg:border-[var(--border-hairline)] lg:bg-[var(--bg-surface-strong)] lg:px-5 lg:pt-4 lg:pb-3 ${
               scrollEdges.canScrollUp
-                ? 'lg:shadow-[0_10px_24px_-14px_rgba(26,18,13,0.3)]'
+                ? 'lg:shadow-[0_10px_24px_-14px_rgba(2,6,23,0.42)]'
                 : ''
             }`}
           >
@@ -1145,7 +1145,7 @@ export function WorkspaceStage({
         {/* Sticky Bottom Export Dock on Desktop >= 1024px (Inline / 2nd Column on Mobile & Tablet) */}
         <div
           data-testid="desktop-export-dock"
-          className="flex min-w-0 flex-col gap-3.5 px-3.5 pb-28 sm:px-6 sm:pb-6 md:sticky md:top-20 md:px-0 md:pb-0 lg:static lg:shrink-0 lg:gap-2 lg:border-t lg:border-[var(--border-hairline)] lg:bg-[var(--bg-surface-strong)] lg:px-5 lg:py-2.5 lg:shadow-[0_-10px_28px_-16px_rgba(26,18,13,0.16)]"
+          className="flex min-w-0 flex-col gap-3.5 px-3.5 pb-28 sm:px-6 sm:pb-6 md:sticky md:top-20 md:px-0 md:pb-0 lg:static lg:shrink-0 lg:gap-2 lg:border-t lg:border-[var(--border-hairline)] lg:bg-[var(--bg-surface-strong)] lg:px-5 lg:py-2.5 lg:shadow-[0_-10px_28px_-16px_rgba(2,6,23,0.32)]"
         >
           {imageProcessError && isImage && (
             <p

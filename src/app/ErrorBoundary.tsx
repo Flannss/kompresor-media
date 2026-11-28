@@ -53,14 +53,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       return (
         <div
           data-testid="error-boundary-card"
-          className="bg-warm-stage flex min-h-screen w-full items-center justify-center p-4"
+          className="bg-slate-stage flex min-h-screen w-full items-center justify-center p-4"
         >
           <div className="km-glass-strong w-full max-w-md rounded-[26px] border border-[var(--status-err-border)] p-6 shadow-[var(--stage-shadow)]">
             <div className="mb-3 flex items-center gap-2">
               <span className="text-xs font-semibold tracking-tight text-[var(--text-primary)]">
                 Kompresor Media
               </span>
-              <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--accent-gold-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent-gold)]">
+              <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--accent-craft-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent-craft)]">
                 BY AMDZ
               </span>
             </div>

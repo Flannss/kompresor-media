@@ -96,7 +96,7 @@ export function QueuePanel({
         <div className="flex items-center justify-between gap-2 text-xs">
           <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--text-primary)] tabular-nums">
             <span>{batchRunning && batchStatusLabel ? batchStatusLabel : 'Antrean'}</span>
-            <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--accent-gold)]">
+            <span className="rounded-full border border-[var(--accent-craft-border)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--accent-craft)]">
               {items.length}/{maxTotal}
             </span>
           </span>
@@ -153,14 +153,14 @@ export function QueuePanel({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-[var(--accent-terracotta)]">
+                      <div className="flex h-full w-full items-center justify-center text-[var(--accent-video)]">
                         <Film className="h-4 w-4" aria-hidden="true" />
                       </div>
                     )}
                     <span
                       aria-hidden="true"
                       className={`absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full ring-1 ring-white/80 ${
-                        isImg ? 'bg-[var(--accent-olive)]' : 'bg-[var(--accent-terracotta)]'
+                        isImg ? 'bg-[var(--accent-photo)]' : 'bg-[var(--accent-video)]'
                       }`}
                     />
                   </div>
@@ -172,8 +172,8 @@ export function QueuePanel({
                       <span
                         className={`inline-block rounded-full border px-1.5 text-[9px] font-semibold ${
                           isImg
-                            ? 'border-[var(--status-ok-border)] bg-[var(--accent-olive-soft)] text-[var(--accent-olive)]'
-                            : 'border-[var(--status-err-border)] bg-[var(--accent-terracotta-soft)] text-[var(--accent-terracotta)]'
+                            ? 'border-[var(--accent-photo-border)] bg-[var(--accent-photo-soft)] text-[var(--accent-photo)]'
+                            : 'border-[var(--accent-video-border)] bg-[var(--accent-video-soft)] text-[var(--accent-video)]'
                         }`}
                       >
                         {isImg ? 'Foto' : 'Video'}
@@ -282,7 +282,7 @@ export function QueuePanel({
                               className="h-full w-full object-cover"
                             />
                           ) : (
-                            <div className="flex h-full w-full items-center justify-center text-[var(--accent-terracotta)]">
+                            <div className="flex h-full w-full items-center justify-center text-[var(--accent-video)]">
                               <Film className="h-4 w-4" aria-hidden="true" />
                             </div>
                           )}
@@ -290,9 +290,9 @@ export function QueuePanel({
                         <div className="min-w-0 flex-1 overflow-hidden">
                           <div className="flex min-w-0 items-center gap-1">
                             {isImg ? (
-                              <ImageIcon className="h-3 w-3 shrink-0 text-[var(--accent-olive)]" aria-hidden="true" />
+                              <ImageIcon className="h-3 w-3 shrink-0 text-[var(--accent-photo)]" aria-hidden="true" />
                             ) : (
-                              <Film className="h-3 w-3 shrink-0 text-[var(--accent-terracotta)]" aria-hidden="true" />
+                              <Film className="h-3 w-3 shrink-0 text-[var(--accent-video)]" aria-hidden="true" />
                             )}
                             <span
                               className="block min-w-0 truncate text-[11px] font-semibold text-[var(--text-primary)]"
@@ -324,8 +324,8 @@ export function QueuePanel({
                         <span
                           className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9.5px] font-semibold ${
                             isImg
-                              ? 'border-[var(--status-ok-border)] bg-[var(--accent-olive-soft)] text-[var(--accent-olive)]'
-                              : 'border-[var(--status-err-border)] bg-[var(--accent-terracotta-soft)] text-[var(--accent-terracotta)]'
+                              ? 'border-[var(--accent-photo-border)] bg-[var(--accent-photo-soft)] text-[var(--accent-photo)]'
+                              : 'border-[var(--accent-video-border)] bg-[var(--accent-video-soft)] text-[var(--accent-video)]'
                           }`}
                         >
                           {isImg ? 'Foto' : 'Video'}

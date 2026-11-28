@@ -110,7 +110,7 @@ describe('KM-T018 Final Hardening: ErrorBoundary, Numeric Guards, Mobile Pre-Sca
     useMediaStore.getState().clearMedia();
   });
 
-  it('captures runtime crashes inside AppErrorBoundary with Warm Earthy Indonesian recovery and onReset reset', () => {
+  it('captures runtime crashes inside AppErrorBoundary with Midnight Slate recovery and onReset reset', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     let shouldThrow = true;
 

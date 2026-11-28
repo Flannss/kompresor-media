@@ -30,7 +30,7 @@ export const COLOR_GRADE_PRESETS: readonly ColorGradeMeta[] = [
     badge: 'Flagship Pro',
     description:
       'Rentang dinamis cerah, warna kulit natural, kontras bersih, highlight hangat, dan detail halus.',
-    swatchGradient: 'linear-gradient(125deg, #f3e0c8 0%, #c89d76 52%, #55644a 100%)',
+    swatchGradient: 'linear-gradient(125deg, #f1f5f9 0%, #64748b 52%, #0f766e 100%)',
   },
   {
     id: 'teal-orange',

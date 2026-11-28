@@ -62,12 +62,12 @@ export type VideoTabId = 'utama' | 'tampilan' | 'lanjutan';
 export type VideoAdvancedCard = 'stabilize' | 'audio' | 'subtitle' | 'frame';
 
 const VIDEO_PRESET_BADGE_STYLE: Record<string, { dot: string; tag: string }> = {
-  'whatsapp-hd': { dot: 'bg-[var(--accent-olive)]', tag: 'WA HD' },
-  'whatsapp-status': { dot: 'bg-[var(--accent-olive)]', tag: '1080p' },
-  'instagram-story': { dot: 'bg-[var(--accent-terracotta)]', tag: 'Reels' },
-  'tiktok-hd': { dot: 'bg-[var(--accent-gold)]', tag: 'TikTok' },
-  'web-light': { dot: 'bg-[var(--accent-caramel)]', tag: '720p' },
-  custom: { dot: 'bg-[var(--accent-taupe)]', tag: 'Manual' },
+  'whatsapp-hd': { dot: 'bg-[var(--accent-photo)]', tag: 'WA HD' },
+  'whatsapp-status': { dot: 'bg-[var(--accent-primary)]', tag: '1080p' },
+  'instagram-story': { dot: 'bg-[var(--accent-video)]', tag: 'Reels' },
+  'tiktok-hd': { dot: 'bg-[var(--accent-craft)]', tag: 'TikTok' },
+  'web-light': { dot: 'bg-[var(--accent-highlight)]', tag: '720p' },
+  custom: { dot: 'bg-[var(--accent-slate)]', tag: 'Manual' },
 };
 
 export interface CapturedFrameInfo {
@@ -792,7 +792,7 @@ export function VideoControlPanel({
               {VIDEO_PRESET_IDS.map((id) => getMediaPreset(id)).map((preset) => {
                 const selected = preset.id === selectedPresetId;
                 const badgeMeta = VIDEO_PRESET_BADGE_STYLE[preset.id] ?? {
-                  dot: 'bg-[var(--accent-caramel)]',
+                  dot: 'bg-[var(--accent-highlight)]',
                   tag: preset.shortLabel,
                 };
                 return (
@@ -806,7 +806,7 @@ export function VideoControlPanel({
                     onClick={() => onSelectPreset(preset.id)}
                     className={`flex min-h-[48px] shrink-0 snap-start flex-col items-start justify-center whitespace-nowrap rounded-2xl border px-3.5 py-2 text-left transition-all duration-150 hover:-translate-y-0.5 active:scale-[0.985] disabled:opacity-60 md:min-h-[54px] md:whitespace-normal md:px-3 ${
                       selected
-                        ? 'border-[var(--border-active)] bg-[var(--accent-gold-soft)] text-[var(--text-primary)] ring-1 ring-[var(--border-active)]/40'
+                        ? 'border-[var(--accent-video-border)] bg-[var(--accent-video-soft)] text-[var(--text-primary)] ring-1 ring-[var(--accent-video-border)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
                     }`}
                   >
@@ -1159,7 +1159,7 @@ export function VideoControlPanel({
                     onClick={() => onUpdateVideoEdit({ clarityModel: model.id })}
                     className={`flex min-h-[52px] min-w-[162px] shrink-0 snap-start flex-col items-start justify-center rounded-2xl border px-3.5 py-2 text-left transition-all duration-150 hover:-translate-y-0.5 md:min-w-0 md:px-3 ${
                       active
-                        ? 'border-[var(--border-active)] border-l-[3px] border-l-[var(--accent-gold)] bg-[var(--accent-gold-soft)] text-[var(--text-primary)] ring-1 ring-[var(--border-active)]'
+                        ? 'border-[var(--accent-craft-border)] border-l-[3px] border-l-[var(--accent-craft)] bg-[var(--accent-craft-soft)] text-[var(--text-primary)] ring-1 ring-[var(--accent-craft-border)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
                     }`}
                   >

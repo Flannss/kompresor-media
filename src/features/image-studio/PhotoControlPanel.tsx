@@ -51,14 +51,14 @@ import type { DeviceProfile } from '../../shared/utils/deviceCapability';
 export type PhotoTabId = 'utama' | 'tampilan' | 'edit';
 
 const PRESET_BADGE_STYLE: Record<string, { dot: string; tag: string }> = {
-  'whatsapp-hd': { dot: 'bg-[var(--accent-olive)]', tag: 'WA HD' },
-  'whatsapp-status': { dot: 'bg-[var(--accent-olive)]', tag: 'Status' },
-  'instagram-story': { dot: 'bg-[var(--accent-terracotta)]', tag: 'Reels' },
-  'instagram-feed': { dot: 'bg-[var(--accent-terracotta)]', tag: 'Feed' },
-  'tiktok-hd': { dot: 'bg-[var(--accent-gold)]', tag: 'TikTok' },
-  'web-light': { dot: 'bg-[var(--accent-caramel)]', tag: 'WebP' },
-  'archive-hd': { dot: 'bg-[var(--accent-gold)]', tag: 'Arsip' },
-  custom: { dot: 'bg-[var(--accent-taupe)]', tag: 'Manual' },
+  'whatsapp-hd': { dot: 'bg-[var(--accent-photo)]', tag: 'WA HD' },
+  'whatsapp-status': { dot: 'bg-[var(--accent-primary)]', tag: 'Status' },
+  'instagram-story': { dot: 'bg-[var(--accent-video)]', tag: 'Reels' },
+  'instagram-feed': { dot: 'bg-[var(--accent-video)]', tag: 'Feed' },
+  'tiktok-hd': { dot: 'bg-[var(--accent-craft)]', tag: 'TikTok' },
+  'web-light': { dot: 'bg-[var(--accent-highlight)]', tag: 'WebP' },
+  'archive-hd': { dot: 'bg-[var(--accent-craft)]', tag: 'Arsip' },
+  custom: { dot: 'bg-[var(--accent-slate)]', tag: 'Manual' },
 };
 
 const PRO_TOOL_ICONS = {
@@ -110,7 +110,7 @@ export function PhotoInspectorHeader({
           <button
             type="button"
             onClick={() => onChangeTab('tampilan')}
-            className="rounded-full border border-[var(--border-active)] bg-[var(--accent-gold-soft)] px-2.5 py-0.5 font-semibold text-[var(--accent-gold)]"
+            className="rounded-full border border-[var(--accent-craft-border)] bg-[var(--accent-craft-soft)] px-2.5 py-0.5 font-semibold text-[var(--accent-craft)]"
           >
             {activeTools.length} Alat Foto
           </button>
@@ -388,7 +388,7 @@ export function PhotoControlPanel({
               {photoPresets.map((preset) => {
                 const selected = preset.id === selectedPresetId;
                 const badgeMeta = PRESET_BADGE_STYLE[preset.id] ?? {
-                  dot: 'bg-[var(--accent-caramel)]',
+                  dot: 'bg-[var(--accent-highlight)]',
                   tag: preset.shortLabel,
                 };
                 return (
@@ -401,7 +401,7 @@ export function PhotoControlPanel({
                     onClick={() => onSelectPreset(preset.id)}
                     className={`flex min-h-[48px] shrink-0 snap-start flex-col items-start justify-center whitespace-nowrap rounded-2xl border px-3.5 py-2 text-left transition-all duration-150 hover:-translate-y-0.5 active:scale-[0.985] md:min-h-[54px] md:whitespace-normal md:px-3 ${
                       selected
-                        ? 'border-[var(--border-active)] bg-[var(--accent-gold-soft)] text-[var(--text-primary)] shadow-[var(--glass-highlight)] ring-1 ring-[var(--border-active)]/40'
+                        ? 'border-[var(--border-active)] bg-[var(--accent-photo-soft)] text-[var(--text-primary)] shadow-[var(--glass-highlight)] ring-1 ring-[var(--border-active)]/40'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
                     }`}
                   >
@@ -618,7 +618,7 @@ export function PhotoControlPanel({
                     <span>Reset</span>
                   </button>
                 )}
-                <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-0.5 text-[10.5px] font-semibold text-[var(--accent-gold)] tabular-nums">
+                <span className="rounded-full border border-[var(--accent-craft-border)] bg-[var(--bg-surface)] px-2.5 py-0.5 text-[10.5px] font-semibold text-[var(--accent-craft)] tabular-nums">
                   {activeTools.length > 0 ? `${activeTools.length} aktif` : '9 alat'}
                 </span>
               </div>
@@ -644,7 +644,7 @@ export function PhotoControlPanel({
                       idx === 8 ? 'col-span-2' : ''
                     } ${
                       active
-                        ? 'border-[var(--border-active)] border-l-[3px] border-l-[var(--accent-gold)] bg-[var(--accent-gold-soft)] text-[var(--text-primary)] ring-1 ring-[var(--border-active)]'
+                        ? 'border-[var(--accent-craft-border)] border-l-[3px] border-l-[var(--accent-craft)] bg-[var(--accent-craft-soft)] text-[var(--text-primary)] ring-1 ring-[var(--accent-craft-border)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
                     }`}
                   >

@@ -30,7 +30,7 @@ export const PHOTO_FILTER_PRESETS: readonly PhotoFilterPresetSpec[] = [
     title: 'RealPhoto Natural',
     badge: 'Natural',
     description: 'Warna jernih natural dengan kontras seimbang.',
-    swatchGradient: 'linear-gradient(125deg, #f0dfc8 0%, #c89d76 52%, #5e6d52 100%)',
+    swatchGradient: 'linear-gradient(125deg, #e2e8f0 0%, #64748b 52%, #0d9488 100%)',
     css: { brightness: 1.03, contrast: 1.06, saturate: 1.07 },
   },
   {
@@ -38,7 +38,7 @@ export const PHOTO_FILTER_PRESETS: readonly PhotoFilterPresetSpec[] = [
     title: 'Flagship Pro',
     badge: 'Pro',
     description: 'Tegas, bersih, dan highlight terkendali.',
-    swatchGradient: 'linear-gradient(125deg, #e7d9c4 0%, #9b7a52 52%, #2f231b 100%)',
+    swatchGradient: 'linear-gradient(125deg, #f8fafc 0%, #3b82f6 52%, #0f172a 100%)',
     css: { brightness: 1.02, contrast: 1.12, saturate: 1.1 },
   },
   {
