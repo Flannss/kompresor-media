@@ -286,7 +286,7 @@ export async function runMediaRecorderVideoTranscode(
     const videoBitsPerSecond = resolveHardwareVideoBitrateBps(edit);
     const audioBitsPerSecond = Math.min(
       160_000,
-      Math.max(128_000, getEffectiveAudioBitrateKbps(edit) * 1000)
+      Math.max(96_000, getEffectiveAudioBitrateKbps(edit) * 1000)
     );
 
     try {

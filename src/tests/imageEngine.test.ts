@@ -178,8 +178,8 @@ describe('image pixelOps, 1080p HD Enhance Suite, Color Grades, and studio histo
     expect(formatOutputMimeShort('image/png')).toBe('PNG');
   });
 
-  it('exposes all 9 calibrated Indonesian share presets including WhatsApp HD', () => {
-    expect(MEDIA_PRESETS.length).toBe(9);
+  it('exposes all calibrated Indonesian share presets including WhatsApp HD, Vlog HD, and Long Video', () => {
+    expect(MEDIA_PRESETS.length).toBe(11);
     const waHd = getMediaPreset('whatsapp-hd').image;
     expect(waHd.maxEdgePx).toBe(2560);
     expect(waHd.outputFormat).toBe('image/jpeg');

@@ -128,6 +128,20 @@ export function MediaInfoBar({
               {renderDeltaBadge(imageProcessResult.inputBytes, imageProcessResult.outputBytes)}
             </>
           )}
+          {imageProcessResult.sharpnessDeltaPct !== undefined &&
+            imageProcessResult.sharpnessDeltaPct > 0 && (
+              <>
+                <span aria-hidden="true" className="text-[var(--text-muted)]">
+                  ·
+                </span>
+                <span
+                  data-testid="media-sharpness-delta"
+                  className="font-semibold text-[var(--text-primary)] tabular-nums"
+                >
+                  Ketajaman +{imageProcessResult.sharpnessDeltaPct}%
+                </span>
+              </>
+            )}
           {imageProcessStatus === 'processing' && (
             <>
               <span aria-hidden="true" className="text-[var(--text-muted)]">

@@ -7,8 +7,12 @@ export type VideoPresetId =
   | 'whatsapp-status'
   | 'instagram-story'
   | 'tiktok-hd'
+  | 'vlog-hd'
+  | 'long-video'
   | 'web-light'
   | 'custom';
+
+export type LongVideoProfileId = 'space-saver' | 'balanced-hd' | 'clear-archive';
 
 export type VideoOutputFormat = 'mp4' | 'mov' | 'webm' | 'mkv';
 export type VideoOutputMime =
@@ -71,6 +75,7 @@ export interface VideoSubtitleOptions {
 
 export interface VideoEditState {
   presetId: VideoPresetId;
+  longVideoProfile?: LongVideoProfileId;
   compressEnabled: boolean;
   outputFormat: VideoOutputFormat;
   /** Semantic target resolution preset/override ('original' honors maxHeightPx). */

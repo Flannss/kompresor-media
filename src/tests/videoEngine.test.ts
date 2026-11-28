@@ -76,7 +76,7 @@ describe('video presets, trim helpers, and even scaling', () => {
   });
 
   it('provides consistent video preset configurations across all calibrated destinations', () => {
-    expect(MEDIA_PRESETS.length).toBe(9);
+    expect(MEDIA_PRESETS.length).toBe(11);
     const waHd = getMediaPreset('whatsapp-hd').video;
     expect(waHd.targetResolution).toBe('1080p');
     expect(waHd.maxHeightPx).toBe(1080);

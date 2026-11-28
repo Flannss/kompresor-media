@@ -210,14 +210,14 @@ export function UploadZone({
           </p>
 
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-[11px] font-medium text-[var(--text-secondary)] tabular-nums">
-            <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-1">
+            <span className="km-glass-pill rounded-full border px-3 py-1">
               100% Lokal di Perangkat
             </span>
-            <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-1">
+            <span className="km-glass-pill rounded-full border px-3 py-1">
               Hingga {queueLimits.maxTotal} File Sekaligus
             </span>
-            <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-1">
-              Siap WhatsApp, IG &amp; TikTok
+            <span className="km-glass-pill rounded-full border px-3 py-1">
+              Siap WhatsApp, IG, TikTok &amp; Vlog
             </span>
           </div>
         </header>
@@ -243,7 +243,7 @@ export function UploadZone({
           <section
             data-testid="entry-photo-card"
             aria-label="Studio Foto"
-            className="km-glass-strong group relative flex flex-col justify-between gap-4 overflow-hidden rounded-[26px] border p-5 transition-all duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-card-hover)] sm:gap-6 sm:p-7 md:p-8"
+            className="km-glass-panel group relative flex flex-col justify-between gap-4 overflow-hidden rounded-[26px] border p-5 transition-all duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-card-hover)] sm:gap-6 sm:p-7 md:p-8"
             style={{ boxShadow: 'var(--shadow-soft)' }}
           >
             <div
@@ -305,12 +305,11 @@ export function UploadZone({
             </div>
           </section>
 
-          {/* Card 2: Studio Video (Dusty Terracotta accent harmony) */}
           {/* Card 2: Studio Video (Sculpted Charcoal Slate Timeline Motif) */}
           <section
             data-testid="entry-video-card"
             aria-label="Studio Video"
-            className="km-glass-strong group relative flex flex-col justify-between gap-4 overflow-hidden rounded-[26px] border p-5 transition-all duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-card-hover)] sm:gap-6 sm:p-7 md:p-8"
+            className="km-glass-panel group relative flex flex-col justify-between gap-4 overflow-hidden rounded-[26px] border p-5 transition-all duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-card-hover)] sm:gap-6 sm:p-7 md:p-8"
             style={{ boxShadow: 'var(--shadow-soft)' }}
           >
             <div
@@ -339,7 +338,7 @@ export function UploadZone({
                 </div>
 
                 <span className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border-hairline)] bg-[var(--bg-subtle)] px-3 py-1 text-[11px] font-semibold text-[var(--text-primary)] tabular-nums">
-                  1080p HD · BT.709
+                  1080p HD · Vlog &amp; 30+ mnt
                 </span>
               </div>
 
@@ -348,8 +347,8 @@ export function UploadZone({
                   Studio Video
                 </h2>
                 <p className="mt-2 text-[13px] leading-relaxed text-[var(--text-secondary)] sm:text-sm">
-                  Kompres HD 1080p BT.709, 4 model penjernih video, 7 color grading langsung,
-                  bandingkan sebelum–sesudah, potong durasi, audio, &amp; subtitle.
+                  Kompres HD 1080p BT.709, Vlog HD 8,5 Mbps, mode Video Panjang 30+ mnt, 4 model
+                  penjernih, color grading langsung, potong durasi, audio, &amp; subtitle.
                 </p>
               </div>
             </div>
@@ -377,7 +376,7 @@ export function UploadZone({
         <div className="flex w-full flex-col items-center gap-3">
           <div
             data-testid="landing-flow-strip"
-            className="km-glass flex max-w-full flex-wrap items-center justify-center gap-x-4 gap-y-2 rounded-2xl border px-4 py-3 text-xs text-[var(--text-secondary)] tabular-nums sm:gap-x-5 sm:rounded-full sm:px-6"
+            className="km-glass-pill flex max-w-full flex-wrap items-center justify-center gap-x-4 gap-y-2 rounded-2xl border px-4 py-3 text-xs text-[var(--text-secondary)] tabular-nums sm:gap-x-5 sm:rounded-full sm:px-6"
           >
             <span className="flex items-center gap-1.5">
               <span className="font-editorial text-[13px] font-semibold text-[var(--text-primary)]">

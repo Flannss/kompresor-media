@@ -155,5 +155,6 @@ export interface ImageProcessResult {
   targetSizeMet?: boolean;
   clampedByMemoryGuard?: boolean;
   appliedTargetResolution?: PhotoTargetResolution;
+  sharpnessDeltaPct?: number;
   activeModules?: string[];
 }

@@ -124,7 +124,7 @@ export function CoreSummaryCard({
     <section
       data-testid="core-summary-card"
       aria-label="Ringkasan Inti"
-      className={`rounded-[22px] border border-[var(--border-hairline)] bg-[var(--bg-elevated)] shadow-[var(--glass-highlight)] ${
+      className={`km-glass-panel rounded-[22px] border ${
         compactOnDesktop ? 'p-3.5 lg:rounded-xl lg:px-3 lg:py-2' : 'p-3.5'
       }`}
     >
@@ -195,6 +195,16 @@ export function CoreSummaryCard({
                 {savingsBadge}
               </span>
             )}
+            {isImage &&
+              imageProcessResult?.sharpnessDeltaPct !== undefined &&
+              imageProcessResult.sharpnessDeltaPct > 0 && (
+                <span
+                  data-testid="core-summary-sharpness"
+                  className="rounded-md border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-primary)] tabular-nums"
+                >
+                  Ketajaman +{imageProcessResult.sharpnessDeltaPct}%
+                </span>
+              )}
           </div>
         </div>
 

@@ -46,7 +46,7 @@ export function WorkspaceHeader({
 
   return (
     <>
-      <header className="km-glass-strong sticky top-0 z-30 h-[54px] border-b transition-colors sm:h-[60px]">
+      <header className="km-glass-dock sticky top-0 z-30 h-[54px] border-b transition-colors sm:h-[60px]">
         <div className="mx-auto flex h-full max-w-[1720px] items-center justify-between gap-2 px-3 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-1.5 sm:gap-2.5">
             <svg

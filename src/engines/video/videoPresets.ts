@@ -1,7 +1,10 @@
 import { sanitizeExportBaseName } from '../../shared/utils/sanitizeFileName';
 import type {
+  AudioBitrateKbps,
+  LongVideoProfileId,
   VideoClarityModel,
   VideoEditState,
+  VideoMetadata,
   VideoOutputFormat,
   VideoQualityTier,
   VideoTargetResolution,
@@ -18,6 +21,81 @@ export interface ClampedTrimRange {
   durationSec: number;
   isTrimmed: boolean;
 }
+
+export interface LongVideoProfileSpec {
+  id: LongVideoProfileId;
+  label: string;
+  badge: string | null;
+  summary: string;
+  targetResolution: VideoTargetResolution;
+  maxHeightPx: number;
+  fpsCap: number;
+  qualityTier: VideoQualityTier;
+  targetBitrateBps: number;
+  crf: number;
+  maxrateKbps: number;
+  bufsizeKbps: number;
+  audioBitrateKbps: AudioBitrateKbps;
+}
+
+export interface VideoSegmentRange {
+  index: number;
+  startSec: number;
+  endSec: number;
+  durationSec: number;
+  label: string;
+}
+
+export const LONG_VIDEO_DURATION_THRESHOLD_SEC = 300; // 5 minutes
+export const LONG_VIDEO_SIZE_THRESHOLD_BYTES = 150 * 1024 * 1024; // 150 MB
+
+export const LONG_VIDEO_PROFILE_SPECS: Record<LongVideoProfileId, LongVideoProfileSpec> = {
+  'space-saver': {
+    id: 'space-saver',
+    label: 'Hemat Ruang',
+    badge: null,
+    summary: '720p · 2,2 Mbps · Audio 96k · Ukuran ringkas & cepat',
+    targetResolution: '720p',
+    maxHeightPx: 720,
+    fpsCap: 30,
+    qualityTier: 'light',
+    targetBitrateBps: 2_200_000,
+    crf: 23,
+    maxrateKbps: 2600,
+    bufsizeKbps: 5200,
+    audioBitrateKbps: 96,
+  },
+  'balanced-hd': {
+    id: 'balanced-hd',
+    label: 'Seimbang HD',
+    badge: 'Rekomendasi',
+    summary: '1080p · 4,2 Mbps · Audio 128k · Jernih stabil 30+ mnt',
+    targetResolution: '1080p',
+    maxHeightPx: 1080,
+    fpsCap: 30,
+    qualityTier: 'balanced',
+    targetBitrateBps: 4_200_000,
+    crf: 20,
+    maxrateKbps: 4800,
+    bufsizeKbps: 9600,
+    audioBitrateKbps: 128,
+  },
+  'clear-archive': {
+    id: 'clear-archive',
+    label: 'Arsip Jernih',
+    badge: null,
+    summary: '1080p · 6,5 Mbps · Audio 160k · Detail presentasi & acara',
+    targetResolution: '1080p',
+    maxHeightPx: 1080,
+    fpsCap: 30,
+    qualityTier: 'high',
+    targetBitrateBps: 6_500_000,
+    crf: 18,
+    maxrateKbps: 7500,
+    bufsizeKbps: 15000,
+    audioBitrateKbps: 160,
+  },
+};
 
 export const VIDEO_CLARITY_MODEL_LABELS: Record<VideoClarityModel, string> = {
   original: 'Asli (Hemat)',
@@ -156,6 +234,121 @@ export function resolveCustomVideoParams(
         audioBitrateKbps: 128,
       };
   }
+}
+
+export function resolveLongVideoProfileParams(
+  profile: LongVideoProfileId
+): Pick<
+  VideoEditState,
+  | 'longVideoProfile'
+  | 'targetResolution'
+  | 'maxHeightPx'
+  | 'fpsCap'
+  | 'qualityTier'
+  | 'targetBitrateBps'
+  | 'crf'
+  | 'maxrateKbps'
+  | 'bufsizeKbps'
+  | 'audioBitrateKbps'
+> {
+  const spec = LONG_VIDEO_PROFILE_SPECS[profile] ?? LONG_VIDEO_PROFILE_SPECS['balanced-hd'];
+  return {
+    longVideoProfile: spec.id,
+    targetResolution: spec.targetResolution,
+    maxHeightPx: spec.maxHeightPx,
+    fpsCap: spec.fpsCap,
+    qualityTier: spec.qualityTier,
+    targetBitrateBps: spec.targetBitrateBps,
+    crf: spec.crf,
+    maxrateKbps: spec.maxrateKbps,
+    bufsizeKbps: spec.bufsizeKbps,
+    audioBitrateKbps: spec.audioBitrateKbps,
+  };
+}
+
+export function isLongFormVideoCandidate(
+  metadata: Pick<VideoMetadata, 'durationSec' | 'sizeBytes'>
+): boolean {
+  return (
+    metadata.durationSec >= LONG_VIDEO_DURATION_THRESHOLD_SEC ||
+    metadata.sizeBytes >= LONG_VIDEO_SIZE_THRESHOLD_BYTES
+  );
+}
+
+/**
+ * Resolves calibrated effective video bitrate across hardware WebCodecs, MediaRecorder,
+ * and output size estimation.
+ */
+export function resolveEffectiveVideoBitrateBps(edit: VideoEditState): number {
+  switch (edit.presetId) {
+    case 'whatsapp-hd':
+      return 6_200_000;
+    case 'whatsapp-status':
+      return 4_600_000;
+    case 'instagram-story':
+      return 7_000_000;
+    case 'tiktok-hd':
+      return 7_500_000;
+    case 'vlog-hd':
+      return 8_500_000;
+    case 'web-light':
+    case 'whatsapp-fast':
+      return 2_200_000;
+    case 'long-video':
+      return edit.targetBitrateBps || 4_200_000;
+    default:
+      return edit.targetBitrateBps;
+  }
+}
+
+/**
+ * Estimates final container file size mathematically from trimmed duration * (video + audio bitrate)
+ * plus ~2% MP4/MOV muxer overhead.
+ */
+export function estimateVideoOutputBytes(durationSec: number, edit: VideoEditState): number {
+  const safeTotal = Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 0;
+  if (safeTotal <= 0) return 0;
+
+  const trim = clampTrimRange(edit.trimStartSec, edit.trimEndSec, safeTotal);
+  const activeDur = trim.durationSec > 0 ? trim.durationSec : safeTotal;
+  const videoBps = resolveEffectiveVideoBitrateBps(edit);
+  const isMuted = edit.muteAudio || (edit.audio.enabled && edit.audio.muteAudio);
+  const audioKbps = isMuted ? 0 : edit.audio.enabled ? edit.audio.bitrateKbps : edit.audioBitrateKbps;
+  const totalBps = videoBps + audioKbps * 1000;
+  return Math.max(0, Math.round(((totalBps * activeDur) / 8) * 1.02));
+}
+
+function formatSegmentMinuteMark(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+/**
+ * Builds chronological trim segment chunks (e.g. 10-min or 15-min slices) for long-form exports.
+ */
+export function buildVideoSegments(
+  totalDurationSec: number,
+  segmentMinutes: 10 | 15 = 10
+): VideoSegmentRange[] {
+  const safeTotal = Number.isFinite(totalDurationSec) && totalDurationSec > 0 ? totalDurationSec : 0;
+  if (safeTotal <= 0) return [];
+  const stepSec = segmentMinutes * 60;
+  const count = Math.ceil(safeTotal / stepSec);
+  const segments: VideoSegmentRange[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const startSec = i * stepSec;
+    const endSec = Math.min(safeTotal, (i + 1) * stepSec);
+    if (endSec - startSec < 0.2) break;
+    segments.push({
+      index: i + 1,
+      startSec: Number(startSec.toFixed(3)),
+      endSec: Number(endSec.toFixed(3)),
+      durationSec: Number((endSec - startSec).toFixed(3)),
+      label: `Bagian ${i + 1} (${formatSegmentMinuteMark(startSec)}–${formatSegmentMinuteMark(endSec)})`,
+    });
+  }
+  return segments;
 }
 
 export function buildVideoExportFileName(

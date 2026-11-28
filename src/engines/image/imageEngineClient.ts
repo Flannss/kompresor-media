@@ -244,6 +244,7 @@ export async function processImage(
       targetSizeMet: response.targetSizeMet,
       clampedByMemoryGuard: response.clampedByMemoryGuard,
       appliedTargetResolution: response.appliedTargetResolution,
+      sharpnessDeltaPct: response.sharpnessDeltaPct,
       activeModules,
     };
   } catch {

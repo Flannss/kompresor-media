@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Button } from '../design-system/components/Button';
 import { isStaleChunkError, recoverFromStaleChunkError } from '../shared/utils/chunkRecovery';
+import { formatFriendlyMediaError, TECHNICAL_LEAK_RE } from '../shared/utils/friendlyError';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -22,14 +23,19 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     const chunkErr = isStaleChunkError(error);
+    const cleanDirect =
+      error instanceof Error &&
+      error.message &&
+      error.message.length < 200 &&
+      !TECHNICAL_LEAK_RE.test(`${error.name} ${error.message}`)
+        ? error.message
+        : null;
     return {
       hasError: true,
       isChunkError: chunkErr,
       message: chunkErr
         ? 'Versi baru aplikasi baru saja tersedia. Muat ulang studio untuk melanjutkan.'
-        : error instanceof Error && error.message
-          ? error.message
-          : 'Terjadi gangguan tak terduga saat memuat studio.',
+        : cleanDirect ?? formatFriendlyMediaError(error, 'video'),
     };
   }
 

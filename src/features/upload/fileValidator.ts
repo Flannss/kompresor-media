@@ -5,7 +5,7 @@ import type {
 } from '../../engines/contracts';
 
 export const DEFAULT_MAX_IMAGE_BYTES = 50 * 1024 * 1024; // 50 MB
-export const DEFAULT_MAX_VIDEO_BYTES = 500 * 1024 * 1024; // 500 MB
+export const DEFAULT_MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB (streaming BlobSource support)
 
 export interface ValidateFileOptions {
   maxImageBytes?: number;

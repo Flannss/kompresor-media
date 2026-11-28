@@ -27,6 +27,7 @@ import {
   buildVideoExportFileName,
   clampTrimRange,
   computeVideoTargetDimensions,
+  resolveEffectiveVideoBitrateBps,
 } from './videoPresets';
 
 export class VideoFallbackRequiredError extends Error {
@@ -120,25 +121,11 @@ const HARDWARE_H264_CODEC_CANDIDATES = [
 ] as const;
 
 /**
- * Resolves calibrated social-HD bitrates for Hardware WebCodecs video exports
- * to guarantee crisp playback after WhatsApp, IG Reels, and TikTok re-compression.
+ * Resolves calibrated social-HD, Vlog HD (8.5 Mbps), and Long-Form bitrates
+ * for Hardware WebCodecs & MediaRecorder video exports.
  */
 export function resolveHardwareVideoBitrateBps(edit: VideoEditState): number {
-  switch (edit.presetId) {
-    case 'whatsapp-hd':
-      return 6_200_000;
-    case 'whatsapp-status':
-      return 4_600_000;
-    case 'instagram-story':
-      return 7_000_000;
-    case 'tiktok-hd':
-      return 7_500_000;
-    case 'web-light':
-    case 'whatsapp-fast':
-      return 2_200_000;
-    default:
-      return edit.targetBitrateBps;
-  }
+  return resolveEffectiveVideoBitrateBps(edit);
 }
 
 /**
@@ -847,7 +834,7 @@ export async function runWebCodecsVideoTranscode(
     }
 
     const muted = isAudioMuted(edit);
-    const audioBitrateBps = Math.min(160_000, Math.max(128_000, getEffectiveAudioBitrateKbps(edit) * 1000));
+    const audioBitrateBps = Math.min(160_000, Math.max(96_000, getEffectiveAudioBitrateKbps(edit) * 1000));
     const primaryAudio = await input.getPrimaryAudioTrack().catch(() => null);
     let discardAudio = muted || !primaryAudio;
 

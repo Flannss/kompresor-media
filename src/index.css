@@ -124,19 +124,43 @@
 }
 
 .km-glass {
-  background: var(--bg-surface);
-  border-color: var(--border-hairline);
-  box-shadow: var(--glass-highlight), var(--shadow-soft);
-  -webkit-backdrop-filter: blur(16px) saturate(130%);
-  backdrop-filter: blur(16px) saturate(130%);
+  background: var(--glass-bg, var(--bg-surface));
+  border-color: var(--glass-border, var(--border-hairline));
+  box-shadow: var(--glass-shadow, var(--shadow-soft));
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
+  backdrop-filter: blur(14px) saturate(135%);
 }
 
 .km-glass-strong {
   background: var(--bg-surface-strong);
-  border-color: var(--border-hairline);
-  box-shadow: var(--glass-highlight), var(--shadow-soft);
-  -webkit-backdrop-filter: blur(20px) saturate(135%);
-  backdrop-filter: blur(20px) saturate(135%);
+  border-color: var(--glass-border, var(--border-hairline));
+  box-shadow: var(--glass-shadow, var(--shadow-soft));
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
+.km-glass-panel {
+  background: var(--glass-bg, var(--bg-surface));
+  border-color: var(--glass-border, var(--border-hairline));
+  box-shadow: var(--glass-shadow, var(--shadow-soft));
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
+  backdrop-filter: blur(14px) saturate(135%);
+}
+
+.km-glass-dock {
+  background: var(--glass-bg-elevated, var(--surface-dock));
+  border-color: var(--glass-border, var(--border-hairline));
+  box-shadow: var(--glass-highlight), var(--dock-shadow);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
+  backdrop-filter: blur(14px) saturate(135%);
+}
+
+.km-glass-pill {
+  background: var(--glass-bg-elevated, var(--bg-elevated));
+  border-color: var(--glass-border, var(--border-hairline));
+  box-shadow: var(--glass-highlight);
+  -webkit-backdrop-filter: blur(10px) saturate(125%);
+  backdrop-filter: blur(10px) saturate(125%);
 }
 
 .km-glass-lite {
@@ -148,7 +172,10 @@
 }
 
 html[data-glass-lite='true'] .km-glass,
-html[data-glass-lite='true'] .km-glass-strong {
+html[data-glass-lite='true'] .km-glass-strong,
+html[data-glass-lite='true'] .km-glass-panel,
+html[data-glass-lite='true'] .km-glass-dock,
+html[data-glass-lite='true'] .km-glass-pill {
   background: var(--bg-surface-mobile);
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;

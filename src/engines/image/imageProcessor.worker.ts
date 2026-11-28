@@ -53,6 +53,7 @@ export type ImageWorkerResponse =
       targetSizeMet?: boolean;
       clampedByMemoryGuard?: boolean;
       appliedTargetResolution?: PhotoTargetResolution;
+      sharpnessDeltaPct?: number;
     }
   | {
       type: 'base-thumbnail';
@@ -192,6 +193,7 @@ workerScope.onmessage = async (event: MessageEvent<ImageWorkerRequest>) => {
         targetSizeMet: out.targetSizeMet,
         clampedByMemoryGuard: out.clampedByMemoryGuard,
         appliedTargetResolution: out.appliedTargetResolution,
+        sharpnessDeltaPct: out.sharpnessDeltaPct,
       },
       [outputBuffer]
     );

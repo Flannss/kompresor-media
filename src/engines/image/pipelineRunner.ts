@@ -15,6 +15,7 @@ import {
   applyQualityModelPass,
   applySharpen,
   computeCropPixels,
+  computeImageLaplacianEnergy,
   computePhotoTargetDimensions,
   computeProgressiveSteps,
   computeRotatedDimensions,
@@ -69,6 +70,7 @@ export interface PipelineOutput {
   targetSizeMet?: boolean;
   clampedByMemoryGuard?: boolean;
   appliedTargetResolution?: PhotoTargetResolution;
+  sharpnessDeltaPct?: number;
 }
 
 /** Explicitly releases backing GPU/RAM memory allocated for temporary Canvas/OffscreenCanvas buffers (critical for iOS Safari caps). */
@@ -498,10 +500,13 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
       needsQualityModelPass ||
       effectiveSharpen > 0;
 
+    let sharpnessDeltaPct = 0;
+
     if (needsPostPixelPass) {
       const ctx = currentCanvas.getContext('2d');
       if (ctx) {
         const imgData = ctx.getImageData(0, 0, currentCanvas.width, currentCanvas.height);
+        const preSharpness = computeImageLaplacianEnergy(imgData);
 
         applyColorAdjustments(imgData, edit.adjustments);
         if (edit.adjustments.clarity !== 0) {
@@ -540,6 +545,13 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
         }
 
         applySharpen(imgData, effectiveSharpen, edit.enhanceSuite.sharpen.antiArtifact);
+        const postSharpness = computeImageLaplacianEnergy(imgData);
+        if (preSharpness > 0.05 && postSharpness > preSharpness) {
+          sharpnessDeltaPct = Math.max(
+            0,
+            Math.round(((postSharpness - preSharpness) / preSharpness) * 100)
+          );
+        }
         ctx.putImageData(imgData, 0, 0);
       }
     }
@@ -558,6 +570,7 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
         ...sizedOut,
         clampedByMemoryGuard: targetPlan.clampedByMemoryGuard,
         appliedTargetResolution: targetPlan.appliedTargetResolution,
+        sharpnessDeltaPct,
       };
     }
 
@@ -579,6 +592,7 @@ export async function runImagePipeline<TCanvas extends CanvasSurfaceLike>(
       height: outH,
       clampedByMemoryGuard: targetPlan.clampedByMemoryGuard,
       appliedTargetResolution: targetPlan.appliedTargetResolution,
+      sharpnessDeltaPct,
     };
   } finally {
     releaseCanvasSurface(currentCanvas);

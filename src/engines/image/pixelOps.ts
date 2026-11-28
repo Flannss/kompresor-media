@@ -729,7 +729,210 @@ function applyStudioPortraitPass(
 }
 
 /**
- * 5 distinct, style-preserving Photo Quality Models + resolution-scaled clarity recovery.
+ * Measures average luminance Laplacian edge energy (`|4*c - n - s - w - e|`)
+ * cleanly strided for multi-megapixel 4K/8K canvases without UI overhead.
+ */
+export function computeImageLaplacianEnergy(imageData: ImageData): number {
+  const { width, height, data } = imageData;
+  if (width < 3 || height < 3) {
+    return 0;
+  }
+
+  const step = width * height > 450_000 ? 2 : 1;
+  const stride = width * 4;
+  let total = 0;
+  let count = 0;
+
+  for (let y = 1; y < height - 1; y += step) {
+    const rowOff = y * stride;
+    for (let x = 1; x < width - 1; x += step) {
+      const i = rowOff + x * 4;
+      const c = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      const l = 0.2126 * data[i - 4] + 0.7152 * data[i - 3] + 0.0722 * data[i - 2];
+      const r = 0.2126 * data[i + 4] + 0.7152 * data[i + 5] + 0.0722 * data[i + 6];
+      const u =
+        0.2126 * data[i - stride] + 0.7152 * data[i - stride + 1] + 0.0722 * data[i - stride + 2];
+      const d =
+        0.2126 * data[i + stride] + 0.7152 * data[i + stride + 1] + 0.0722 * data[i + stride + 2];
+      total += Math.abs(4 * c - l - r - u - d);
+      count += 1;
+    }
+  }
+
+  return count > 0 ? total / count : 0;
+}
+
+/**
+ * Multi-scale rolling separable local-contrast (9x9) + fine edge acutance (5x5)
+ * with soft-knee anti-halo clamping (~200 KB peak RAM even at 8K).
+ */
+export function applyMultiScaleSuperClarity(
+  imageData: ImageData,
+  wideLocalContrastGain: number,
+  fineAcutanceGain: number,
+  maxHalo = 34
+): void {
+  const { width, height, data } = imageData;
+  if (wideLocalContrastGain <= 0.001 && fineAcutanceGain <= 0.001) {
+    return;
+  }
+  if (width < 9 || height < 9) {
+    if (wideLocalContrastGain > 0.001) {
+      applyClarity(imageData, Math.round(wideLocalContrastGain * 45));
+    }
+    if (fineAcutanceGain > 0.001) {
+      applySharpen(imageData, Math.round(fineAcutanceGain * 45), true);
+    }
+    return;
+  }
+
+  const rWide = 4; // 9x9 window (81 samples)
+  const winWide = 9;
+  const rFine = 2; // 5x5 window (25 samples)
+  const winFine = 5;
+  const rowStride = width * 4;
+
+  const hSumWideRing: Uint16Array[] = Array.from({ length: winWide }, () => new Uint16Array(width));
+  const hSumFineRing: Uint16Array[] = Array.from({ length: winFine }, () => new Uint16Array(width));
+  const colSumWide = new Int32Array(width);
+  const colSumFine = new Int32Array(width);
+  const rowLuma = new Float32Array(width);
+
+  const fillRowHorizSums = (srcY: number, outWide: Uint16Array, outFine: Uint16Array) => {
+    const clampedY = Math.min(height - 1, Math.max(0, srcY));
+    const base = clampedY * rowStride;
+    for (let x = 0; x < width; x += 1) {
+      const p = base + x * 4;
+      rowLuma[x] = 0.2126 * data[p] + 0.7152 * data[p + 1] + 0.0722 * data[p + 2];
+    }
+
+    let accW = rowLuma[0] * (rWide + 1);
+    for (let dx = 1; dx <= rWide; dx += 1) {
+      accW += rowLuma[Math.min(width - 1, dx)];
+    }
+    outWide[0] = Math.round(accW);
+    for (let x = 1; x < width; x += 1) {
+      accW += rowLuma[Math.min(width - 1, x + rWide)] - rowLuma[Math.max(0, x - rWide - 1)];
+      outWide[x] = Math.round(accW);
+    }
+
+    let accF = rowLuma[0] * (rFine + 1);
+    for (let dx = 1; dx <= rFine; dx += 1) {
+      accF += rowLuma[Math.min(width - 1, dx)];
+    }
+    outFine[0] = Math.round(accF);
+    for (let x = 1; x < width; x += 1) {
+      accF += rowLuma[Math.min(width - 1, x + rFine)] - rowLuma[Math.max(0, x - rFine - 1)];
+      outFine[x] = Math.round(accF);
+    }
+  };
+
+  // Seed vertical sliding sums centered on y = 0
+  for (let i = 0; i < winWide; i += 1) {
+    const srcY = i - rWide;
+    fillRowHorizSums(srcY, hSumWideRing[i], hSumFineRing[i % winFine]);
+    const rw = hSumWideRing[i];
+    for (let x = 0; x < width; x += 1) {
+      colSumWide[x] += rw[x];
+    }
+  }
+  for (let j = 0; j < winFine; j += 1) {
+    const srcY = j - rFine;
+    const fineIdx = j;
+    fillRowHorizSums(srcY, hSumWideRing[rWide - rFine + j], hSumFineRing[fineIdx]);
+    const rf = hSumFineRing[fineIdx];
+    for (let x = 0; x < width; x += 1) {
+      colSumFine[x] += rf[x];
+    }
+  }
+  // Re-align vertical sums cleanly for y = 0 (fill above shared ring index; keep independent pass clean)
+  colSumWide.fill(0);
+  colSumFine.fill(0);
+  for (let i = 0; i < winWide; i += 1) {
+    fillRowHorizSums(i - rWide, hSumWideRing[i], hSumFineRing[0]);
+    const rw = hSumWideRing[i];
+    for (let x = 0; x < width; x += 1) {
+      colSumWide[x] += rw[x];
+    }
+  }
+  for (let j = 0; j < winFine; j += 1) {
+    fillRowHorizSums(j - rFine, hSumWideRing[0], hSumFineRing[j]);
+    // Ensure hSumWideRing[0] restored cleanly to y = -rWide
+    const rf = hSumFineRing[j];
+    for (let x = 0; x < width; x += 1) {
+      colSumFine[x] += rf[x];
+    }
+  }
+  // Restore exact wide ring row 0 before scan loop
+  fillRowHorizSums(-rWide, hSumWideRing[0], hSumFineRing[0]);
+  fillRowHorizSums(-rFine, hSumWideRing[rWide - rFine], hSumFineRing[0]);
+  // Wait: compute exact wide and fine horizontal sums independently without aliasing slot 0!
+  colSumWide.fill(0);
+  colSumFine.fill(0);
+  const scratchWide = new Uint16Array(width);
+  const scratchFine = new Uint16Array(width);
+  for (let i = 0; i < winWide; i += 1) {
+    fillRowHorizSums(i - rWide, hSumWideRing[i], scratchFine);
+    const rw = hSumWideRing[i];
+    for (let x = 0; x < width; x += 1) {
+      colSumWide[x] += rw[x];
+    }
+  }
+  for (let j = 0; j < winFine; j += 1) {
+    fillRowHorizSums(j - rFine, scratchWide, hSumFineRing[j]);
+    const rf = hSumFineRing[j];
+    for (let x = 0; x < width; x += 1) {
+      colSumFine[x] += rf[x];
+    }
+  }
+
+  for (let y = 0; y < height; y += 1) {
+    const outRow = y * rowStride;
+    for (let x = 0; x < width; x += 1) {
+      const idx = outRow + x * 4;
+      const cr = data[idx];
+      const cg = data[idx + 1];
+      const cb = data[idx + 2];
+      const lCenter = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb;
+
+      const avgWide = colSumWide[x] / 81;
+      const avgFine = colSumFine[x] / 25;
+      const midWeight = Math.max(
+        0.48,
+        1 - Math.abs(lCenter / 255 - 0.5) * 1.1
+      );
+      const rawDelta =
+        (lCenter - avgWide) * wideLocalContrastGain * midWeight +
+        (lCenter - avgFine) * fineAcutanceGain;
+      const limitedDelta = (maxHalo * rawDelta) / (maxHalo + Math.abs(rawDelta));
+
+      data[idx] = clampByte(cr + limitedDelta);
+      data[idx + 1] = clampByte(cg + limitedDelta);
+      data[idx + 2] = clampByte(cb + limitedDelta);
+    }
+
+    if (y + 1 < height) {
+      const oldWideIdx = y % winWide;
+      const oldFineIdx = y % winFine;
+      const evictWide = hSumWideRing[oldWideIdx];
+      const evictFine = hSumFineRing[oldFineIdx];
+      fillRowHorizSums(y + 1 + rWide, scratchWide, scratchFine);
+      for (let x = 0; x < width; x += 1) {
+        colSumWide[x] += scratchWide[x] - evictWide[x];
+      }
+      evictWide.set(scratchWide);
+
+      fillRowHorizSums(y + 1 + rFine, scratchWide, scratchFine);
+      for (let x = 0; x < width; x += 1) {
+        colSumFine[x] += scratchFine[x] - evictFine[x];
+      }
+      evictFine.set(scratchFine);
+    }
+  }
+}
+
+/**
+ * 5 distinct, style-preserving Photo Quality Models + resolution-scaled super-clarity recovery.
  */
 export function applyQualityModelPass(
   imageData: ImageData,
@@ -742,21 +945,22 @@ export function applyQualityModelPass(
   const s = Math.min(1, Math.max(0, modelStrength / 100));
   const tierBonus =
     targetResolution === '8k'
-      ? 0.72
+      ? 0.76
       : targetResolution === '4k'
-        ? 0.56
+        ? 0.62
         : targetResolution === '3k'
-          ? 0.42
+          ? 0.45
           : targetResolution === '2k'
-            ? 0.28
+            ? 0.3
             : targetResolution === 'hd'
-              ? 0.14
+              ? 0.16
               : 0;
-  const resBoost = tierBonus + Math.max(0, Math.min(0.6, (upscaleRatio - 1) * 0.35));
+  const resBoost = tierBonus + Math.max(0, Math.min(0.65, (upscaleRatio - 1) * 0.36));
 
   if (s <= 0.001) {
     if (resBoost > 0.01) {
-      applySharpen(imageData, Math.round(resBoost * 18), true);
+      applyMultiScaleSuperClarity(imageData, resBoost * 0.18, resBoost * 0.24, 24);
+      applySharpen(imageData, Math.round(resBoost * 20), true);
     }
     return;
   }
@@ -766,49 +970,73 @@ export function applyQualityModelPass(
       if (!options?.skipDenoise) {
         applyEdgePreservingDenoiseParams(
           imageData,
-          Math.max(1.2, (2.2 + resBoost * 1.4) * s),
-          Math.max(2, Math.round(3.5 * s))
+          Math.max(1.2, (2.0 + resBoost * 1.3) * s),
+          Math.max(2, Math.round(3.2 * s))
         );
       }
       applyColorAdjustments(imageData, {
-        contrast: Math.round(6 * s),
-        vibrance: Math.round(5 * s),
+        contrast: Math.round(7 * s),
+        vibrance: Math.round(6 * s),
       });
-      applyClarity(imageData, Math.round((22 + resBoost * 12) * s));
-      applySharpen(imageData, Math.round((32 + resBoost * 20) * s), true);
+      applyMultiScaleSuperClarity(
+        imageData,
+        (0.36 + resBoost * 0.24) * s,
+        (0.48 + resBoost * 0.3) * s,
+        36
+      );
+      applyClarity(imageData, Math.round((24 + resBoost * 12) * s));
+      applySharpen(imageData, Math.min(100, Math.round((40 + resBoost * 24) * s)), true);
       return;
     }
     case 'ultra-detail': {
       if (!options?.skipDenoise) {
         applyEdgePreservingDenoiseParams(
           imageData,
-          Math.min(2.4, (1.4 + resBoost) * s),
+          Math.min(2.3, (1.3 + resBoost * 0.9) * s),
           2
         );
       }
-      applyColorAdjustments(imageData, { contrast: Math.round(9 * s) });
-      applyClarity(imageData, Math.round((34 + resBoost * 18) * s));
-      applySharpen(imageData, Math.min(100, Math.round((66 + resBoost * 32) * s)), true);
+      applyColorAdjustments(imageData, { contrast: Math.round(10 * s) });
+      applyMultiScaleSuperClarity(
+        imageData,
+        (0.5 + resBoost * 0.28) * s,
+        (0.68 + resBoost * 0.36) * s,
+        42
+      );
+      applyClarity(imageData, Math.round((36 + resBoost * 18) * s));
+      applySharpen(imageData, Math.min(100, Math.round((72 + resBoost * 34) * s)), true);
       return;
     }
     case 'studio-portrait': {
       applyStudioPortraitPass(imageData, s, resBoost);
       applyColorAdjustments(imageData, {
         highlights: Math.round(-10 * s),
-        shadows: Math.round(10 * s),
+        shadows: Math.round(12 * s),
         temperature: Math.round(4 * s),
       });
+      applyMultiScaleSuperClarity(
+        imageData,
+        (0.2 + resBoost * 0.14) * s,
+        (0.24 + resBoost * 0.18) * s,
+        24
+      );
       return;
     }
     case 'hdr-dynamic': {
       applyColorAdjustments(imageData, {
-        shadows: Math.round(28 * s),
-        highlights: Math.round(-22 * s),
-        contrast: Math.round(10 * s),
-        vibrance: Math.round(18 * s),
+        shadows: Math.round(30 * s),
+        highlights: Math.round(-24 * s),
+        contrast: Math.round(11 * s),
+        vibrance: Math.round(20 * s),
       });
-      applyClarity(imageData, Math.round((26 + resBoost * 12) * s));
-      applySharpen(imageData, Math.round((20 + resBoost * 16) * s), true);
+      applyMultiScaleSuperClarity(
+        imageData,
+        (0.42 + resBoost * 0.22) * s,
+        (0.34 + resBoost * 0.22) * s,
+        38
+      );
+      applyClarity(imageData, Math.round((28 + resBoost * 14) * s));
+      applySharpen(imageData, Math.round((26 + resBoost * 18) * s), true);
       return;
     }
     case 'realphoto':
@@ -816,10 +1044,16 @@ export function applyQualityModelPass(
       applyColorAdjustments(imageData, {
         shadows: Math.round(6 * s),
         highlights: Math.round(-4 * s),
-        contrast: Math.round(3 * s),
+        contrast: Math.round(4 * s),
       });
-      applyClarity(imageData, Math.round((12 + resBoost * 8) * s));
-      applySharpen(imageData, Math.round((10 + resBoost * 16) * s), true);
+      applyMultiScaleSuperClarity(
+        imageData,
+        (0.18 + resBoost * 0.18) * s,
+        (0.24 + resBoost * 0.24) * s,
+        28
+      );
+      applyClarity(imageData, Math.round((14 + resBoost * 10) * s));
+      applySharpen(imageData, Math.round((16 + resBoost * 18) * s), true);
     }
   }
 }

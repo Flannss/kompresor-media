@@ -20,6 +20,7 @@ export interface BeforeAfterPreviewProps {
   splitPct: number;
   onSplitPctChange: (pct: number) => void;
   showOriginalOnly: boolean;
+  resultBadgeLabel?: string;
   backdrop: StageBackdrop;
 }
 
@@ -46,6 +47,7 @@ export function BeforeAfterPreview({
   splitPct,
   onSplitPctChange,
   showOriginalOnly,
+  resultBadgeLabel = 'Hasil HD',
   backdrop,
 }: BeforeAfterPreviewProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -128,7 +130,7 @@ export function BeforeAfterPreview({
                 draggable={false}
               />
               <span className="pointer-events-none absolute right-2 top-2 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ink-on-accent)] shadow-sm">
-                {showOriginalOnly ? 'Asli' : 'Hasil'}
+                {showOriginalOnly ? 'Asli' : resultBadgeLabel}
               </span>
             </div>
           </div>
@@ -145,7 +147,7 @@ export function BeforeAfterPreview({
             <img
               data-testid="preview-image"
               src={processedUrl}
-              alt={`${fileName} (Hasil)`}
+              alt={`${fileName} (${resultBadgeLabel})`}
               className="block max-h-[250px] w-auto max-w-full object-contain sm:max-h-[58vh] lg:max-h-[calc(100dvh-240px)]"
               draggable={false}
             />
@@ -169,7 +171,7 @@ export function BeforeAfterPreview({
               Asli
             </span>
             <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ink-on-accent)] shadow-sm">
-              Hasil
+              {resultBadgeLabel}
             </span>
           </div>
         ) : (
@@ -183,7 +185,7 @@ export function BeforeAfterPreview({
             />
             {processedUrl && (
               <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-[var(--surface-badge)] px-2 py-0.5 text-[11px] font-medium text-white">
-                {showOriginalOnly ? 'Asli' : 'Hasil'}
+                {showOriginalOnly ? 'Asli' : resultBadgeLabel}
               </span>
             )}
           </div>

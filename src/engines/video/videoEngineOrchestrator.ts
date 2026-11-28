@@ -11,6 +11,7 @@ import {
   runMediaRecorderVideoTranscode,
 } from './mediaRecorderVideoEngine';
 import { VideoCancelledError } from './videoErrors';
+import { isCancellationError } from '../../shared/utils/friendlyError';
 import {
   getActiveVideoModuleLabels,
   getVideoFormatMeta,
@@ -228,7 +229,7 @@ export async function processVideo(
         stallMessage: 'Mode Cepat Hardware WebCodecs terlalu lama tanpa progres — beralih otomatis.',
       });
     } catch (err) {
-      if ((err instanceof VideoCancelledError && signal?.aborted) || signal?.aborted) {
+      if ((err instanceof VideoCancelledError && signal?.aborted) || signal?.aborted || isCancellationError(err)) {
         throw new VideoCancelledError();
       }
       if (err instanceof VideoCancelledError) {
@@ -251,7 +252,7 @@ export async function processVideo(
               stallMessage: 'Mode Cepat Hardware HP terlalu lama — beralih ke CPU.',
             });
           } catch (mrErr) {
-            if (mrErr instanceof VideoCancelledError || signal?.aborted) {
+            if (mrErr instanceof VideoCancelledError || signal?.aborted || isCancellationError(mrErr)) {
               throw new VideoCancelledError();
             }
             if (

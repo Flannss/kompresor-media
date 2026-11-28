@@ -626,6 +626,11 @@ export function WorkspaceStage({
               splitPct={splitPct}
               onSplitPctChange={setSplitPct}
               showOriginalOnly={showOriginalPhoto || holdOriginalMedia}
+              resultBadgeLabel={
+                imageEdit.targetResolution !== 'original'
+                  ? `Hasil ${imageEdit.targetResolution.toUpperCase()}`
+                  : 'Hasil HD'
+              }
               backdrop={backdrop}
             />
           )
@@ -934,10 +939,10 @@ export function WorkspaceStage({
       </section>
 
       {/* Right Inspector Panel: Fixed Header + Independent Middle Scroll + Pinned Export Dock on >= 1024px */}
-      <aside className="km-glass flex w-full shrink-0 flex-col border-t md:grid md:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.9fr)] md:items-start md:gap-6 md:px-7 md:py-5 md:pb-8 lg:flex lg:h-full lg:min-h-0 lg:w-[420px] xl:w-[448px] lg:flex-col lg:items-stretch lg:gap-0 lg:overflow-hidden lg:border-l lg:border-t-0 lg:bg-[var(--bg-surface)]/80 lg:p-0">
+      <aside className="km-glass-panel flex w-full shrink-0 flex-col border-t md:grid md:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.9fr)] md:items-start md:gap-6 md:px-7 md:py-5 md:pb-8 lg:flex lg:h-full lg:min-h-0 lg:w-[420px] xl:w-[448px] lg:flex-col lg:items-stretch lg:gap-0 lg:overflow-hidden lg:border-l lg:border-t-0 lg:p-0">
         <div className="flex min-w-0 flex-col px-3.5 pt-5 pb-4 sm:px-6 sm:pt-6 md:px-0 md:py-0 lg:min-h-0 lg:flex-1 lg:overflow-hidden">
           <div
-            className={`shrink-0 transition-shadow duration-200 lg:border-b lg:border-[var(--border-hairline)] lg:bg-[var(--bg-surface-strong)] lg:px-5 lg:pt-4 lg:pb-3 ${
+            className={`shrink-0 transition-shadow duration-200 lg:border-b lg:border-[var(--glass-border)] lg:bg-[var(--glass-bg-elevated)] lg:px-5 lg:pt-4 lg:pb-3 ${
               scrollEdges.canScrollUp
                 ? 'lg:shadow-[0_10px_24px_-14px_rgba(2,6,23,0.42)]'
                 : ''
@@ -1145,7 +1150,7 @@ export function WorkspaceStage({
         {/* Sticky Bottom Export Dock on Desktop >= 1024px (Inline / 2nd Column on Mobile & Tablet) */}
         <div
           data-testid="desktop-export-dock"
-          className="flex min-w-0 flex-col gap-3.5 px-3.5 pb-28 sm:px-6 sm:pb-6 md:sticky md:top-20 md:px-0 md:pb-0 lg:static lg:shrink-0 lg:gap-2 lg:border-t lg:border-[var(--border-hairline)] lg:bg-[var(--bg-surface-strong)] lg:px-5 lg:py-2.5 lg:shadow-[0_-10px_28px_-16px_rgba(2,6,23,0.32)]"
+          className="km-glass-dock flex min-w-0 flex-col gap-3.5 px-3.5 pb-28 sm:px-6 sm:pb-6 md:sticky md:top-20 md:px-0 md:pb-0 lg:static lg:shrink-0 lg:gap-2 lg:border-t lg:px-5 lg:py-2.5"
         >
           {imageProcessError && isImage && (
             <p

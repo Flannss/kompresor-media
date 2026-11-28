@@ -26,6 +26,7 @@ import { Slider } from '../../design-system/components/Slider';
 import type {
   AudioBitrateKbps,
   ColorGradeId,
+  LongVideoProfileId,
   SubtitleCue,
   SubtitlePosition,
   SubtitleSize,
@@ -45,13 +46,22 @@ import {
   hasActiveEnhancements,
 } from '../../engines/shared/colorGrades';
 import { parseSubtitleText } from '../../engines/video/subtitleParser';
-import { clampTrimRange, resolveCustomVideoParams } from '../../engines/video/videoPresets';
+import {
+  buildVideoSegments,
+  clampTrimRange,
+  estimateVideoOutputBytes,
+  isLongFormVideoCandidate,
+  LONG_VIDEO_PROFILE_SPECS,
+  resolveCustomVideoParams,
+  resolveLongVideoProfileParams,
+} from '../../engines/video/videoPresets';
 import {
   getMediaPreset,
   VIDEO_PRESET_IDS,
   type MediaPresetId,
 } from '../../presets/mediaPresets';
 import type { DeviceProfile } from '../../shared/utils/deviceCapability';
+import { formatBytes } from '../../shared/utils/formatBytes';
 import { formatDuration } from '../../shared/utils/formatDuration';
 import type { VideoProcessStatus } from '../../store/useMediaStore';
 import type { ZipEntryInput } from '../export-share/zipExport';
@@ -62,11 +72,13 @@ export type VideoTabId = 'utama' | 'tampilan' | 'lanjutan';
 export type VideoAdvancedCard = 'stabilize' | 'audio' | 'subtitle' | 'frame';
 
 const VIDEO_PRESET_BADGE_STYLE: Record<string, { dot: string; tag: string }> = {
-  'whatsapp-hd': { dot: 'bg-[var(--text-primary)]', tag: 'WA HD' },
-  'whatsapp-status': { dot: 'bg-[var(--text-secondary)]', tag: '1080p' },
-  'instagram-story': { dot: 'bg-[var(--text-muted)]', tag: 'Reels' },
-  'tiktok-hd': { dot: 'bg-[var(--accent-slate)]', tag: 'TikTok' },
-  'web-light': { dot: 'bg-[var(--text-subtle)]', tag: '720p' },
+  'whatsapp-hd': { dot: 'bg-[var(--text-primary)]', tag: 'Paling Populer' },
+  'whatsapp-status': { dot: 'bg-[var(--text-secondary)]', tag: 'Rekomendasi' },
+  'instagram-story': { dot: 'bg-[var(--text-muted)]', tag: 'Reels & Story' },
+  'tiktok-hd': { dot: 'bg-[var(--accent-slate)]', tag: 'TikTok HD' },
+  'vlog-hd': { dot: 'bg-[var(--text-primary)]', tag: 'Khusus Vlog' },
+  'long-video': { dot: 'bg-[var(--text-secondary)]', tag: '30+ Menit' },
+  'web-light': { dot: 'bg-[var(--text-subtle)]', tag: 'Hemat Kuota' },
   custom: { dot: 'bg-[var(--text-subtle)]', tag: 'Manual' },
 };
 
@@ -153,10 +165,11 @@ const RESOLUTION_OPTIONS: ReadonlyArray<{
   value: VideoTargetResolution;
   maxHeightPx: number | null;
   label: string;
+  badge?: string;
 }> = [
   { value: 'original', maxHeightPx: null, label: 'Asli' },
-  { value: '720p', maxHeightPx: 720, label: '720p' },
-  { value: '1080p', maxHeightPx: 1080, label: '1080p HD' },
+  { value: '720p', maxHeightPx: 720, label: '720p', badge: 'Ringan' },
+  { value: '1080p', maxHeightPx: 1080, label: '1080p HD', badge: 'Vlog' },
   { value: '2k', maxHeightPx: 1440, label: '2K 1440p' },
 ];
 
@@ -164,6 +177,7 @@ const VIDEO_CLARITY_MODELS: ReadonlyArray<{
   id: VideoClarityModel;
   title: string;
   desc: string;
+  badge?: string;
 }> = [
   {
     id: 'original',
@@ -174,11 +188,13 @@ const VIDEO_CLARITY_MODELS: ReadonlyArray<{
     id: 'natural-hd',
     title: 'Natural HD',
     desc: 'Bersih halus + anti-buram siap kompres WA/IG',
+    badge: 'Rekomendasi',
   },
   {
     id: 'sharp-1080p',
     title: 'Tajam 1080p',
     desc: 'Pulihkan detail teks, objek, & rekaman buram',
+    badge: 'Khusus Vlog',
   },
   {
     id: 'low-light',
@@ -583,6 +599,7 @@ export function VideoControlPanel({
   };
 
   const [trimDrawerOpen, setTrimDrawerOpen] = useState(false);
+  const [segmentStepMinutes, setSegmentStepMinutes] = useState<10 | 15>(10);
   const [motionDrawerOpen, setMotionDrawerOpen] = useState(false);
   const [internalAdvancedOpen, setInternalAdvancedOpen] = useState<VideoAdvancedCard>('stabilize');
   const advancedOpen = controlledAdvancedCard ?? internalAdvancedOpen;
@@ -605,6 +622,12 @@ export function VideoControlPanel({
 
   const isProcessing = videoProcessStatus === 'processing';
   const isLargeVideo = metadata.sizeBytes > 150 * 1024 * 1024;
+  const isLongCandidate = isLongFormVideoCandidate(metadata);
+  const isLongPresetActive =
+    selectedPresetId === 'long-video' || videoEdit.presetId === 'long-video';
+  const activeLongProfile: LongVideoProfileId = videoEdit.longVideoProfile ?? 'balanced-hd';
+  const estimatedOutputBytes = estimateVideoOutputBytes(metadata.durationSec, videoEdit);
+  const videoSegments = buildVideoSegments(metadata.durationSec, segmentStepMinutes);
   const trim = clampTrimRange(
     videoEdit.trimStartSec,
     videoEdit.trimEndSec,
@@ -646,20 +669,24 @@ export function VideoControlPanel({
     e.target.value = '';
     if (!file) return;
     setSubError(null);
-    const raw = await file.text();
-    const parsed = parseSubtitleText(raw);
-    if (parsed.length === 0) {
-      setSubError(`File "${file.name}" tidak memiliki baris subtitle SRT/VTT yang valid.`);
-      return;
+    try {
+      const raw = await file.text();
+      const parsed = parseSubtitleText(raw);
+      if (parsed.length === 0) {
+        setSubError(`File "${file.name}" tidak memiliki baris subtitle .SRT atau .VTT yang valid.`);
+        return;
+      }
+      onUpdateVideoEdit({
+        subtitle: {
+          ...videoEdit.subtitle,
+          enabled: true,
+          cues: parsed,
+          sourceFileName: file.name,
+        },
+      });
+    } catch {
+      setSubError('File subtitle gagal dibaca. Pastikan formatnya .SRT atau .VTT yang valid.');
     }
-    onUpdateVideoEdit({
-      subtitle: {
-        ...videoEdit.subtitle,
-        enabled: true,
-        cues: parsed,
-        sourceFileName: file.name,
-      },
-    });
   };
 
   const handleAddBlankCue = () => {
@@ -740,11 +767,37 @@ export function VideoControlPanel({
         </p>
       )}
 
-      {isLargeVideo && (
+      {isLongCandidate && !isLongPresetActive && (
+        <div
+          data-testid="long-video-suggestion-banner"
+          className="flex flex-col gap-2 rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] px-3.5 py-2.5 text-xs text-[var(--text-primary)]"
+        >
+          <p className="leading-relaxed text-[var(--text-secondary)]">
+            <span className="font-semibold text-[var(--text-primary)]">
+              Video panjang terdeteksi
+            </span>{' '}
+            ({formatDuration(metadata.durationSec)} · {formatBytes(metadata.sizeBytes)}) — aktifkan
+            mode <span className="font-semibold text-[var(--text-primary)]">Video Panjang (30+ mnt)</span>{' '}
+            agar lancar &amp; hemat RAM.
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={isProcessing}
+            data-testid="apply-long-video-btn"
+            onClick={() => onSelectPreset('long-video')}
+            className="min-h-[36px] self-start"
+          >
+            Terapkan Mode Video Panjang
+          </Button>
+        </div>
+      )}
+
+      {isLargeVideo && !isLongPresetActive && (
         <div className="flex items-start gap-2 rounded-xl border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-3 py-2 text-xs text-[var(--status-warn-ink)]">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <p className="leading-relaxed">
-            Video berukuran besar. Pemrosesan di browser mungkin memerlukan waktu lebih lama.
+            Video berukuran besar. Gunakan mode MP4 (Video Panjang) agar streaming hemat RAM berjalan optimal.
           </p>
         </div>
       )}
@@ -833,7 +886,87 @@ export function VideoControlPanel({
             </div>
           </div>
 
+          {isLongPresetActive && (
+            <div
+              data-testid="long-video-profile-panel"
+              className="space-y-2.5 rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] p-3.5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-semibold text-[var(--text-primary)]">
+                    Profil Video Panjang (30+ Menit)
+                  </h3>
+                  <p className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">
+                    Diproses secara streaming MP4 hemat RAM dengan estimasi ukuran terkontrol.
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2 py-0.5 text-[10px] font-semibold text-[var(--text-primary)]">
+                  30+ Menit
+                </span>
+              </div>
+              <div
+                className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+                role="radiogroup"
+                aria-label="Pilih profil video panjang"
+              >
+                {(Object.values(LONG_VIDEO_PROFILE_SPECS) as Array<
+                  (typeof LONG_VIDEO_PROFILE_SPECS)[LongVideoProfileId]
+                >).map((spec) => {
+                  const selected = activeLongProfile === spec.id;
+                  return (
+                    <button
+                      key={spec.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      disabled={isProcessing}
+                      data-testid={`long-profile-${spec.id}`}
+                      onClick={() =>
+                        onUpdateVideoEdit({
+                          ...resolveLongVideoProfileParams(spec.id),
+                          presetId: 'long-video',
+                        })
+                      }
+                      className={`flex flex-col items-start justify-between gap-1 rounded-xl border p-2.5 text-left transition-all ${
+                        selected
+                          ? 'border-[var(--border-active)] [background-image:var(--accent-wash-gradient)] bg-[var(--bg-subtle)] text-[var(--text-primary)] ring-1 ring-[var(--border-strong)]'
+                          : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
+                      }`}
+                    >
+                      <span className="flex w-full items-center justify-between gap-1.5">
+                        <span className="text-xs font-semibold text-[var(--text-primary)]">
+                          {spec.label}
+                        </span>
+                        {spec.badge && (
+                          <span className="shrink-0 rounded border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-1.5 py-0 text-[9px] font-semibold text-[var(--text-primary)]">
+                            {spec.badge}
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[10px] leading-snug text-[var(--text-muted)]">
+                        {spec.summary}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="space-y-4 rounded-2xl bg-[var(--bg-surface)]/80 p-3 sm:space-y-3 sm:border sm:border-[var(--border-hairline)] sm:bg-[var(--bg-elevated)] sm:p-3.5">
+            {estimatedOutputBytes > 0 && (
+              <div
+                data-testid="video-size-estimator"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3 py-1.5 text-[11px] tabular-nums"
+              >
+                <span className="font-medium text-[var(--text-secondary)]">
+                  Estimasi hasil ({formatDuration(trim.durationSec > 0 ? trim.durationSec : metadata.durationSec)})
+                </span>
+                <span className="font-semibold text-[var(--text-primary)]">
+                  ~{formatBytes(estimatedOutputBytes)}
+                </span>
+              </div>
+            )}
             <div>
               <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                 Format Output
@@ -894,7 +1027,7 @@ export function VideoControlPanel({
                           : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
                       }`}
                     >
-                      <span>{opt.label}</span>
+                      <span>{opt.badge ? `${opt.label} · ${opt.badge}` : opt.label}</span>
                       {isLocked2k && <Lock className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />}
                     </button>
                   );
@@ -945,7 +1078,7 @@ export function VideoControlPanel({
                 onClick={() => setMotionDrawerOpen((v) => !v)}
                 className="flex w-full items-center justify-between text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               >
-                <span>Kehalusan Gerak</span>
+                <span>Kehalusan Gerak (FPS)</span>
                 <ChevronDown
                   className={`h-3.5 w-3.5 transition-transform ${
                     motionDrawerOpen ? 'rotate-180' : ''
@@ -971,7 +1104,7 @@ export function VideoControlPanel({
                             : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
                         }`}
                       >
-                        {opt.value === null ? opt.label : `${opt.label} Gerak/dtk`}
+                        {opt.value === null ? opt.label : `${opt.label} FPS`}
                       </button>
                     );
                   })}
@@ -1089,6 +1222,65 @@ export function VideoControlPanel({
                   />
                 </label>
 
+                {videoSegments.length > 1 && (
+                  <div
+                    data-testid="video-segment-chips"
+                    className="space-y-2 border-t border-[var(--border-hairline)] pt-2.5"
+                  >
+                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                      <span className="font-semibold text-[var(--text-primary)]">
+                        Bagi per Bagian ({videoSegments.length} bagian)
+                      </span>
+                      <div className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-0.5">
+                        {([10, 15] as const).map((mins) => (
+                          <button
+                            key={mins}
+                            type="button"
+                            disabled={isProcessing}
+                            onClick={() => setSegmentStepMinutes(mins)}
+                            className={`rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                              segmentStepMinutes === mins
+                                ? 'bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                                : 'text-[var(--text-secondary)]'
+                            }`}
+                          >
+                            {mins} mnt
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {videoSegments.map((seg) => {
+                        const isSegSelected =
+                          Math.abs(trim.startSec - seg.startSec) < 0.25 &&
+                          Math.abs(trim.endSec - seg.endSec) < 0.25;
+                        return (
+                          <button
+                            key={seg.index}
+                            type="button"
+                            disabled={isProcessing}
+                            data-testid={`video-segment-${seg.index}`}
+                            onClick={() => {
+                              onUpdateVideoEdit({
+                                trimStartSec: seg.startSec,
+                                trimEndSec: seg.endSec,
+                              });
+                              onSeekPreview(seg.startSec);
+                            }}
+                            className={`rounded-lg border px-2.5 py-1 text-[10.5px] font-medium tabular-nums transition-all ${
+                              isSegSelected
+                                ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+                                : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-strong)]'
+                            }`}
+                          >
+                            {seg.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex flex-wrap gap-2">
                   {metadata.durationSec > 30 && (
                     <Button
@@ -1163,12 +1355,15 @@ export function VideoControlPanel({
                         : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
                     }`}
                   >
-                    <span
-                      className={`whitespace-nowrap text-xs font-semibold ${
-                        active ? 'text-[var(--text-primary)]' : 'text-[var(--text-primary)]'
-                      }`}
-                    >
-                      {model.title}
+                    <span className="flex w-full items-center justify-between gap-1.5">
+                      <span className="truncate whitespace-nowrap text-xs font-semibold text-[var(--text-primary)]">
+                        {model.title}
+                      </span>
+                      {model.badge && (
+                        <span className="shrink-0 rounded-md border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[9px] font-semibold text-[var(--text-secondary)]">
+                          {model.badge}
+                        </span>
+                      )}
                     </span>
                     <span className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-[var(--text-muted)]">
                       {model.desc}

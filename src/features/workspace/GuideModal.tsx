@@ -127,6 +127,12 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
                 dengan ikon <strong>HD</strong> aktif atau kirim sebagai <strong>Dokumen</strong>.
               </li>
               <li>
+                Untuk <strong>Vlog &amp; Video Panjang (30+ mnt)</strong>, gunakan preset{' '}
+                <strong>Vlog &amp; Konten HD</strong> (8,5 Mbps anti-kotak) atau{' '}
+                <strong>Video Panjang (30+ mnt)</strong> dengan pilihan bagi per 10/15 menit agar
+                proses hemat RAM dan cepat.
+              </li>
+              <li>
                 Untuk <strong>Status WA</strong>, gunakan preset <strong>Status WA HD</strong>{' '}
                 (1080p BT.709) dengan durasi maksimal <strong>30 detik</strong> agar tidak pecah
                 atau buram.

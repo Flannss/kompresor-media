@@ -23,6 +23,7 @@ export const SOCIAL_HD_PRESET_IDS: ReadonlySet<VideoPresetId> = new Set([
   'whatsapp-status',
   'instagram-story',
   'tiktok-hd',
+  'vlog-hd',
 ]);
 
 export interface VideoFormatMeta {
@@ -199,14 +200,16 @@ export function buildFfmpegFilterGraph(
     }
   }
 
-  // Step 2: Scaling — use fast_bilinear/bicubic when downscaling >=4K to <=1080p for 3x speed & low RAM
+  // Step 2: Scaling — reserve fast_bilinear strictly for >=4K->1080p mobile thermal downscales (never <=1080p or Vlog HD)
   const scaleFlags = upscale1080.enabled
     ? upscale1080.method
-    : is4kDownscale
+    : is4kDownscale && edit.presetId !== 'vlog-hd'
       ? performanceTier === 'low-memory-mobile'
         ? 'fast_bilinear'
         : 'bicubic'
-      : 'lanczos';
+      : is4kDownscale
+        ? 'bicubic'
+        : 'lanczos';
   const wantsExplicitResize =
     upscale1080.enabled ||
     targetRes === '1080p' ||
@@ -433,7 +436,8 @@ export function buildFfmpegArgs(params: {
       '-keyint_min',
       '30',
       '-sc_threshold',
-      '0'
+      edit.presetId === 'vlog-hd' ? '40' : '0',
+      ...(edit.presetId === 'vlog-hd' ? ['-x264-params', 'aq-mode=2'] : [])
     );
     if (edit.outputFormat === 'mp4' || edit.outputFormat === 'mov') {
       args.push('-movflags', '+faststart');

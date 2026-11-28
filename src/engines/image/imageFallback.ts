@@ -88,6 +88,7 @@ export async function runMainThreadImageFallback(
       targetSizeMet: out.targetSizeMet,
       clampedByMemoryGuard: out.clampedByMemoryGuard,
       appliedTargetResolution: out.appliedTargetResolution,
+      sharpnessDeltaPct: out.sharpnessDeltaPct,
       activeModules,
     };
   } finally {

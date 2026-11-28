@@ -51,13 +51,13 @@ import type { DeviceProfile } from '../../shared/utils/deviceCapability';
 export type PhotoTabId = 'utama' | 'tampilan' | 'edit';
 
 const PRESET_BADGE_STYLE: Record<string, { dot: string; tag: string }> = {
-  'whatsapp-hd': { dot: 'bg-[var(--text-primary)]', tag: 'WA HD' },
-  'whatsapp-status': { dot: 'bg-[var(--text-secondary)]', tag: 'Status' },
-  'instagram-story': { dot: 'bg-[var(--text-muted)]', tag: 'Reels' },
-  'instagram-feed': { dot: 'bg-[var(--text-muted)]', tag: 'Feed' },
-  'tiktok-hd': { dot: 'bg-[var(--accent-slate)]', tag: 'TikTok' },
-  'web-light': { dot: 'bg-[var(--text-subtle)]', tag: 'WebP' },
-  'archive-hd': { dot: 'bg-[var(--text-secondary)]', tag: 'Arsip' },
+  'whatsapp-hd': { dot: 'bg-[var(--text-primary)]', tag: 'Paling Populer' },
+  'whatsapp-status': { dot: 'bg-[var(--text-secondary)]', tag: 'Rekomendasi' },
+  'instagram-story': { dot: 'bg-[var(--text-muted)]', tag: 'Reels & Story' },
+  'instagram-feed': { dot: 'bg-[var(--text-muted)]', tag: 'Feed IG' },
+  'tiktok-hd': { dot: 'bg-[var(--accent-slate)]', tag: 'TikTok HD' },
+  'web-light': { dot: 'bg-[var(--text-subtle)]', tag: 'Paling Ringan' },
+  'archive-hd': { dot: 'bg-[var(--text-secondary)]', tag: 'Super Jernih' },
   custom: { dot: 'bg-[var(--text-subtle)]', tag: 'Manual' },
 };
 
@@ -210,21 +210,25 @@ const QUALITY_MODELS: ReadonlyArray<{
   id: PhotoQualityModel;
   title: string;
   desc: string;
+  badge?: string;
 }> = [
   {
     id: 'realphoto',
     title: 'RealPhoto',
     desc: 'Natural & detail autentik',
+    badge: 'Rekomendasi',
   },
   {
     id: 'high-quality',
     title: 'High Quality',
     desc: 'Bening maksimal & tegas',
+    badge: 'Bening HD',
   },
   {
     id: 'ultra-detail',
     title: 'Ultra Detail',
     desc: 'Tajam maksimal & mikro-tekstur',
+    badge: 'Detail 4K',
   },
   {
     id: 'studio-portrait',
@@ -242,12 +246,13 @@ const TARGET_RESOLUTION_OPTIONS: ReadonlyArray<{
   id: PhotoTargetResolution;
   label: string;
   sub: string;
+  badge?: string;
 }> = [
   { id: 'original', label: 'Asli', sub: 'Sesuai asal' },
   { id: 'hd', label: 'HD', sub: '1920 px' },
-  { id: '2k', label: '2K', sub: '2560 px' },
+  { id: '2k', label: '2K', sub: '2560 px', badge: 'Seimbang' },
   { id: '3k', label: '3K', sub: '3072 px' },
-  { id: '4k', label: '4K', sub: '3840 px' },
+  { id: '4k', label: '4K', sub: '3840 px', badge: 'Ultra Jernih' },
   { id: '8k', label: '8K', sub: '7680 px' },
 ];
 
@@ -770,8 +775,15 @@ export function PhotoControlPanel({
                         : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] hover:border-[var(--border-active)]'
                     }`}
                   >
-                    <span className="w-full truncate text-xs font-semibold text-[var(--text-primary)]">
-                      {model.title}
+                    <span className="flex w-full items-center justify-between gap-1.5">
+                      <span className="truncate text-xs font-semibold text-[var(--text-primary)]">
+                        {model.title}
+                      </span>
+                      {model.badge && (
+                        <span className="shrink-0 rounded-md border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[9px] font-semibold text-[var(--text-secondary)]">
+                          {model.badge}
+                        </span>
+                      )}
                     </span>
                     <span className="mt-0.5 line-clamp-1 w-full text-[10.5px] leading-snug text-[var(--text-muted)]">
                       {model.desc}
@@ -833,7 +845,7 @@ export function PhotoControlPanel({
                         { commitHistory: true, preservePreset: true }
                       )
                     }
-                    className={`flex min-h-[48px] min-w-[82px] shrink-0 snap-start flex-col items-center justify-center gap-0.5 whitespace-nowrap rounded-xl border px-3 py-2 text-center transition-all tabular-nums disabled:cursor-not-allowed disabled:opacity-45 md:min-h-[48px] md:min-w-0 md:rounded-lg md:px-1.5 md:py-1.5 ${
+                    className={`flex min-h-[48px] min-w-[96px] shrink-0 snap-start flex-col items-center justify-center gap-0.5 whitespace-nowrap rounded-xl border px-2.5 py-2 text-center transition-all tabular-nums disabled:cursor-not-allowed disabled:opacity-45 md:min-h-[48px] md:min-w-0 md:rounded-lg md:px-1.5 md:py-1.5 ${
                       active
                         ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-active)]'
@@ -848,7 +860,7 @@ export function PhotoControlPanel({
                         active ? 'text-[var(--ink-on-accent)]/80' : 'text-[var(--text-muted)]'
                       }`}
                     >
-                      {opt.sub}
+                      {opt.badge ? `${opt.sub} · ${opt.badge}` : opt.sub}
                     </span>
                   </button>
                 );

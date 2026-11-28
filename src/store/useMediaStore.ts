@@ -20,6 +20,7 @@ import {
   processImage,
 } from '../engines/image/imageEngineClient';
 import { VideoCancelledError } from '../engines/video/videoErrors';
+import { formatFriendlyMediaError, isCancellationError } from '../shared/utils/friendlyError';
 import { shouldUseFfmpegBackend } from '../engines/video/videoFilterGraph';
 import { resolveCustomVideoParams } from '../engines/video/videoPresets';
 import { validateMediaFile } from '../features/upload/fileValidator';
@@ -447,8 +448,7 @@ async function processPhotoItem(
     if (!currentAfter || currentAfter.processSeq !== nextSeq) {
       return;
     }
-    const message =
-      err instanceof Error ? err.message : 'Gagal memproses foto di browser.';
+    const message = formatFriendlyMediaError(err, 'photo');
     updateItemInStore(get, set, itemId, (item) => ({
       ...item,
       status: 'error',
@@ -605,7 +605,7 @@ async function processVideoItem(
     if (!curAfterErr || curAfterErr.processSeq !== seq) {
       return;
     }
-    if (err instanceof VideoCancelledError || controller.signal.aborted) {
+    if (isCancellationError(err) || controller.signal.aborted) {
       updateItemInStore(get, set, itemId, (it) => ({
         ...it,
         status: 'cancelled',
@@ -615,8 +615,7 @@ async function processVideoItem(
       }));
       return;
     }
-    const message =
-      err instanceof Error ? err.message : 'Gagal memproses video di browser.';
+    const message = formatFriendlyMediaError(err, 'video');
     updateItemInStore(get, set, itemId, (it) => ({
       ...it,
       status: 'error',
@@ -1003,7 +1002,10 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     if (active.metadata.kind === 'video') {
       const cur = active.videoEdit;
       const nextVideo = cloneVideoEdit(presetSpec.video);
-      const keep2k = cur.targetResolution === '2k' && get().deviceProfile.allow2KVideoExport;
+      const keep2k =
+        cur.targetResolution === '2k' &&
+        get().deviceProfile.allow2KVideoExport &&
+        presetId !== 'long-video';
       if (keep2k) {
         nextVideo.targetResolution = '2k';
         nextVideo.maxHeightPx = 1440;
@@ -1168,7 +1170,9 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
               ? { ...sanitizedPatch.crop }
               : null
             : cur.crop,
-        presetId: nextPreset,
+        presetId: preservePreset
+          ? getMediaPreset(curPresetId).image.presetId
+          : 'custom',
       };
       return { nextEdit, nextPreset };
     };
