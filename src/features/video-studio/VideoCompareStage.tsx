@@ -827,7 +827,7 @@ export function VideoCompareStage({
                   className="block h-full w-full object-contain"
                 />
               )}
-              <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-medium text-white">
+              <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ink-on-accent)] shadow-sm">
                 {afterBadgeLabel}
               </span>
             </div>
@@ -924,7 +924,7 @@ export function VideoCompareStage({
             <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-[var(--surface-badge)] px-2 py-0.5 text-[11px] font-medium text-white">
               Asli
             </span>
-            <span className="pointer-events-none absolute right-2.5 top-2.5 z-10 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-medium text-white">
+            <span className="pointer-events-none absolute right-2.5 top-2.5 z-10 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ink-on-accent)] shadow-sm">
               {afterBadgeLabel}
             </span>
           </div>

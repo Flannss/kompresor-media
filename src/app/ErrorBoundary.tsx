@@ -60,7 +60,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               <span className="text-xs font-semibold tracking-tight text-[var(--text-primary)]">
                 Kompresor Media
               </span>
-              <span className="rounded-full border border-[var(--border-hairline)] bg-[var(--accent-craft-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent-craft)]">
+              <span className="rounded-full border border-[var(--border-strong)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
                 BY AMDZ
               </span>
             </div>

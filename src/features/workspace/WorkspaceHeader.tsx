@@ -54,7 +54,7 @@ export function WorkspaceHeader({
               height="18"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="var(--accent-craft)"
+              stroke="var(--text-primary)"
               strokeWidth="1.75"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -74,7 +74,7 @@ export function WorkspaceHeader({
               </span>
               <span
                 data-testid="brand-by-amdz"
-                className="shrink-0 rounded-full border border-[var(--accent-craft-border)] bg-[var(--accent-craft-soft)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--accent-craft)] sm:px-2 sm:text-[10px] sm:tracking-[0.16em]"
+                className="shrink-0 rounded-full border border-[var(--border-strong)] bg-[var(--bg-elevated)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)] sm:px-2 sm:text-[10px] sm:tracking-[0.16em]"
               >
                 BY AMDZ
               </span>
@@ -85,8 +85,8 @@ export function WorkspaceHeader({
                 data-testid="active-studio-badge"
                 className={`hidden rounded-full border px-2.5 py-0.5 text-[11px] font-semibold sm:inline-block ${
                   activeMediaKind === 'image'
-                    ? 'border-[var(--accent-photo-border)] bg-[var(--accent-photo-soft)] text-[var(--accent-photo)]'
-                    : 'border-[var(--accent-video-border)] bg-[var(--accent-video-soft)] text-[var(--accent-video)]'
+                    ? 'border-[var(--border-strong)] bg-[var(--bg-subtle)] text-[var(--text-primary)]'
+                    : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)]'
                 }`}
               >
                 {activeMediaKind === 'image' ? 'Studio Foto' : 'Studio Video'}
@@ -155,7 +155,7 @@ export function WorkspaceHeader({
               title="Panduan"
               className="inline-flex h-9 w-9 items-center justify-center gap-1.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-xs font-medium text-[var(--text-secondary)] shadow-[var(--glass-highlight)] transition-all duration-200 hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] active:scale-[0.97] sm:w-auto sm:px-3"
             >
-              <HelpCircle className="h-3.5 w-3.5 text-[var(--accent-highlight)]" aria-hidden="true" />
+              <HelpCircle className="h-3.5 w-3.5 text-[var(--text-secondary)]" aria-hidden="true" />
               <span className="hidden sm:inline">Panduan</span>
             </button>
 
@@ -163,18 +163,18 @@ export function WorkspaceHeader({
               type="button"
               data-testid="theme-toggle-btn"
               onClick={onToggleTheme}
-              aria-label={isDark ? 'Ganti ke tema Porselen Terang' : 'Ganti ke tema Malam Navy'}
-              title={isDark ? 'Porselen Terang' : 'Malam Navy'}
+              aria-label={isDark ? 'Ganti ke tema Porselen Terang' : 'Ganti ke tema Slate Gelap'}
+              title={isDark ? 'Porselen Terang' : 'Slate Gelap'}
               className="inline-flex h-9 w-9 items-center justify-center gap-1.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-xs font-medium text-[var(--text-secondary)] shadow-[var(--glass-highlight)] transition-all duration-200 hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] active:scale-[0.97] sm:w-auto sm:px-3"
             >
               {isDark ? (
                 <>
-                  <Sun className="h-3.5 w-3.5 text-[var(--accent-craft)]" aria-hidden="true" />
-                  <span className="hidden sm:inline">Malam Navy</span>
+                  <Moon className="h-3.5 w-3.5 text-[var(--text-primary)]" aria-hidden="true" />
+                  <span className="hidden sm:inline">Slate Gelap</span>
                 </>
               ) : (
                 <>
-                  <Moon className="h-3.5 w-3.5 text-[var(--accent-highlight)]" aria-hidden="true" />
+                  <Sun className="h-3.5 w-3.5 text-[var(--text-primary)]" aria-hidden="true" />
                   <span className="hidden sm:inline">Porselen Terang</span>
                 </>
               )}

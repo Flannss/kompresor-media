@@ -127,7 +127,7 @@ export function BeforeAfterPreview({
                 className="block max-h-[220px] w-full object-contain transition-transform duration-200 sm:max-h-[52vh] lg:max-h-[calc(100dvh-250px)]"
                 draggable={false}
               />
-              <span className="pointer-events-none absolute right-2 top-2 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-medium text-white">
+              <span className="pointer-events-none absolute right-2 top-2 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ink-on-accent)] shadow-sm">
                 {showOriginalOnly ? 'Asli' : 'Hasil'}
               </span>
             </div>
@@ -168,7 +168,7 @@ export function BeforeAfterPreview({
             <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-[var(--surface-badge)] px-2 py-0.5 text-[11px] font-medium text-white">
               Asli
             </span>
-            <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-medium text-white">
+            <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ink-on-accent)] shadow-sm">
               Hasil
             </span>
           </div>

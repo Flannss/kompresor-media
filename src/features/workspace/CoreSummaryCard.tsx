@@ -239,7 +239,7 @@ export function CoreSummaryCard({
       {!isImage && videoProcessResult && (
         <p
           data-testid="video-hd-proof-badge"
-          className="mt-2 rounded-lg border border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] px-2.5 py-1 text-[10.5px] font-semibold text-[var(--status-ok-ink)] tabular-nums"
+          className="mt-2 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-2.5 py-1 text-[10.5px] font-semibold text-[var(--text-primary)] tabular-nums"
         >
           Hasil HD · {videoProcessResult.outputWidth}×{videoProcessResult.outputHeight}
           {videoProcessResult.appliedFps ? ` · ${videoProcessResult.appliedFps} fps` : ''}

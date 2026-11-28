@@ -186,11 +186,10 @@ export function EnhanceAndGradePanel({
                             },
                           })
                         }
-                        className={`min-h-[36px] rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-colors ${
-                          active
-                            ? 'border-[var(--border-active)] bg-[var(--accent-primary)] [background-image:var(--accent-primary-gradient)] text-[var(--ink-on-accent)] shadow-sm'
-                            : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
-                        }`}
+                        className={`min-h-[36px] rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-colors ${active
+                          ? 'border-[var(--border-active)] bg-[var(--accent-primary)] [background-image:var(--accent-primary-gradient)] text-[var(--ink-on-accent)] shadow-sm'
+                          : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
+                          }`}
                       >
                         {lv.label}
                       </button>
@@ -372,11 +371,10 @@ export function EnhanceAndGradePanel({
                             },
                           })
                         }
-                        className={`min-h-[38px] rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
-                          enhanceSuite.sharpen.kernelSize === opt.size
-                            ? 'border-[var(--border-active)] bg-[var(--accent-primary)] [background-image:var(--accent-primary-gradient)] text-[var(--ink-on-accent)] shadow-sm'
-                            : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
-                        }`}
+                        className={`min-h-[38px] rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${enhanceSuite.sharpen.kernelSize === opt.size
+                          ? 'border-[var(--border-active)] bg-[var(--accent-primary)] [background-image:var(--accent-primary-gradient)] text-[var(--ink-on-accent)] shadow-sm'
+                          : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
+                          }`}
                       >
                         {opt.label}
                       </button>
@@ -541,11 +539,10 @@ export function EnhanceAndGradePanel({
                           },
                         })
                       }
-                      className={`min-h-[38px] rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
-                        enhanceSuite.upscale1080.method === opt.id
-                          ? 'border-[var(--border-active)] bg-[var(--accent-primary)] [background-image:var(--accent-primary-gradient)] text-[var(--ink-on-accent)] shadow-sm'
-                          : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
-                      }`}
+                      className={`min-h-[38px] rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${enhanceSuite.upscale1080.method === opt.id
+                        ? 'border-[var(--border-active)] bg-[var(--accent-primary)] [background-image:var(--accent-primary-gradient)] text-[var(--ink-on-accent)] shadow-sm'
+                        : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]'
+                        }`}
                     >
                       {opt.label}
                     </button>
@@ -614,7 +611,7 @@ export function EnhanceAndGradePanel({
                 title={look.description}
                 className={`group flex flex-col overflow-hidden rounded-xl border text-left transition-all duration-150 hover:-translate-y-0.5 ${
                   active
-                    ? 'border-[var(--border-active)] bg-[var(--accent-primary)]/14 ring-1 ring-[var(--border-active)]'
+                    ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] ring-1 ring-[var(--border-active)]'
                     : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] hover:border-[var(--border-active)]'
                 }`}
               >
@@ -722,7 +719,7 @@ export function EnhanceAndGradePanel({
                     true
                   )
                 }
-                className="text-[11px] font-medium text-[var(--accent-highlight)] hover:underline"
+                className="text-[11px] font-medium text-[var(--text-primary)] hover:underline"
               >
                 Reset
               </button>

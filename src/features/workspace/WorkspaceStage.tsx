@@ -834,7 +834,7 @@ export function WorkspaceStage({
                   title="Balik Horizontal"
                   className={`inline-flex min-h-[38px] items-center gap-1 rounded-xl px-2.5 text-xs font-medium transition-all active:scale-[0.97] ${
                     imageEdit.flipH
-                      ? 'bg-[var(--bg-subtle)] text-[var(--accent-highlight)]'
+                      ? 'bg-[var(--bg-subtle)] text-[var(--text-primary)] ring-1 ring-[var(--border-strong)]'
                       : 'text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]'
                   }`}
                 >
@@ -1278,7 +1278,7 @@ export function WorkspaceStage({
               }}
               className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-[var(--border-active)] bg-[var(--bg-elevated)] px-3.5 text-xs font-semibold text-[var(--text-primary)] disabled:opacity-60"
             >
-              <Send className="h-4 w-4 text-[var(--accent-highlight)]" aria-hidden="true" />
+              <Send className="h-4 w-4 text-[var(--text-primary)]" aria-hidden="true" />
               <span>Bagikan</span>
             </button>
           </>
@@ -1289,14 +1289,14 @@ export function WorkspaceStage({
         ) : videoProcessStatus === 'processing' ? (
           <>
             <div className="flex min-w-0 flex-1 items-center gap-2 text-xs font-medium text-[var(--text-primary)]">
-              <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-[var(--accent-highlight)]" />
+              <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-[var(--accent-primary)]" />
               <span className="truncate">Memproses Video HD…</span>
             </div>
             <button
               type="button"
               data-testid="mobile-sticky-cancel-btn"
               onClick={onCancelVideoProcess}
-              className="inline-flex min-h-[42px] shrink-0 items-center justify-center rounded-xl border border-[var(--status-err-border)] bg-[var(--status-err-bg)] px-4 text-xs font-semibold text-[var(--status-err-ink)]"
+              className="inline-flex min-h-[42px] shrink-0 items-center justify-center rounded-xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] px-4 text-xs font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--status-err-border)] hover:bg-[var(--status-err-bg)] hover:text-[var(--status-err-ink)]"
             >
               Batalkan
             </button>

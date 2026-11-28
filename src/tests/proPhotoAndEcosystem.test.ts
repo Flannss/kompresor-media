@@ -368,7 +368,7 @@ describe('KM-T008 Pro Photo Studio (2K-8K RealPhoto, 12 Filters, Adjustments, Ec
     expect(clickSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('defaults theme to Malam Navy (km-theme-v4) and Midnight Slate / Porcelain stage backdrop', () => {
+  it('defaults theme to Slate Gelap (km-theme-v4) and Architectural Slate / Porcelain stage backdrop', () => {
     localStorage.removeItem(THEME_STORAGE_KEY);
     expect(THEME_STORAGE_KEY).toBe('km-theme-v4');
     expect(initTheme()).toBe('dark');

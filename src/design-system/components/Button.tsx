@@ -11,13 +11,13 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
-    'bg-[var(--accent-primary)] [background-image:var(--accent-primary-gradient)] text-[var(--ink-on-accent)] border-transparent shadow-[var(--btn-primary-shadow)] hover:brightness-110',
+    'bg-[var(--accent-primary)] [background-image:var(--accent-primary-gradient)] text-[var(--ink-on-accent)] border-transparent shadow-[var(--btn-primary-shadow)] hover:-translate-y-[1px] hover:brightness-105',
   secondary:
     'bg-[var(--bg-elevated)] text-[var(--text-primary)] border-[var(--border-hairline)] shadow-[var(--glass-highlight)] hover:bg-[var(--bg-subtle)] hover:border-[var(--border-active)]',
   ghost:
     'bg-transparent text-[var(--text-secondary)] border-transparent hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]',
   danger:
-    'bg-[var(--status-err-bg)] text-[var(--status-err-ink)] border-[var(--status-err-border)] hover:brightness-95',
+    'bg-[var(--bg-elevated)] text-[var(--text-primary)] border-[var(--border-strong)] hover:bg-[var(--status-err-bg)] hover:text-[var(--status-err-ink)] hover:border-[var(--status-err-border)]',
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {

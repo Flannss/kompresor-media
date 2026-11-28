@@ -38,7 +38,7 @@ export const PHOTO_FILTER_PRESETS: readonly PhotoFilterPresetSpec[] = [
     title: 'Flagship Pro',
     badge: 'Pro',
     description: 'Tegas, bersih, dan highlight terkendali.',
-    swatchGradient: 'linear-gradient(125deg, #f8fafc 0%, #3b82f6 52%, #0f172a 100%)',
+    swatchGradient: 'linear-gradient(125deg, #f8fafc 0%, #94a3b8 52%, #0f172a 100%)',
     css: { brightness: 1.02, contrast: 1.12, saturate: 1.1 },
   },
   {

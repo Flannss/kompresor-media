@@ -34,12 +34,12 @@ function getStatusBadge(status: QueueItem['status']) {
     case 'done':
       return {
         label: 'Selesai',
-        cls: 'bg-[var(--status-ok-bg)] text-[var(--status-ok-ink)] border-[var(--status-ok-border)]',
+        cls: 'bg-[var(--bg-elevated)] text-[var(--text-primary)] border-[var(--border-strong)]',
       };
     case 'processing':
       return {
         label: 'Memproses',
-        cls: 'bg-[var(--bg-subtle)] text-[var(--accent-highlight)] border-[var(--border-active)]',
+        cls: 'bg-[var(--bg-subtle)] text-[var(--text-primary)] border-[var(--border-active)]',
       };
     case 'cancelled':
       return {
@@ -96,7 +96,7 @@ export function QueuePanel({
         <div className="flex items-center justify-between gap-2 text-xs">
           <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--text-primary)] tabular-nums">
             <span>{batchRunning && batchStatusLabel ? batchStatusLabel : 'Antrean'}</span>
-            <span className="rounded-full border border-[var(--accent-craft-border)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--accent-craft)]">
+            <span className="rounded-full border border-[var(--border-strong)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--text-primary)]">
               {items.length}/{maxTotal}
             </span>
           </span>
@@ -153,14 +153,14 @@ export function QueuePanel({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-[var(--accent-video)]">
+                      <div className="flex h-full w-full items-center justify-center text-[var(--text-secondary)]">
                         <Film className="h-4 w-4" aria-hidden="true" />
                       </div>
                     )}
                     <span
                       aria-hidden="true"
                       className={`absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full ring-1 ring-white/80 ${
-                        isImg ? 'bg-[var(--accent-photo)]' : 'bg-[var(--accent-video)]'
+                        isImg ? 'bg-[var(--text-primary)]' : 'bg-[var(--text-muted)]'
                       }`}
                     />
                   </div>
@@ -172,8 +172,8 @@ export function QueuePanel({
                       <span
                         className={`inline-block rounded-full border px-1.5 text-[9px] font-semibold ${
                           isImg
-                            ? 'border-[var(--accent-photo-border)] bg-[var(--accent-photo-soft)] text-[var(--accent-photo)]'
-                            : 'border-[var(--accent-video-border)] bg-[var(--accent-video-soft)] text-[var(--accent-video)]'
+                            ? 'border-[var(--border-strong)] bg-[var(--bg-subtle)] text-[var(--text-primary)]'
+                            : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)]'
                         }`}
                       >
                         {isImg ? 'Foto' : 'Video'}
@@ -282,7 +282,7 @@ export function QueuePanel({
                               className="h-full w-full object-cover"
                             />
                           ) : (
-                            <div className="flex h-full w-full items-center justify-center text-[var(--accent-video)]">
+                            <div className="flex h-full w-full items-center justify-center text-[var(--text-secondary)]">
                               <Film className="h-4 w-4" aria-hidden="true" />
                             </div>
                           )}
@@ -290,9 +290,9 @@ export function QueuePanel({
                         <div className="min-w-0 flex-1 overflow-hidden">
                           <div className="flex min-w-0 items-center gap-1">
                             {isImg ? (
-                              <ImageIcon className="h-3 w-3 shrink-0 text-[var(--accent-photo)]" aria-hidden="true" />
+                              <ImageIcon className="h-3 w-3 shrink-0 text-[var(--text-primary)]" aria-hidden="true" />
                             ) : (
-                              <Film className="h-3 w-3 shrink-0 text-[var(--accent-video)]" aria-hidden="true" />
+                              <Film className="h-3 w-3 shrink-0 text-[var(--text-secondary)]" aria-hidden="true" />
                             )}
                             <span
                               className="block min-w-0 truncate text-[11px] font-semibold text-[var(--text-primary)]"
@@ -324,8 +324,8 @@ export function QueuePanel({
                         <span
                           className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9.5px] font-semibold ${
                             isImg
-                              ? 'border-[var(--accent-photo-border)] bg-[var(--accent-photo-soft)] text-[var(--accent-photo)]'
-                              : 'border-[var(--accent-video-border)] bg-[var(--accent-video-soft)] text-[var(--accent-video)]'
+                              ? 'border-[var(--border-strong)] bg-[var(--bg-subtle)] text-[var(--text-primary)]'
+                              : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)]'
                           }`}
                         >
                           {isImg ? 'Foto' : 'Video'}
@@ -355,7 +355,7 @@ export function QueuePanel({
                     {item.status === 'processing' && (
                       <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-[var(--border-hairline)]">
                         <div
-                          className="h-full rounded-full bg-[var(--accent-highlight)] transition-all"
+                          className="h-full rounded-full bg-[var(--accent-primary)] transition-all"
                           style={{ width: `${Math.max(8, item.progress)}%` }}
                         />
                       </div>
@@ -385,7 +385,7 @@ export function QueuePanel({
                   onClick={onApplyToAll}
                   className="inline-flex min-h-[34px] items-center justify-center gap-1.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--border-active)]"
                 >
-                  <CopyCheck className="h-3.5 w-3.5 text-[var(--accent-highlight)]" aria-hidden="true" />
+                  <CopyCheck className="h-3.5 w-3.5 text-[var(--text-primary)]" aria-hidden="true" />
                   <span>Terapkan ke Semua</span>
                 </button>
               )}

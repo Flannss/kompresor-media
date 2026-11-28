@@ -248,7 +248,7 @@ export function ExportSharePanel({
           onClick={() => void handleSharePlatform('whatsapp')}
           className="min-h-[44px] w-full rounded-full"
         >
-          <Share2 className="h-4 w-4 text-[var(--accent-highlight)]" aria-hidden="true" />
+          <Share2 className="h-4 w-4 text-[var(--text-primary)]" aria-hidden="true" />
           <span>{preparingFullRes ? `Merender ${renderResTag} penuh…` : 'Bagikan'}</span>
         </Button>
       ) : (
@@ -316,7 +316,7 @@ export function ExportSharePanel({
           onClick={() => void handleZipDownload()}
           className="min-h-[44px] w-full rounded-full py-2 tabular-nums"
         >
-          <FileArchive className="h-4 w-4 shrink-0 text-[var(--accent-highlight)]" aria-hidden="true" />
+          <FileArchive className="h-4 w-4 shrink-0 text-[var(--text-primary)]" aria-hidden="true" />
           <span className="truncate">
             {zipping
               ? batchStatusLabel || 'Membuat arsip ZIP…'
@@ -366,7 +366,7 @@ export function ExportSharePanel({
                 ? 'open-whatsapp-web-link'
                 : `open-${helperSpec.id}-link`
             }
-            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-full border border-[var(--border-active)] bg-[var(--bg-surface)] px-3 text-xs font-semibold text-[var(--accent-highlight)] transition-colors hover:bg-[var(--bg-subtle)]"
+            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-full border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-subtle)]"
           >
             <span>{helperSpec.openLabel}</span>
             <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />

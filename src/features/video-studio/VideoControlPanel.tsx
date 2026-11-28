@@ -62,12 +62,12 @@ export type VideoTabId = 'utama' | 'tampilan' | 'lanjutan';
 export type VideoAdvancedCard = 'stabilize' | 'audio' | 'subtitle' | 'frame';
 
 const VIDEO_PRESET_BADGE_STYLE: Record<string, { dot: string; tag: string }> = {
-  'whatsapp-hd': { dot: 'bg-[var(--accent-photo)]', tag: 'WA HD' },
-  'whatsapp-status': { dot: 'bg-[var(--accent-primary)]', tag: '1080p' },
-  'instagram-story': { dot: 'bg-[var(--accent-video)]', tag: 'Reels' },
-  'tiktok-hd': { dot: 'bg-[var(--accent-craft)]', tag: 'TikTok' },
-  'web-light': { dot: 'bg-[var(--accent-highlight)]', tag: '720p' },
-  custom: { dot: 'bg-[var(--accent-slate)]', tag: 'Manual' },
+  'whatsapp-hd': { dot: 'bg-[var(--text-primary)]', tag: 'WA HD' },
+  'whatsapp-status': { dot: 'bg-[var(--text-secondary)]', tag: '1080p' },
+  'instagram-story': { dot: 'bg-[var(--text-muted)]', tag: 'Reels' },
+  'tiktok-hd': { dot: 'bg-[var(--accent-slate)]', tag: 'TikTok' },
+  'web-light': { dot: 'bg-[var(--text-subtle)]', tag: '720p' },
+  custom: { dot: 'bg-[var(--text-subtle)]', tag: 'Manual' },
 };
 
 export interface CapturedFrameInfo {
@@ -282,7 +282,7 @@ export function VideoInspectorHeader({
           }`}
         >
           {videoEdit.compressEnabled && (
-            <Check className="h-3 w-3 text-[var(--accent-highlight)]" aria-hidden="true" />
+            <Check className="h-3 w-3 text-[var(--text-primary)]" aria-hidden="true" />
           )}
           <span>Kompres</span>
         </button>
@@ -469,14 +469,14 @@ export function VideoExportDock({
             </span>
             <span
               data-testid="video-progress-pct"
-              className="font-semibold text-[var(--accent-highlight)] tabular-nums"
+              className="font-semibold text-[var(--text-primary)] tabular-nums"
             >
               {progressPct}%
             </span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--border-hairline)]">
             <div
-              className="h-full rounded-full bg-[var(--accent-highlight)] transition-all duration-150"
+              className="h-full rounded-full bg-[var(--accent-primary)] transition-all duration-150"
               style={{ width: `${Math.max(4, progressPct)}%` }}
             />
           </div>
@@ -792,7 +792,7 @@ export function VideoControlPanel({
               {VIDEO_PRESET_IDS.map((id) => getMediaPreset(id)).map((preset) => {
                 const selected = preset.id === selectedPresetId;
                 const badgeMeta = VIDEO_PRESET_BADGE_STYLE[preset.id] ?? {
-                  dot: 'bg-[var(--accent-highlight)]',
+                  dot: 'bg-[var(--text-secondary)]',
                   tag: preset.shortLabel,
                 };
                 return (
@@ -806,7 +806,7 @@ export function VideoControlPanel({
                     onClick={() => onSelectPreset(preset.id)}
                     className={`flex min-h-[48px] shrink-0 snap-start flex-col items-start justify-center whitespace-nowrap rounded-2xl border px-3.5 py-2 text-left transition-all duration-150 hover:-translate-y-0.5 active:scale-[0.985] disabled:opacity-60 md:min-h-[54px] md:whitespace-normal md:px-3 ${
                       selected
-                        ? 'border-[var(--accent-video-border)] bg-[var(--accent-video-soft)] text-[var(--text-primary)] ring-1 ring-[var(--accent-video-border)]'
+                        ? 'border-[var(--border-active)] [background-image:var(--accent-wash-gradient)] bg-[var(--bg-subtle)] text-[var(--text-primary)] ring-1 ring-[var(--border-strong)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
                     }`}
                   >
@@ -989,10 +989,10 @@ export function VideoControlPanel({
               className="flex w-full items-center justify-between text-xs font-semibold text-[var(--text-primary)]"
             >
               <span className="flex items-center gap-1.5">
-                <Scissors className="h-3.5 w-3.5 text-[var(--accent-highlight)]" aria-hidden="true" />
+                <Scissors className="h-3.5 w-3.5 text-[var(--text-secondary)]" aria-hidden="true" />
                 <span>Potong Durasi</span>
               </span>
-              <span className="flex items-center gap-2 text-[11px] text-[var(--accent-highlight)] tabular-nums">
+              <span className="flex items-center gap-2 text-[11px] text-[var(--text-primary)] tabular-nums">
                 <span data-testid="trim-duration-badge">
                   {trim.durationSec.toFixed(1).replace('.', ',')} dtk
                 </span>
@@ -1141,7 +1141,7 @@ export function VideoControlPanel({
                   Pilih tingkat ketajaman agar video tetap bening setelah diunggah.
                 </span>
               </div>
-              <span className="shrink-0 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--accent-highlight)]">
+              <span className="shrink-0 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--text-primary)]">
                 {VIDEO_CLARITY_MODELS.find((m) => m.id === videoEdit.clarityModel)?.title ??
                   'Natural HD'}
               </span>
@@ -1159,13 +1159,13 @@ export function VideoControlPanel({
                     onClick={() => onUpdateVideoEdit({ clarityModel: model.id })}
                     className={`flex min-h-[52px] min-w-[162px] shrink-0 snap-start flex-col items-start justify-center rounded-2xl border px-3.5 py-2 text-left transition-all duration-150 hover:-translate-y-0.5 md:min-w-0 md:px-3 ${
                       active
-                        ? 'border-[var(--accent-craft-border)] border-l-[3px] border-l-[var(--accent-craft)] bg-[var(--accent-craft-soft)] text-[var(--text-primary)] ring-1 ring-[var(--accent-craft-border)]'
+                        ? 'border-[var(--border-active)] border-l-[3px] border-l-[var(--border-active)] [background-image:var(--accent-wash-gradient)] bg-[var(--bg-subtle)] text-[var(--text-primary)] ring-1 ring-[var(--border-strong)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
                     }`}
                   >
                     <span
                       className={`whitespace-nowrap text-xs font-semibold ${
-                        active ? 'text-[var(--accent-highlight)]' : 'text-[var(--text-primary)]'
+                        active ? 'text-[var(--text-primary)]' : 'text-[var(--text-primary)]'
                       }`}
                     >
                       {model.title}
@@ -1219,7 +1219,7 @@ export function VideoControlPanel({
                 }
                 className="flex flex-1 items-center gap-1.5 text-left text-xs font-semibold text-[var(--text-primary)]"
               >
-                <Activity className="h-3.5 w-3.5 text-[var(--accent-highlight)]" aria-hidden="true" />
+                <Activity className="h-3.5 w-3.5 text-[var(--text-secondary)]" aria-hidden="true" />
                 <span>Stabilkan Video</span>
               </button>
               <button
@@ -1288,7 +1288,7 @@ export function VideoControlPanel({
               className="flex w-full items-center justify-between text-xs font-semibold text-[var(--text-primary)]"
             >
               <span className="flex items-center gap-1.5">
-                <Volume2 className="h-3.5 w-3.5 text-[var(--accent-highlight)]" aria-hidden="true" />
+                <Volume2 className="h-3.5 w-3.5 text-[var(--text-secondary)]" aria-hidden="true" />
                 <span>Audio &amp; Suara</span>
               </span>
               <ChevronDown
@@ -1320,7 +1320,7 @@ export function VideoControlPanel({
                 >
                   <div className="flex items-center gap-2">
                     {videoEdit.muteAudio ? (
-                      <VolumeX className="h-3.5 w-3.5 text-[var(--accent-highlight)]" aria-hidden="true" />
+                      <VolumeX className="h-3.5 w-3.5 text-[var(--text-primary)]" aria-hidden="true" />
                     ) : (
                       <Volume2 className="h-3.5 w-3.5 text-[var(--text-secondary)]" aria-hidden="true" />
                     )}
@@ -1328,7 +1328,7 @@ export function VideoControlPanel({
                       Bisukan Suara Video
                     </span>
                   </div>
-                  <span className="text-[11px] font-semibold text-[var(--accent-highlight)]">
+                  <span className="text-[11px] font-semibold text-[var(--text-primary)]">
                     {videoEdit.muteAudio ? 'Ya' : 'Tidak'}
                   </span>
                 </button>
@@ -1491,7 +1491,7 @@ export function VideoControlPanel({
               className="flex w-full items-center justify-between text-xs font-semibold text-[var(--text-primary)]"
             >
               <span className="flex items-center gap-1.5">
-                <Captions className="h-3.5 w-3.5 text-[var(--accent-highlight)]" aria-hidden="true" />
+                <Captions className="h-3.5 w-3.5 text-[var(--text-secondary)]" aria-hidden="true" />
                 <span>Subtitle / Teks Video ({videoEdit.subtitle.cues.length})</span>
               </span>
               <ChevronDown
@@ -1723,7 +1723,7 @@ export function VideoControlPanel({
               className="flex w-full items-center justify-between text-xs font-semibold text-[var(--text-primary)]"
             >
               <span className="flex items-center gap-1.5">
-                <Camera className="h-3.5 w-3.5 text-[var(--accent-highlight)]" aria-hidden="true" />
+                <Camera className="h-3.5 w-3.5 text-[var(--text-secondary)]" aria-hidden="true" />
                 <span>Ambil Foto dari Frame</span>
               </span>
               <ChevronDown

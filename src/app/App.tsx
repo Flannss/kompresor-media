@@ -218,7 +218,7 @@ export function App() {
         {isGlobalFileDrag && isReady && (
           <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-app)]/78 p-4">
             <div className="km-glass-strong flex items-center gap-3 rounded-2xl border-2 border-dashed border-[var(--border-strong)] px-7 py-5 text-sm font-semibold text-[var(--text-primary)]">
-              <Upload className="h-5 w-5 text-[var(--accent-craft)]" aria-hidden="true" />
+              <Upload className="h-5 w-5 text-[var(--text-primary)]" aria-hidden="true" />
               <span>Lepas file untuk ditambahkan ke antrean</span>
             </div>
           </div>

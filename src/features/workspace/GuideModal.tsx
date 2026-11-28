@@ -41,14 +41,7 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
       >
         <div className="flex items-start justify-between gap-3 border-b border-[var(--border-hairline)] pb-4">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border"
-              style={{
-                backgroundColor: 'var(--accent-craft-soft)',
-                borderColor: 'var(--accent-craft-border)',
-                color: 'var(--accent-craft)',
-              }}
-            >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] text-[var(--text-primary)]">
               <BookOpen className="h-4.5 w-4.5" aria-hidden="true" />
             </div>
             <div className="min-w-0">
@@ -100,7 +93,7 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
 
           <section className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5">
             <div className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
-              <Sliders className="h-3.5 w-3.5 text-[var(--accent-photo)]" aria-hidden="true" />
+              <Sliders className="h-3.5 w-3.5 text-[var(--text-primary)]" aria-hidden="true" />
               <h3>2. Bedanya Model, Alat &amp; Filter</h3>
             </div>
             <ul className="mt-1.5 space-y-1">
@@ -123,7 +116,7 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
           <section className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5">
             <div className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
               <Smartphone
-                className="h-3.5 w-3.5 text-[var(--accent-video)]"
+                className="h-3.5 w-3.5 text-[var(--text-secondary)]"
                 aria-hidden="true"
               />
               <h3>3. Tips Kirim HD ke WhatsApp &amp; iPhone</h3>
@@ -141,7 +134,7 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
             </ul>
           </section>
 
-          <section className="rounded-2xl border border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] p-3.5 text-[var(--status-ok-ink)]">
+          <section className="rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] p-3.5 text-[var(--text-primary)]">
             <div className="flex items-center gap-1.5 font-semibold">
               <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
               <h3>4. Privasi 100% Lokal di Perangkat</h3>
