@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
   AlertCircle,
   Camera,
@@ -31,8 +31,10 @@ import type {
   VideoProcessProgress,
   VideoProcessResult,
 } from '../../engines/contracts';
+import { createDefaultEnhanceSuite } from '../../engines/shared/colorGrades';
 import { releaseCanvasSurface } from '../../engines/image/pipelineRunner';
 import { computeRotatedDimensions } from '../../engines/image/pixelOps';
+import { resolveCustomVideoParams } from '../../engines/video/videoPresets';
 import type { MediaPresetId } from '../../presets/mediaPresets';
 import type { DeviceProfile } from '../../shared/utils/deviceCapability';
 import { formatBytes } from '../../shared/utils/formatBytes';
@@ -42,13 +44,24 @@ import { ExportSharePanel } from '../export-share/ExportSharePanel';
 import { executeWhatsAppShareFlow, triggerObjectUrlDownload } from '../export-share/shareHelper';
 import type { ZipEntryInput } from '../export-share/zipExport';
 import { CropOverlay } from '../image-studio/CropOverlay';
-import { PhotoControlPanel } from '../image-studio/PhotoControlPanel';
+import {
+  PhotoControlPanel,
+  PhotoInspectorHeader,
+  type PhotoTabId,
+} from '../image-studio/PhotoControlPanel';
 import { MediaInfoBar } from '../upload/MediaInfoBar';
 import {
   VideoCompareStage,
   type VideoCompareViewMode,
 } from '../video-studio/VideoCompareStage';
-import { VideoControlPanel, type CapturedFrameInfo } from '../video-studio/VideoControlPanel';
+import {
+  VideoControlPanel,
+  VideoExportDock,
+  VideoInspectorHeader,
+  type CapturedFrameInfo,
+  type VideoAdvancedCard,
+  type VideoTabId,
+} from '../video-studio/VideoControlPanel';
 import {
   BeforeAfterPreview,
   type PhotoCompareViewMode,
@@ -199,8 +212,14 @@ export function WorkspaceStage({
   onLoadSingleReplacementFile,
 }: WorkspaceStageProps) {
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
+  const inspectorScrollRef = useRef<HTMLDivElement | null>(null);
   const [isDraggingOverStage, setIsDraggingOverStage] = useState(false);
   const [backdrop, setBackdrop] = useState<StageBackdrop>('studio');
+
+  const [photoTab, setPhotoTab] = useState<PhotoTabId>('utama');
+  const [videoTab, setVideoTab] = useState<VideoTabId>('utama');
+  const [videoAdvancedCard, setVideoAdvancedCard] = useState<VideoAdvancedCard>('stabilize');
+  const [scrollEdges, setScrollEdges] = useState({ canScrollUp: false, canScrollDown: false });
 
   const [isCropping, setIsCropping] = useState(false);
   const [photoViewMode, setPhotoViewMode] = useState<PhotoCompareViewMode>('single');
@@ -220,6 +239,51 @@ export function WorkspaceStage({
   const activeQueueItem = items.find((i) => i.id === activeItemId);
   const needsFullResExport = Boolean(activeQueueItem?.needsFullResExport);
   const isImage = metadata.kind === 'image';
+
+  const updateScrollEdges = useCallback(() => {
+    const el = inspectorScrollRef.current;
+    if (!el) return;
+    const canScrollUp = el.scrollTop > 8;
+    const canScrollDown = el.scrollHeight - el.scrollTop - el.clientHeight > 8;
+    setScrollEdges((prev) =>
+      prev.canScrollUp === canScrollUp && prev.canScrollDown === canScrollDown
+        ? prev
+        : { canScrollUp, canScrollDown }
+    );
+  }, []);
+
+  useEffect(() => {
+    const el = inspectorScrollRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    updateScrollEdges();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => updateScrollEdges());
+    observer.observe(el);
+    if (el.firstElementChild) {
+      observer.observe(el.firstElementChild);
+    }
+    return () => observer.disconnect();
+  }, [activeItemId, isImage, photoTab, videoTab, videoAdvancedCard, updateScrollEdges]);
+
+  const handleFallbackToSafe720p = useCallback(() => {
+    const balancedParams = resolveCustomVideoParams('balanced');
+    const defaults = createDefaultEnhanceSuite();
+    onUpdateVideoEdit({
+      outputFormat: 'mp4',
+      targetResolution: '720p',
+      maxHeightPx: 720,
+      qualityTier: 'balanced',
+      ...balancedParams,
+      stabilize: { ...videoEdit.stabilize, enabled: false },
+      enhanceSuite: {
+        ...videoEdit.enhanceSuite,
+        noise: defaults.noise,
+        upscale1080: defaults.upscale1080,
+      },
+    });
+    setTimeout(() => onStartVideoProcess('auto'), 40);
+  }, [onUpdateVideoEdit, onStartVideoProcess, videoEdit.stabilize, videoEdit.enhanceSuite]);
   const canSplitCompare =
     isImage &&
     processedImageUrl !== null &&
@@ -489,7 +553,7 @@ export function WorkspaceStage({
     : (videoProcessResult?.outputMime ?? null);
 
   return (
-    <div className="flex min-h-[calc(100vh-56px)] w-full flex-col lg:flex-row">
+    <div className="flex min-h-[calc(100vh-56px)] w-full flex-col lg:h-[calc(100dvh-60px)] lg:min-h-0 lg:flex-row lg:overflow-hidden">
       <QueuePanel
         items={items}
         activeItemId={activeItemId}
@@ -506,16 +570,20 @@ export function WorkspaceStage({
         onProcessAll={onProcessAll}
       />
 
-      {/* Center Studio Preview Stage */}
+      {/* Left/Center Studio Preview Stage (Pinned in viewport on Laptop/Desktop >= 1024px) */}
       <section
-        data-testid="workspace-preview-stage"
+        data-testid="desktop-pinned-stage"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`bg-warm-stage relative flex min-h-0 w-full min-w-0 flex-1 flex-col items-center justify-center gap-2.5 px-3 py-3 transition-colors sm:min-h-[50vh] sm:gap-4 sm:px-7 sm:py-6 md:min-h-[46vh] lg:min-h-[calc(100vh-60px)] lg:px-8 lg:py-7 ${
+        className={`bg-warm-stage lg:bg-warm-gallery relative flex min-h-0 w-full min-w-0 flex-1 flex-col items-center justify-center px-3 py-3 transition-colors sm:min-h-[50vh] sm:px-7 sm:py-6 md:min-h-[46vh] lg:h-full lg:min-h-0 lg:overflow-hidden lg:px-7 lg:py-4 ${
           isDraggingOverStage ? 'ring-2 ring-inset ring-[var(--border-active)]' : ''
         }`}
       >
+        <div
+          data-testid="workspace-preview-stage"
+          className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-2.5 sm:gap-4 lg:gap-3"
+        >
         {queueLimitNotice && (
           <div
             data-testid="queue-limit-notice"
@@ -862,65 +930,223 @@ export function WorkspaceStage({
             </div>
           </div>
         )}
+        </div>
       </section>
 
-      {/* Right Inspector Panel (flattened airy stack on Mobile, 2-column balanced grid on Tablet md..lg-1, single rail on Desktop) */}
-      <aside className="km-glass flex w-full shrink-0 flex-col gap-5 border-t px-3.5 py-5 pb-28 sm:p-6 md:grid md:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.9fr)] md:items-start md:gap-6 md:px-7 md:pb-8 lg:flex lg:w-[404px] xl:w-[424px] lg:flex-col lg:items-stretch lg:gap-5 lg:border-l lg:border-t-0 lg:p-6">
-        <div className="min-w-0">
-          {isImage ? (
-            <PhotoControlPanel
-              selectedPresetId={selectedPresetId}
-              deviceProfile={deviceProfile}
-              imageEdit={imageEdit}
-              imageProcessResult={imageProcessResult}
-              baseThumbnailUrl={baseThumbnailUrl}
-              avifSupported={avifSupported}
-              isCropping={isCropping}
-              holdOriginalActive={holdOriginalMedia}
-              onHoldOriginalChange={setHoldOriginalMedia}
-              onSelectPreset={onSelectPreset}
-              onUpdateImageEdit={onUpdateImageEdit}
-              onCommitSnapshot={onCommitPhotoSnapshot}
-              onToggleCrop={() => setIsCropping((v) => !v)}
-              onRotate90={onRotatePhoto90}
-              onFlipH={onFlipH}
-              onFlipV={onFlipV}
-              onSelectPhotoFilter={onSelectPhotoFilter}
-              onRequestThumbnail={onRequestPhotoThumbnail}
-              onResetPhoto={onResetPhoto}
+      {/* Right Inspector Panel: Fixed Header + Independent Middle Scroll + Pinned Export Dock on >= 1024px */}
+      <aside className="km-glass flex w-full shrink-0 flex-col border-t md:grid md:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.9fr)] md:items-start md:gap-6 md:px-7 md:py-5 md:pb-8 lg:flex lg:h-full lg:min-h-0 lg:w-[420px] xl:w-[448px] lg:flex-col lg:items-stretch lg:gap-0 lg:overflow-hidden lg:border-l lg:border-t-0 lg:bg-[var(--bg-surface)]/80 lg:p-0">
+        <div className="flex min-w-0 flex-col px-3.5 pt-5 pb-4 sm:px-6 sm:pt-6 md:px-0 md:py-0 lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+          <div
+            className={`shrink-0 transition-shadow duration-200 lg:border-b lg:border-[var(--border-hairline)] lg:bg-[var(--bg-surface-strong)] lg:px-5 lg:pt-4 lg:pb-3 ${
+              scrollEdges.canScrollUp
+                ? 'lg:shadow-[0_10px_24px_-14px_rgba(26,18,13,0.3)]'
+                : ''
+            }`}
+          >
+            {isImage ? (
+              <PhotoInspectorHeader
+                imageEdit={imageEdit}
+                activeTab={photoTab}
+                onChangeTab={setPhotoTab}
+                onResetPhoto={onResetPhoto}
+              />
+            ) : (
+              <VideoInspectorHeader
+                videoEdit={videoEdit}
+                isProcessing={videoProcessStatus === 'processing'}
+                activeTab={videoTab}
+                onChangeTab={setVideoTab}
+                onUpdateVideoEdit={onUpdateVideoEdit}
+                onSelectAdvancedCard={setVideoAdvancedCard}
+              />
+            )}
+          </div>
+
+          <div className="relative flex min-h-0 flex-1 flex-col lg:overflow-hidden">
+            <div
+              aria-hidden="true"
+              className={`pointer-events-none absolute inset-x-0 top-0 z-10 hidden h-5 bg-gradient-to-b from-[var(--bg-app)]/85 to-transparent transition-opacity duration-200 lg:block ${
+                scrollEdges.canScrollUp ? 'opacity-100' : 'opacity-0'
+              }`}
             />
-          ) : (
-            <VideoControlPanel
-              metadata={metadata}
-              deviceProfile={deviceProfile}
-              selectedPresetId={selectedPresetId}
-              videoEdit={videoEdit}
-              baseThumbnailUrl={baseThumbnailUrl}
-              onRequestThumbnail={() => setVideoThumbRequested(true)}
-              holdOriginalActive={holdOriginalMedia}
-              onHoldOriginalChange={setHoldOriginalMedia}
-              videoProcessStatus={videoProcessStatus}
-              videoProgress={videoProgress}
-              videoProcessResult={videoProcessResult}
-              processedVideoUrl={processedVideoUrl}
-              videoProcessError={videoProcessError}
-              capturedFrame={capturedFrame}
-              finishedBatchItems={finishedBatchItems}
-              batchStatusLabel={batchStatusLabel}
-              onPrepareAllZipItems={handlePrepareAllZipItems}
-              onSelectPreset={onSelectPreset}
-              onUpdateVideoEdit={onUpdateVideoEdit}
-              onSelectColorGrade={onSelectColorGrade}
-              onStartProcess={() => onStartVideoProcess('auto')}
-              onCancelProcess={onCancelVideoProcess}
-              onSeekPreview={handleSeekVideoPreview}
-              onCaptureFrame={handleCaptureFrame}
-              onEditCapturedFrameAsPhoto={handleEditCapturedFrameAsPhoto}
+
+            <div
+              ref={inspectorScrollRef}
+              data-testid="desktop-inspector-scroll"
+              onScroll={updateScrollEdges}
+              className="km-studio-scroll pt-4 sm:pt-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:px-5 lg:py-4 scroll-smooth"
+            >
+              {isImage ? (
+                <PhotoControlPanel
+                  selectedPresetId={selectedPresetId}
+                  deviceProfile={deviceProfile}
+                  imageEdit={imageEdit}
+                  imageProcessResult={imageProcessResult}
+                  baseThumbnailUrl={baseThumbnailUrl}
+                  avifSupported={avifSupported}
+                  isCropping={isCropping}
+                  holdOriginalActive={holdOriginalMedia}
+                  activeTab={photoTab}
+                  onTabChange={setPhotoTab}
+                  showHeader={false}
+                  onHoldOriginalChange={setHoldOriginalMedia}
+                  onSelectPreset={onSelectPreset}
+                  onUpdateImageEdit={onUpdateImageEdit}
+                  onCommitSnapshot={onCommitPhotoSnapshot}
+                  onToggleCrop={() => setIsCropping((v) => !v)}
+                  onRotate90={onRotatePhoto90}
+                  onFlipH={onFlipH}
+                  onFlipV={onFlipV}
+                  onSelectPhotoFilter={onSelectPhotoFilter}
+                  onRequestThumbnail={onRequestPhotoThumbnail}
+                  onResetPhoto={onResetPhoto}
+                />
+              ) : (
+                <VideoControlPanel
+                  metadata={metadata}
+                  deviceProfile={deviceProfile}
+                  selectedPresetId={selectedPresetId}
+                  videoEdit={videoEdit}
+                  baseThumbnailUrl={baseThumbnailUrl}
+                  onRequestThumbnail={() => setVideoThumbRequested(true)}
+                  holdOriginalActive={holdOriginalMedia}
+                  onHoldOriginalChange={setHoldOriginalMedia}
+                  videoProcessStatus={videoProcessStatus}
+                  videoProgress={videoProgress}
+                  videoProcessResult={videoProcessResult}
+                  processedVideoUrl={processedVideoUrl}
+                  videoProcessError={videoProcessError}
+                  capturedFrame={capturedFrame}
+                  finishedBatchItems={finishedBatchItems}
+                  batchStatusLabel={batchStatusLabel}
+                  activeTab={videoTab}
+                  onTabChange={setVideoTab}
+                  advancedCard={videoAdvancedCard}
+                  onAdvancedCardChange={setVideoAdvancedCard}
+                  showHeader={false}
+                  showFooter={false}
+                  onPrepareAllZipItems={handlePrepareAllZipItems}
+                  onSelectPreset={onSelectPreset}
+                  onUpdateVideoEdit={onUpdateVideoEdit}
+                  onSelectColorGrade={onSelectColorGrade}
+                  onStartProcess={() => onStartVideoProcess('auto')}
+                  onFallbackToSafe720p={handleFallbackToSafe720p}
+                  onCancelProcess={onCancelVideoProcess}
+                  onSeekPreview={handleSeekVideoPreview}
+                  onCaptureFrame={handleCaptureFrame}
+                  onEditCapturedFrameAsPhoto={handleEditCapturedFrameAsPhoto}
+                />
+              )}
+
+              <details
+                data-testid="file-details-accordion"
+                className="group mt-5 border-t border-[var(--border-hairline)] pt-3.5"
+              >
+                <summary className="flex min-h-[38px] cursor-pointer list-none items-center justify-between py-1 text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] [&::-webkit-details-marker]:hidden">
+                  <span>Detail teknis</span>
+                  <ChevronDown
+                    className="h-4 w-4 transition-transform group-open:rotate-180"
+                    aria-hidden="true"
+                  />
+                </summary>
+
+                <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs tabular-nums">
+                  <dt className="text-[var(--text-muted)]">Nama file</dt>
+                  <dd
+                    className="truncate text-right font-medium text-[var(--text-primary)]"
+                    title={metadata.fileName}
+                  >
+                    {metadata.fileName}
+                  </dd>
+
+                  <dt className="text-[var(--text-muted)]">Jenis</dt>
+                  <dd className="text-right font-medium text-[var(--text-primary)]">
+                    {isImage ? 'Foto' : 'Video'}
+                  </dd>
+
+                  <dt className="text-[var(--text-muted)]">Format asli</dt>
+                  <dd className="text-right font-medium text-[var(--text-primary)]">
+                    {validation.signatureLabel} ({metadata.mimeType})
+                  </dd>
+
+                  <dt className="text-[var(--text-muted)]">Resolusi asli</dt>
+                  <dd className="text-right font-medium text-[var(--text-primary)]">
+                    {metadata.width} × {metadata.height}
+                  </dd>
+
+                  <dt className="text-[var(--text-muted)]">Orientasi</dt>
+                  <dd className="text-right font-medium text-[var(--text-primary)]">
+                    {formatOrientationId(metadata.orientation)}
+                  </dd>
+
+                  <dt className="text-[var(--text-muted)]">Ukuran asli</dt>
+                  <dd className="text-right font-medium text-[var(--text-primary)]">
+                    {formatBytes(metadata.sizeBytes)}
+                  </dd>
+
+                  {isImage ? (
+                    imageProcessResult && (
+                      <>
+                        <dt className="text-[var(--text-muted)]">Mesin proses</dt>
+                        <dd className="text-right font-medium text-[var(--text-primary)]">
+                          {imageProcessResult.backend} ({imageProcessResult.outputMime})
+                        </dd>
+                      </>
+                    )
+                  ) : (
+                    <>
+                      <dt className="text-[var(--text-muted)]">Durasi</dt>
+                      <dd className="text-right font-medium text-[var(--text-primary)]">
+                        {formatDuration(metadata.durationSec)}
+                      </dd>
+
+                      <dt className="text-[var(--text-muted)]">Audio</dt>
+                      <dd className="text-right font-medium text-[var(--text-primary)]">
+                        {metadata.hasAudioHint === true ? 'Ada trek audio' : 'Tidak terdeteksi'}
+                      </dd>
+
+                      <dt className="text-[var(--text-muted)]">Parameter video</dt>
+                      <dd className="text-right font-medium text-[var(--text-primary)]">
+                        CRF {videoEdit.crf} · Bitrate {Math.round(videoEdit.targetBitrateBps / 1000)} kbps ·
+                        Audio {videoEdit.audio.bitrateKbps} kbps
+                      </dd>
+
+                      {videoProcessResult && (
+                        <>
+                          <dt className="text-[var(--text-muted)]">Mesin / Muxer</dt>
+                          <dd className="text-right font-medium text-[var(--text-primary)]">
+                            {videoProcessResult.backend} ({videoProcessResult.outputMime})
+                          </dd>
+                          {videoProcessResult.engineDetail && (
+                            <>
+                              <dt className="text-[var(--text-muted)]">Rantai filter</dt>
+                              <dd className="break-all text-right font-mono text-[10px] text-[var(--text-secondary)]">
+                                {videoProcessResult.engineDetail}
+                              </dd>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
+                </dl>
+              </details>
+            </div>
+
+            <div
+              aria-hidden="true"
+              className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 hidden h-6 bg-gradient-to-t from-[var(--bg-app)]/85 to-transparent transition-opacity duration-200 lg:block ${
+                scrollEdges.canScrollDown ? 'opacity-100' : 'opacity-0'
+              }`}
             />
-          )}
+          </div>
         </div>
 
-        <div className="flex min-w-0 flex-col gap-5 lg:flex-1">
+        {/* Sticky Bottom Export Dock on Desktop >= 1024px (Inline / 2nd Column on Mobile & Tablet) */}
+        <div
+          data-testid="desktop-export-dock"
+          className="flex min-w-0 flex-col gap-3.5 px-3.5 pb-28 sm:px-6 sm:pb-6 md:sticky md:top-20 md:px-0 md:pb-0 lg:static lg:shrink-0 lg:gap-2 lg:border-t lg:border-[var(--border-hairline)] lg:bg-[var(--bg-surface-strong)] lg:px-5 lg:py-2.5 lg:shadow-[0_-10px_28px_-16px_rgba(26,18,13,0.16)]"
+        >
           {imageProcessError && isImage && (
             <p
               role="alert"
@@ -939,10 +1165,11 @@ export function WorkspaceStage({
             needsFullResExport={needsFullResExport}
             videoEdit={videoEdit}
             videoProcessResult={videoProcessResult}
+            compactOnDesktop
           />
 
-          {isImage && (
-            <div className="border-t border-[var(--border-hairline)] pt-3">
+          {isImage ? (
+            <div className="border-t border-[var(--border-hairline)] pt-3 lg:border-t-0 lg:pt-0">
               <ExportSharePanel
                 mediaKind="image"
                 readyBlob={imageProcessResult?.outputBlob ?? null}
@@ -962,101 +1189,24 @@ export function WorkspaceStage({
                 isProcessing={imageProcessStatus === 'processing'}
               />
             </div>
-          )}
-
-          <details
-            data-testid="file-details-accordion"
-            className="group border-t border-[var(--border-hairline)] pt-3.5 lg:mt-auto"
-          >
-          <summary className="flex min-h-[38px] cursor-pointer list-none items-center justify-between py-1 text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] [&::-webkit-details-marker]:hidden">
-            <span>Detail teknis</span>
-            <ChevronDown
-              className="h-4 w-4 transition-transform group-open:rotate-180"
-              aria-hidden="true"
+          ) : (
+            <VideoExportDock
+              videoEdit={videoEdit}
+              selectedPresetId={selectedPresetId}
+              videoProcessStatus={videoProcessStatus}
+              videoProgress={videoProgress}
+              videoProcessResult={videoProcessResult}
+              processedVideoUrl={processedVideoUrl}
+              videoProcessError={videoProcessError}
+              finishedBatchItems={finishedBatchItems}
+              batchStatusLabel={batchStatusLabel}
+              onPrepareAllZipItems={handlePrepareAllZipItems}
+              onStartProcess={() => onStartVideoProcess('auto')}
+              onFallbackToSafe720p={handleFallbackToSafe720p}
+              onCancelProcess={onCancelVideoProcess}
+              compactHeader
             />
-          </summary>
-
-          <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs tabular-nums">
-            <dt className="text-[var(--text-muted)]">Nama file</dt>
-            <dd
-              className="truncate text-right font-medium text-[var(--text-primary)]"
-              title={metadata.fileName}
-            >
-              {metadata.fileName}
-            </dd>
-
-            <dt className="text-[var(--text-muted)]">Jenis</dt>
-            <dd className="text-right font-medium text-[var(--text-primary)]">
-              {isImage ? 'Foto' : 'Video'}
-            </dd>
-
-            <dt className="text-[var(--text-muted)]">Format asli</dt>
-            <dd className="text-right font-medium text-[var(--text-primary)]">
-              {validation.signatureLabel} ({metadata.mimeType})
-            </dd>
-
-            <dt className="text-[var(--text-muted)]">Resolusi asli</dt>
-            <dd className="text-right font-medium text-[var(--text-primary)]">
-              {metadata.width} × {metadata.height}
-            </dd>
-
-            <dt className="text-[var(--text-muted)]">Orientasi</dt>
-            <dd className="text-right font-medium text-[var(--text-primary)]">
-              {formatOrientationId(metadata.orientation)}
-            </dd>
-
-            <dt className="text-[var(--text-muted)]">Ukuran asli</dt>
-            <dd className="text-right font-medium text-[var(--text-primary)]">
-              {formatBytes(metadata.sizeBytes)}
-            </dd>
-
-            {isImage ? (
-              imageProcessResult && (
-                <>
-                  <dt className="text-[var(--text-muted)]">Mesin proses</dt>
-                  <dd className="text-right font-medium text-[var(--text-primary)]">
-                    {imageProcessResult.backend} ({imageProcessResult.outputMime})
-                  </dd>
-                </>
-              )
-            ) : (
-              <>
-                <dt className="text-[var(--text-muted)]">Durasi</dt>
-                <dd className="text-right font-medium text-[var(--text-primary)]">
-                  {formatDuration(metadata.durationSec)}
-                </dd>
-
-                <dt className="text-[var(--text-muted)]">Audio</dt>
-                <dd className="text-right font-medium text-[var(--text-primary)]">
-                  {metadata.hasAudioHint === true ? 'Ada trek audio' : 'Tidak terdeteksi'}
-                </dd>
-
-                <dt className="text-[var(--text-muted)]">Parameter video</dt>
-                <dd className="text-right font-medium text-[var(--text-primary)]">
-                  CRF {videoEdit.crf} · Bitrate {Math.round(videoEdit.targetBitrateBps / 1000)} kbps ·
-                  Audio {videoEdit.audio.bitrateKbps} kbps
-                </dd>
-
-                {videoProcessResult && (
-                  <>
-                    <dt className="text-[var(--text-muted)]">Mesin / Muxer</dt>
-                    <dd className="text-right font-medium text-[var(--text-primary)]">
-                      {videoProcessResult.backend} ({videoProcessResult.outputMime})
-                    </dd>
-                    {videoProcessResult.engineDetail && (
-                      <>
-                        <dt className="text-[var(--text-muted)]">Rantai filter</dt>
-                        <dd className="break-all text-right font-mono text-[10px] text-[var(--text-secondary)]">
-                          {videoProcessResult.engineDetail}
-                        </dd>
-                      </>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-          </dl>
-        </details>
+          )}
         </div>
       </aside>
 

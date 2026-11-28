@@ -226,14 +226,14 @@ export function ExportSharePanel({
   const helperSpec = activeHelperPlatform ? PLATFORM_SHARE_META[activeHelperPlatform] : null;
 
   return (
-    <div className="flex flex-col gap-2.5 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:gap-2 sm:pb-0">
+    <div className="flex flex-col gap-2.5 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:gap-2 lg:gap-1.5 sm:pb-0">
       <Button
         variant="primary"
         size="lg"
         data-testid={mediaKind === 'image' ? 'download-photo-btn' : 'download-video-btn'}
         disabled={!canExport}
         onClick={() => void handleDownload()}
-        className="min-h-[48px] sm:min-h-[46px] w-full rounded-full font-semibold"
+        className="min-h-[48px] w-full rounded-full font-semibold sm:min-h-[46px] lg:min-h-[42px]"
       >
         <Download className="h-4 w-4" aria-hidden="true" />
         <span>{downloadLabel}</span>
@@ -259,7 +259,7 @@ export function ExportSharePanel({
             data-testid="whatsapp-share-btn"
             disabled={!canExport || sharing}
             onClick={() => void handleSharePlatform('whatsapp')}
-            className="min-h-[42px] rounded-full px-2 text-[11px] font-semibold"
+            className="min-h-[42px] rounded-full px-2 text-[11px] font-semibold lg:min-h-[34px]"
           >
             WhatsApp
           </Button>
@@ -269,7 +269,7 @@ export function ExportSharePanel({
             data-testid="instagram-share-btn"
             disabled={!canExport || sharing}
             onClick={() => void handleSharePlatform('instagram')}
-            className="min-h-[42px] rounded-full px-2 text-[11px] font-semibold"
+            className="min-h-[42px] rounded-full px-2 text-[11px] font-semibold lg:min-h-[34px]"
           >
             Instagram
           </Button>
@@ -279,7 +279,7 @@ export function ExportSharePanel({
             data-testid="tiktok-share-btn"
             disabled={!canExport || sharing}
             onClick={() => void handleSharePlatform('tiktok')}
-            className="min-h-[42px] rounded-full px-2 text-[11px] font-semibold"
+            className="min-h-[42px] rounded-full px-2 text-[11px] font-semibold lg:min-h-[34px]"
           >
             TikTok
           </Button>
@@ -289,7 +289,7 @@ export function ExportSharePanel({
       {exportedWidth && exportedHeight && exportedBytes !== null && (
         <p
           data-testid="exported-dimensions-badge"
-          className="break-words rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-2 text-center text-[11px] font-medium leading-snug text-[var(--text-secondary)] tabular-nums"
+          className="break-words rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-2 text-center text-[11px] font-medium leading-snug text-[var(--text-secondary)] tabular-nums lg:py-1 lg:text-[10.5px]"
         >
           {needsFullResPreparation
             ? `Pratinjau cepat (${exportedWidth}×${exportedHeight}) · Hasil penuh dirender saat simpan`

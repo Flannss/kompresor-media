@@ -348,6 +348,9 @@ export function buildFfmpegArgs(params: {
 
   const args: string[] = [];
 
+  // Generate missing PTS on VFR phone clips (.MOV/.MP4) to prevent demuxer/muxer stalls
+  args.push('-fflags', '+genpts');
+
   if (fg.trimStartSec > 0.01) {
     args.push('-ss', fg.trimStartSec.toFixed(3));
   }
@@ -437,7 +440,7 @@ export function buildFfmpegArgs(params: {
     }
   }
 
-  if (isAudioMuted(edit)) {
+  if (isAudioMuted(edit) || sourceMetadata.hasAudioHint === false) {
     args.push('-an');
   } else {
     if (fg.afChain) {
@@ -461,7 +464,7 @@ export function buildFfmpegArgs(params: {
     }
   }
 
-  args.push('-f', formatMeta.ffmpegFormat, outputFileNameOnFs);
+  args.push('-max_muxing_queue_size', '1024', '-f', formatMeta.ffmpegFormat, outputFileNameOnFs);
 
   return {
     args,

@@ -5,6 +5,7 @@ export interface PhotoFilterPresetSpec {
   title: string;
   badge: string;
   description: string;
+  swatchGradient: string;
   css: {
     brightness: number;
     contrast: number;
@@ -21,6 +22,7 @@ export const PHOTO_FILTER_PRESETS: readonly PhotoFilterPresetSpec[] = [
     title: 'Asli',
     badge: 'Asli',
     description: 'Warna asli foto tanpa filter.',
+    swatchGradient: 'linear-gradient(125deg, #d8cfc4 0%, #b5a898 52%, #8e7b6b 100%)',
     css: { brightness: 1, contrast: 1, saturate: 1 },
   },
   {
@@ -28,6 +30,7 @@ export const PHOTO_FILTER_PRESETS: readonly PhotoFilterPresetSpec[] = [
     title: 'RealPhoto Natural',
     badge: 'Natural',
     description: 'Warna jernih natural dengan kontras seimbang.',
+    swatchGradient: 'linear-gradient(125deg, #f0dfc8 0%, #c89d76 52%, #5e6d52 100%)',
     css: { brightness: 1.03, contrast: 1.06, saturate: 1.07 },
   },
   {
@@ -35,6 +38,7 @@ export const PHOTO_FILTER_PRESETS: readonly PhotoFilterPresetSpec[] = [
     title: 'Flagship Pro',
     badge: 'Pro',
     description: 'Tegas, bersih, dan highlight terkendali.',
+    swatchGradient: 'linear-gradient(125deg, #e7d9c4 0%, #9b7a52 52%, #2f231b 100%)',
     css: { brightness: 1.02, contrast: 1.12, saturate: 1.1 },
   },
   {
@@ -42,6 +46,7 @@ export const PHOTO_FILTER_PRESETS: readonly PhotoFilterPresetSpec[] = [
     title: 'Sinematik',
     badge: 'Film',
     description: 'Shadow sejuk kebiruan dan kulit hangat.',
+    swatchGradient: 'linear-gradient(125deg, #2b4c57 0%, #63786e 50%, #d49464 100%)',
     css: { brightness: 0.99, contrast: 1.14, saturate: 1.05, hueRotateDeg: -6 },
   },
   {
@@ -49,6 +54,7 @@ export const PHOTO_FILTER_PRESETS: readonly PhotoFilterPresetSpec[] = [
     title: 'Golden Hour',
     badge: 'Senja',
     description: 'Cahaya keemasan sore yang lembut.',
+    swatchGradient: 'linear-gradient(125deg, #f3c478 0%, #c97a49 54%, #6c3823 100%)',
     css: { brightness: 1.04, contrast: 1.06, saturate: 1.16, sepia: 0.16, hueRotateDeg: -4 },
   },
   {
@@ -56,6 +62,7 @@ export const PHOTO_FILTER_PRESETS: readonly PhotoFilterPresetSpec[] = [
     title: 'Vintage Kodak',
     badge: 'Kodak',
     description: 'Nuansa analog film klasik yang hangat.',
+    swatchGradient: 'linear-gradient(125deg, #dec196 0%, #9e754a 52%, #4a3525 100%)',
     css: { brightness: 1.02, contrast: 1.04, saturate: 0.92, sepia: 0.24 },
   },
   {
@@ -63,6 +70,7 @@ export const PHOTO_FILTER_PRESETS: readonly PhotoFilterPresetSpec[] = [
     title: 'Vivid HDR',
     badge: 'HDR',
     description: 'Warna cerah bertenaga dan detail bayangan.',
+    swatchGradient: 'linear-gradient(125deg, #ebaa58 0%, #bf5b42 48%, #4b7048 100%)',
     css: { brightness: 1.04, contrast: 1.15, saturate: 1.28 },
   },
   {
@@ -70,6 +78,7 @@ export const PHOTO_FILTER_PRESETS: readonly PhotoFilterPresetSpec[] = [
     title: 'Editorial Matte',
     badge: 'Matte',
     description: 'Fade hitam lembut bergaya majalah.',
+    swatchGradient: 'linear-gradient(125deg, #dfd4c5 0%, #9d8b79 52%, #52453c 100%)',
     css: { brightness: 1.05, contrast: 0.92, saturate: 0.9 },
   },
   {
@@ -77,6 +86,7 @@ export const PHOTO_FILTER_PRESETS: readonly PhotoFilterPresetSpec[] = [
     title: 'Pastel Lembut',
     badge: 'Pastel',
     description: 'Terang, ringan, dan warna pastel halus.',
+    swatchGradient: 'linear-gradient(125deg, #f8e5d8 0%, #e4c1ae 52%, #b9c5b4 100%)',
     css: { brightness: 1.08, contrast: 0.95, saturate: 1.08 },
   },
   {
@@ -84,6 +94,7 @@ export const PHOTO_FILTER_PRESETS: readonly PhotoFilterPresetSpec[] = [
     title: 'Studio Sejuk',
     badge: 'Sejuk',
     description: 'Netral bersih dengan nuansa studio dingin.',
+    swatchGradient: 'linear-gradient(125deg, #dce5e7 0%, #8fa3aa 52%, #415159 100%)',
     css: { brightness: 1.03, contrast: 1.08, saturate: 0.98, hueRotateDeg: 5 },
   },
   {
@@ -91,6 +102,7 @@ export const PHOTO_FILTER_PRESETS: readonly PhotoFilterPresetSpec[] = [
     title: 'Moody Gelap',
     badge: 'Moody',
     description: 'Shadow dalam dengan saturasi teredam.',
+    swatchGradient: 'linear-gradient(125deg, #755b48 0%, #423026 52%, #1d1410 100%)',
     css: { brightness: 0.92, contrast: 1.18, saturate: 0.84 },
   },
   {
@@ -98,6 +110,7 @@ export const PHOTO_FILTER_PRESETS: readonly PhotoFilterPresetSpec[] = [
     title: 'Hitam Putih Noir',
     badge: 'Noir',
     description: 'Monokrom kontras tajam dan dramatis.',
+    swatchGradient: 'linear-gradient(125deg, #e5e1dc 0%, #74706c 52%, #191716 100%)',
     css: { brightness: 1.0, contrast: 1.24, saturate: 0, grayscale: 1 },
   },
 ] as const;

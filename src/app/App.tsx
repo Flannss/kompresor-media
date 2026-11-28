@@ -211,7 +211,9 @@ export function App() {
         onDragOver={handleGlobalDragOver}
         onDragLeave={handleGlobalDragLeave}
         onDrop={handleGlobalDrop}
-        className="relative flex min-h-screen flex-col bg-[var(--bg-app)] text-[var(--text-primary)]"
+        className={`relative flex min-h-screen flex-col bg-[var(--bg-app)] text-[var(--text-primary)] ${
+          isReady ? 'lg:h-[100dvh] lg:overflow-hidden' : ''
+        }`}
       >
         {isGlobalFileDrag && isReady && (
           <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-app)]/78 p-4">
@@ -257,7 +259,7 @@ export function App() {
           aria-label="Tambah file foto atau video ke antrean"
         />
 
-        <main className="flex flex-1 flex-col">
+        <main className={`flex flex-1 flex-col ${isReady ? 'lg:min-h-0 lg:overflow-hidden' : ''}`}>
           {isReady ? (
             <WorkspaceStage
               items={items}

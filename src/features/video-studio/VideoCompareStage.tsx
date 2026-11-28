@@ -748,7 +748,7 @@ export function VideoCompareStage({
                     setProcessedPreviewUnsupported(true);
                   }
                 }}
-                className="block max-h-[235px] min-h-[175px] w-full rounded-xl object-contain sm:max-h-[56vh] sm:min-h-[280px]"
+                className="block max-h-[235px] min-h-[175px] w-full rounded-xl object-contain sm:max-h-[56vh] sm:min-h-[280px] lg:min-h-[220px] lg:max-h-[calc(100dvh-290px)]"
               />
             )}
 
@@ -771,7 +771,7 @@ export function VideoCompareStage({
             data-testid="video-side-by-side-stage"
             className="grid w-full grid-cols-2 gap-2 sm:gap-3"
           >
-            <div className="relative aspect-video min-h-[140px] max-h-[220px] w-full overflow-hidden rounded-xl bg-[var(--bg-stage-media)] sm:min-h-[240px] sm:max-h-none">
+            <div className="relative aspect-video min-h-[140px] max-h-[220px] w-full overflow-hidden rounded-xl bg-[var(--bg-stage-media)] sm:min-h-[240px] sm:max-h-[50vh] lg:min-h-[200px] lg:max-h-[calc(100dvh-310px)]">
               <video
                 ref={bindSecondaryRef}
                 key={`sbs-orig-${objectUrl}`}
@@ -788,7 +788,7 @@ export function VideoCompareStage({
               </span>
             </div>
 
-            <div className="relative aspect-video min-h-[140px] max-h-[220px] w-full overflow-hidden rounded-xl bg-[var(--bg-stage-media)] sm:min-h-[240px] sm:max-h-none">
+            <div className="relative aspect-video min-h-[140px] max-h-[220px] w-full overflow-hidden rounded-xl bg-[var(--bg-stage-media)] sm:min-h-[240px] sm:max-h-[50vh] lg:min-h-[200px] lg:max-h-[calc(100dvh-310px)]">
               {processedPreviewUnsupported && processedVideoUrl ? (
                 renderFallbackBox()
               ) : (
@@ -857,7 +857,7 @@ export function VideoCompareStage({
               }
             }}
             style={{ aspectRatio: String(clampedAspect) }}
-            className="relative mx-auto max-h-[235px] min-h-[180px] w-full cursor-ew-resize touch-none select-none overflow-hidden rounded-xl bg-[var(--bg-stage-media)] sm:max-h-[56vh] sm:min-h-[300px]"
+            className="relative mx-auto max-h-[235px] min-h-[180px] w-full cursor-ew-resize touch-none select-none overflow-hidden rounded-xl bg-[var(--bg-stage-media)] sm:max-h-[56vh] sm:min-h-[300px] lg:min-h-[220px] lg:max-h-[calc(100dvh-310px)]"
           >
             {processedPreviewUnsupported && processedVideoUrl ? (
               renderFallbackBox()

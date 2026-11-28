@@ -13,6 +13,7 @@ export interface ColorGradeMeta {
   title: string;
   badge: string;
   description: string;
+  swatchGradient: string;
 }
 
 export const COLOR_GRADE_PRESETS: readonly ColorGradeMeta[] = [
@@ -21,6 +22,7 @@ export const COLOR_GRADE_PRESETS: readonly ColorGradeMeta[] = [
     title: 'Tanpa Filter (Original)',
     badge: 'Original',
     description: 'Pertahankan warna asli video tanpa color grading tambahan.',
+    swatchGradient: 'linear-gradient(125deg, #d8cfc4 0%, #b5a898 52%, #8e7b6b 100%)',
   },
   {
     id: 'iphone-pro',
@@ -28,6 +30,7 @@ export const COLOR_GRADE_PRESETS: readonly ColorGradeMeta[] = [
     badge: 'Flagship Pro',
     description:
       'Rentang dinamis cerah, warna kulit natural, kontras bersih, highlight hangat, dan detail halus.',
+    swatchGradient: 'linear-gradient(125deg, #f3e0c8 0%, #c89d76 52%, #55644a 100%)',
   },
   {
     id: 'teal-orange',
@@ -35,6 +38,7 @@ export const COLOR_GRADE_PRESETS: readonly ColorGradeMeta[] = [
     badge: 'Cinema',
     description:
       'Tone film bioskop modern dengan bayangan teal dan highlight hangat keemasan.',
+    swatchGradient: 'linear-gradient(125deg, #27535c 0%, #587f7c 48%, #d98c54 100%)',
   },
   {
     id: 'golden-hour',
@@ -42,6 +46,7 @@ export const COLOR_GRADE_PRESETS: readonly ColorGradeMeta[] = [
     badge: 'Warm',
     description:
       'Nuansa sore hari yang hangat, lembut, dan estetik untuk Reels, TikTok, & Vlog.',
+    swatchGradient: 'linear-gradient(125deg, #f4c67a 0%, #ca7945 55%, #693622 100%)',
   },
   {
     id: 'vintage-kodak',
@@ -49,6 +54,7 @@ export const COLOR_GRADE_PRESETS: readonly ColorGradeMeta[] = [
     badge: 'Retro',
     description:
       'Kontras film analog lembut dengan saturasi klasik hangat bernuansa nostalgia.',
+    swatchGradient: 'linear-gradient(125deg, #e0c397 0%, #9f754a 52%, #4c3627 100%)',
   },
   {
     id: 'vivid-hdr',
@@ -56,12 +62,14 @@ export const COLOR_GRADE_PRESETS: readonly ColorGradeMeta[] = [
     badge: 'Vivid',
     description:
       'Warna hidup, kontras dalam, dan ketajaman ekstra untuk video buram atau kusam.',
+    swatchGradient: 'linear-gradient(125deg, #efad59 0%, #bd5940 50%, #4b7447 100%)',
   },
   {
     id: 'noir-bw',
     title: 'Noir B&W',
     badge: 'Mono',
     description: 'Hitam putih dramatis berkontras tinggi bergaya sinema klasik.',
+    swatchGradient: 'linear-gradient(125deg, #ebe6df 0%, #75706c 52%, #181615 100%)',
   },
 ] as const;
 

@@ -9,6 +9,8 @@ import { buildVideoExportFileName } from './videoPresets';
 
 export { VideoCancelledError };
 
+export const DEFAULT_FFMPEG_STALL_MS = 35_000;
+
 export interface FfmpegTranscodeOutput {
   outputBlob: Blob;
   outputFileName: string;
@@ -19,10 +21,44 @@ export interface FfmpegTranscodeOutput {
   engineDetail?: string;
 }
 
+/**
+ * Parses `time=HH:MM:SS.xx` emitted by FFmpeg stderr logs into elapsed media seconds
+ * so progress UI continues advancing even when WASM progress hooks freeze at 0%.
+ */
+export function parseFfmpegTimeSeconds(logLine: string): number | null {
+  if (!logLine) return null;
+  const match = /time=\s*(-?\d{1,3}):(\d{2}):(\d{2}(?:\.\d+)?)/i.exec(logLine);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const mins = Number(match[2]);
+  const secs = Number(match[3]);
+  if (!Number.isFinite(hours) || !Number.isFinite(mins) || !Number.isFinite(secs)) {
+    return null;
+  }
+  const total = hours * 3600 + mins * 60 + secs;
+  return total >= 0 && Number.isFinite(total) ? Number(total.toFixed(3)) : null;
+}
+
 let cachedFfmpeg: FFmpeg | null = null;
+let ffmpegInstanceDirty = false;
 
 export function isFfmpegInstanceCached(): boolean {
-  return cachedFfmpeg !== null;
+  return cachedFfmpeg !== null && !ffmpegInstanceDirty;
+}
+
+function discardCachedFfmpeg(target?: FFmpeg | null): void {
+  const inst = target ?? cachedFfmpeg;
+  if (inst) {
+    try {
+      inst.terminate();
+    } catch {
+      // Ignore worker termination failures
+    }
+  }
+  if (!target || cachedFfmpeg === target) {
+    cachedFfmpeg = null;
+    ffmpegInstanceDirty = false;
+  }
 }
 
 function resolveInputExt(file: File): string {
@@ -49,6 +85,10 @@ async function getOrLoadFfmpeg(
     throw new VideoCancelledError();
   }
 
+  if (cachedFfmpeg && ffmpegInstanceDirty) {
+    discardCachedFfmpeg(cachedFfmpeg);
+  }
+
   if (cachedFfmpeg?.loaded) {
     return cachedFfmpeg;
   }
@@ -69,14 +109,36 @@ async function getOrLoadFfmpeg(
 
   const instance = new FfmpegCtor();
   cachedFfmpeg = instance;
+  ffmpegInstanceDirty = false;
 
   const coreURL = new URL('./ffmpeg/ffmpeg-core.js', document.baseURI).href;
   const wasmURL = new URL('./ffmpeg/ffmpeg-core.wasm', document.baseURI).href;
 
-  await instance.load({ coreURL, wasmURL });
+  let loadTimer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    await Promise.race([
+      instance.load({ coreURL, wasmURL }),
+      new Promise<never>((_resolve, reject) => {
+        loadTimer = setTimeout(() => {
+          ffmpegInstanceDirty = true;
+          discardCachedFfmpeg(instance);
+          reject(
+            new Error(
+              'Gagal memuat mesin video FFmpeg (batas waktu terlampaui). Klik Coba Lagi.'
+            )
+          );
+        }, DEFAULT_FFMPEG_STALL_MS);
+      }),
+    ]);
+  } finally {
+    if (loadTimer !== null) {
+      clearTimeout(loadTimer);
+    }
+  }
+
   if (signal?.aborted) {
-    instance.terminate();
-    cachedFfmpeg = null;
+    ffmpegInstanceDirty = true;
+    discardCachedFfmpeg(instance);
     throw new VideoCancelledError();
   }
 
@@ -86,25 +148,21 @@ async function getOrLoadFfmpeg(
 export async function runFfmpegVideoTranscode(
   request: VideoProcessRequest,
   onProgress: (progress: VideoProcessProgress) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: { stallTimeoutMs?: number }
 ): Promise<FfmpegTranscodeOutput> {
   const t0 = performance.now();
   const { file, sourceMetadata, edit, requestId } = request;
   const formatMeta = getVideoFormatMeta(edit.outputFormat);
+  const stallTimeoutMs = options?.stallTimeoutMs ?? DEFAULT_FFMPEG_STALL_MS;
 
   const instance = await getOrLoadFfmpeg(requestId, t0, onProgress, signal);
 
   let aborted = Boolean(signal?.aborted);
   const onAbort = () => {
     aborted = true;
-    try {
-      instance.terminate();
-    } catch {
-      // Ignore worker termination errors
-    }
-    if (cachedFfmpeg === instance) {
-      cachedFfmpeg = null;
-    }
+    ffmpegInstanceDirty = true;
+    discardCachedFfmpeg(instance);
   };
   signal?.addEventListener('abort', onAbort, { once: true });
 
@@ -119,28 +177,6 @@ export async function runFfmpegVideoTranscode(
     typeof VideoFrame !== 'undefined';
 
   const progressScale = canBurnHardsubViaWebCodecs ? 0.78 : 0.96;
-
-  const progressHandler = ({ progress }: { progress: number }) => {
-    if (aborted) return;
-    const clamped = Math.min(
-      progressScale,
-      Math.max(0.05, (Number.isFinite(progress) ? progress : 0) * progressScale)
-    );
-    onProgress({
-      requestId,
-      backend: 'ffmpeg-wasm-st',
-      stage: 'transcoding',
-      ratio: clamped,
-      elapsedMs: performance.now() - t0,
-      detail: edit.stabilize.enabled
-        ? 'Menstabilkan & memproses video…'
-        : hasActiveEnhancements(edit.enhanceSuite) || hasActiveColorGrade(edit.colorGrade)
-          ? 'Menjernihkan warna & memproses video…'
-          : 'Memproses video & audio…',
-    });
-  };
-
-  instance.on('progress', progressHandler);
 
   const inputName = `input.${resolveInputExt(file)}`;
   const needsSubtitleFile =
@@ -169,6 +205,51 @@ export async function runFfmpegVideoTranscode(
     performanceTier: profile.performanceTier,
   });
 
+  let lastActivityAt = Date.now();
+  let lastReportedRatio = 0.05;
+  const detailText = edit.stabilize.enabled
+    ? 'Menstabilkan & memproses video…'
+    : hasActiveEnhancements(edit.enhanceSuite) || hasActiveColorGrade(edit.colorGrade)
+      ? 'Menjernihkan warna & memproses video…'
+      : 'Memproses video & audio…';
+
+  const emitMonotonicProgress = (rawRatio: number) => {
+    if (aborted) return;
+    lastActivityAt = Date.now();
+    const clamped = Math.min(progressScale, Math.max(lastReportedRatio, rawRatio));
+    lastReportedRatio = clamped;
+    onProgress({
+      requestId,
+      backend: 'ffmpeg-wasm-st',
+      stage: 'transcoding',
+      ratio: clamped,
+      elapsedMs: performance.now() - t0,
+      detail: detailText,
+    });
+  };
+
+  const progressHandler = ({ progress }: { progress: number }) => {
+    if (aborted) return;
+    const candidate = (Number.isFinite(progress) ? Math.max(0, progress) : 0) * progressScale;
+    emitMonotonicProgress(Math.max(0.05, candidate));
+  };
+
+  const logHandler = ({ message }: { message: string }) => {
+    if (aborted) return;
+    lastActivityAt = Date.now();
+    const parsedSec = parseFfmpegTimeSeconds(message);
+    if (parsedSec !== null) {
+      const expectedDur = Math.max(0.25, built.filterGraph.trimDurationSec || sourceMetadata.durationSec || 1);
+      const ratio = (parsedSec / expectedDur) * progressScale;
+      emitMonotonicProgress(Math.min(progressScale, Math.max(0.05, ratio)));
+    }
+  };
+
+  instance.on('progress', progressHandler);
+  instance.on('log', logHandler);
+
+  let execWatchdogTimer: ReturnType<typeof setInterval> | null = null;
+
   try {
     if (aborted) {
       throw new VideoCancelledError();
@@ -176,6 +257,7 @@ export async function runFfmpegVideoTranscode(
 
     const inputBytes = new Uint8Array(await file.arrayBuffer());
     await instance.writeFile(inputName, inputBytes);
+    lastActivityAt = Date.now();
 
     if (subFileName && built.subtitleFileNameOnFs) {
       const text =
@@ -185,7 +267,32 @@ export async function runFfmpegVideoTranscode(
       await instance.writeFile(subFileName, new TextEncoder().encode(text));
     }
 
-    const exitCode = await instance.exec(built.args);
+    onProgress({
+      requestId,
+      backend: 'ffmpeg-wasm-st',
+      stage: 'transcoding',
+      ratio: 0.06,
+      elapsedMs: performance.now() - t0,
+      detail: detailText,
+    });
+
+    const exitCode = await Promise.race([
+      instance.exec(built.args),
+      new Promise<never>((_resolve, reject) => {
+        execWatchdogTimer = setInterval(() => {
+          if (aborted) return;
+          if (Date.now() - lastActivityAt >= stallTimeoutMs) {
+            ffmpegInstanceDirty = true;
+            discardCachedFfmpeg(instance);
+            reject(
+              new Error(
+                'Proses video terhenti karena memori atau dekoder browser penuh. Klik "Coba Lagi" atau gunakan Mode Hemat RAM 720p.'
+              )
+            );
+          }
+        }, 400);
+      }),
+    ]);
     if (aborted) {
       throw new VideoCancelledError();
     }
@@ -316,27 +423,29 @@ export async function runFfmpegVideoTranscode(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (aborted || msg.includes('FFmpeg.terminate()')) {
+      ffmpegInstanceDirty = true;
+      discardCachedFfmpeg(instance);
       throw new VideoCancelledError();
     }
+    ffmpegInstanceDirty = true;
+    discardCachedFfmpeg(instance);
     throw err;
   } finally {
+    if (execWatchdogTimer !== null) {
+      clearInterval(execWatchdogTimer);
+      execWatchdogTimer = null;
+    }
     signal?.removeEventListener('abort', onAbort);
     instance.off('progress', progressHandler);
+    instance.off('log', logHandler);
     if (!aborted) {
       await instance.deleteFile(inputName).catch(() => {});
       await instance.deleteFile(built.outputFileNameOnFs).catch(() => {});
       if (subFileName) {
         await instance.deleteFile(subFileName).catch(() => {});
       }
-      if (getDeviceProfile().releaseFfmpegAfterExport) {
-        try {
-          instance.terminate();
-        } catch {
-          // Ignore worker cleanup failure
-        }
-        if (cachedFfmpeg === instance) {
-          cachedFfmpeg = null;
-        }
+      if (getDeviceProfile().releaseFfmpegAfterExport && !ffmpegInstanceDirty) {
+        discardCachedFfmpeg(instance);
       }
     }
   }

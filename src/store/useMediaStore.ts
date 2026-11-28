@@ -529,6 +529,26 @@ async function processVideoItem(
     };
   });
 
+  const tStart = performance.now();
+  const heartbeatId = setInterval(() => {
+    if (controller.signal.aborted) return;
+    const elapsedMs = performance.now() - tStart;
+    set((state) => {
+      const target = state.items.find((it) => it.id === itemId && it.processSeq === seq);
+      if (!target || target.status !== 'processing' || !target.videoProgress) {
+        return {};
+      }
+      const nextProgress = { ...target.videoProgress, elapsedMs };
+      const items = state.items.map((it) =>
+        it.id === itemId && it.processSeq === seq ? { ...it, videoProgress: nextProgress } : it
+      );
+      return {
+        items,
+        ...(state.activeItemId === itemId ? { videoProgress: nextProgress } : {}),
+      };
+    });
+  }, 450);
+
   try {
     const { processVideo } = await import('../engines/video/videoEngineOrchestrator');
     const latest = get().items.find((i) => i.id === itemId);
@@ -605,6 +625,7 @@ async function processVideoItem(
       errorMessage: message,
     }));
   } finally {
+    clearInterval(heartbeatId);
     if (videoAbortControllers.get(itemId) === controller) {
       videoAbortControllers.delete(itemId);
     }

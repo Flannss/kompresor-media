@@ -215,7 +215,7 @@ export function QueuePanel({
       {/* Desktop Left Vertical Queue Rail */}
       <aside
         data-testid="queue-rail-desktop"
-        className={`km-glass hidden shrink-0 flex-col border-r transition-all lg:flex ${
+        className={`km-glass hidden shrink-0 flex-col border-r transition-all lg:flex lg:h-full lg:overflow-hidden ${
           collapsed ? 'w-[54px]' : 'w-[222px]'
         }`}
       >
@@ -247,7 +247,7 @@ export function QueuePanel({
 
         {!collapsed && (
           <>
-            <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-2.5">
+            <div className="km-studio-scroll flex flex-1 flex-col gap-2 overflow-y-auto p-2.5">
               {items.map((item) => {
                 const active = item.id === activeItemId;
                 const badge = getStatusBadge(item.status);

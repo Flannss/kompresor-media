@@ -58,11 +58,47 @@ import type { ZipEntryInput } from '../export-share/zipExport';
 import { ExportSharePanel } from '../export-share/ExportSharePanel';
 import { EnhanceAndGradePanel } from '../workspace/EnhanceAndGradePanel';
 
-type VideoTabId = 'utama' | 'tampilan' | 'lanjutan';
+export type VideoTabId = 'utama' | 'tampilan' | 'lanjutan';
+export type VideoAdvancedCard = 'stabilize' | 'audio' | 'subtitle' | 'frame';
+
+const VIDEO_PRESET_BADGE_STYLE: Record<string, { dot: string; tag: string }> = {
+  'whatsapp-hd': { dot: 'bg-[var(--accent-olive)]', tag: 'WA HD' },
+  'whatsapp-status': { dot: 'bg-[var(--accent-olive)]', tag: '1080p' },
+  'instagram-story': { dot: 'bg-[var(--accent-terracotta)]', tag: 'Reels' },
+  'tiktok-hd': { dot: 'bg-[var(--accent-gold)]', tag: 'TikTok' },
+  'web-light': { dot: 'bg-[var(--accent-caramel)]', tag: '720p' },
+  custom: { dot: 'bg-[var(--accent-taupe)]', tag: 'Manual' },
+};
 
 export interface CapturedFrameInfo {
   file: File;
   url: string;
+}
+
+export interface VideoInspectorHeaderProps {
+  videoEdit: VideoEditState;
+  isProcessing: boolean;
+  activeTab: VideoTabId;
+  onChangeTab: (tab: VideoTabId) => void;
+  onUpdateVideoEdit: (patch: Partial<VideoEditState>) => void;
+  onSelectAdvancedCard?: (card: VideoAdvancedCard) => void;
+}
+
+export interface VideoExportDockProps {
+  videoEdit: VideoEditState;
+  selectedPresetId: MediaPresetId;
+  videoProcessStatus: VideoProcessStatus;
+  videoProgress: VideoProcessProgress | null;
+  videoProcessResult: VideoProcessResult | null;
+  processedVideoUrl: string | null;
+  videoProcessError: string | null;
+  finishedBatchItems: ZipEntryInput[];
+  batchStatusLabel?: string | null;
+  onPrepareAllZipItems?: () => Promise<ZipEntryInput[]>;
+  onStartProcess: () => void;
+  onFallbackToSafe720p?: () => void;
+  onCancelProcess: () => void;
+  compactHeader?: boolean;
 }
 
 export interface VideoControlPanelProps {
@@ -82,11 +118,18 @@ export interface VideoControlPanelProps {
   capturedFrame: CapturedFrameInfo | null;
   finishedBatchItems: ZipEntryInput[];
   batchStatusLabel?: string | null;
+  activeTab?: VideoTabId;
+  onTabChange?: (tab: VideoTabId) => void;
+  advancedCard?: VideoAdvancedCard;
+  onAdvancedCardChange?: (card: VideoAdvancedCard) => void;
+  showHeader?: boolean;
+  showFooter?: boolean;
   onPrepareAllZipItems?: () => Promise<ZipEntryInput[]>;
   onSelectPreset: (id: MediaPresetId) => void;
   onUpdateVideoEdit: (patch: Partial<VideoEditState>) => void;
   onSelectColorGrade: (gradeId: ColorGradeId) => void;
   onStartProcess: () => void;
+  onFallbackToSafe720p?: () => void;
   onCancelProcess: () => void;
   onSeekPreview: (timeSec: number) => void;
   onCaptureFrame: () => void;
@@ -164,21 +207,30 @@ const AUDIO_CLARITY_OPTIONS: ReadonlyArray<{ kbps: AudioBitrateKbps; label: stri
   { kbps: 320, label: '320k' },
 ];
 
+function formatElapsedClock(elapsedMs: number): string {
+  const totalSec = Math.max(0, Math.floor(elapsedMs / 1000));
+  const mins = Math.floor(totalSec / 60)
+    .toString()
+    .padStart(2, '0');
+  const secs = (totalSec % 60).toString().padStart(2, '0');
+  return `${mins}:${secs}`;
+}
+
 function getStageLabel(progress: VideoProcessProgress | null): string {
-  if (!progress) return 'Menyiapkan pemrosesan video…';
+  if (!progress) return 'Menyiapkan mesin…';
   if (progress.detail) return progress.detail;
   switch (progress.stage) {
     case 'probing':
       return 'Memeriksa dukungan video perangkat…';
     case 'loading-core':
-      return 'Memuat modul pengolah video & audio…';
+      return 'Menyiapkan mesin…';
     case 'demuxing':
-      return 'Membaca trek video…';
+      return 'Membaca video…';
     case 'transcoding':
       return 'Memproses video…';
     case 'muxing':
     case 'finalizing':
-      return 'Menyimpan file video hasil…';
+      return 'Menyusun file MP4…';
   }
 }
 
@@ -189,6 +241,7 @@ function formatVideoEngineStatus(progress: VideoProcessProgress | null, pct: num
       : progress?.backend === 'mediarecorder-native'
         ? 'Mode Cepat Hardware HP'
         : 'Mode Cepat Hardware';
+  const clock = formatElapsedClock(progress?.elapsedMs ?? 0);
   if (
     progress &&
     progress.ratio >= 0.08 &&
@@ -197,9 +250,292 @@ function formatVideoEngineStatus(progress: VideoProcessProgress | null, pct: num
   ) {
     const remainingMs = (progress.elapsedMs * (1 - progress.ratio)) / progress.ratio;
     const etaSec = Math.max(1, Math.round(remainingMs / 1000));
-    return `${modeLabel} · ${pct}% · ~${etaSec} dtk`;
+    return `${modeLabel} · ${pct}% · ${clock} · ~${etaSec} dtk`;
   }
-  return `${modeLabel} · ${pct}%`;
+  return `${modeLabel} · ${pct}% · ${clock}`;
+}
+
+export function VideoInspectorHeader({
+  videoEdit,
+  isProcessing,
+  activeTab,
+  onChangeTab,
+  onUpdateVideoEdit,
+  onSelectAdvancedCard,
+}: VideoInspectorHeaderProps) {
+  const enhanceOrGradeActive =
+    hasActiveEnhancements(videoEdit.enhanceSuite) || hasActiveColorGrade(videoEdit.colorGrade);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={isProcessing}
+          data-testid="toggle-video-compress-btn"
+          aria-pressed={videoEdit.compressEnabled}
+          onClick={() => onUpdateVideoEdit({ compressEnabled: !videoEdit.compressEnabled })}
+          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
+            videoEdit.compressEnabled
+              ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] text-[var(--text-primary)]'
+              : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)]'
+          }`}
+        >
+          {videoEdit.compressEnabled && (
+            <Check className="h-3 w-3 text-[var(--accent-highlight)]" aria-hidden="true" />
+          )}
+          <span>Kompres</span>
+        </button>
+
+        <button
+          type="button"
+          disabled={isProcessing}
+          data-testid="toggle-video-enhance-btn"
+          aria-pressed={enhanceOrGradeActive}
+          onClick={() => {
+            if (!enhanceOrGradeActive) {
+              onUpdateVideoEdit({
+                enhanceSuite: applyEnhanceRecipe('hd-balanced', videoEdit.enhanceSuite),
+              });
+            } else if (hasActiveEnhancements(videoEdit.enhanceSuite)) {
+              onUpdateVideoEdit({ enhanceSuite: createDefaultEnhanceSuite() });
+            }
+            onChangeTab('tampilan');
+          }}
+          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
+            enhanceOrGradeActive
+              ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+              : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
+          }`}
+        >
+          <Focus className="h-3 w-3" aria-hidden="true" />
+          <span>Jernihkan</span>
+        </button>
+
+        <button
+          type="button"
+          disabled={isProcessing}
+          data-testid="toggle-video-stabilize-btn"
+          aria-pressed={videoEdit.stabilize.enabled}
+          onClick={() => {
+            onUpdateVideoEdit({
+              stabilize: { ...videoEdit.stabilize, enabled: !videoEdit.stabilize.enabled },
+            });
+            onChangeTab('lanjutan');
+            onSelectAdvancedCard?.('stabilize');
+          }}
+          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
+            videoEdit.stabilize.enabled
+              ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+              : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
+          }`}
+        >
+          <Activity className="h-3 w-3" aria-hidden="true" />
+          <span>Stabilkan</span>
+        </button>
+
+        <button
+          type="button"
+          disabled={isProcessing}
+          data-testid="toggle-video-audio-btn"
+          aria-pressed={videoEdit.audio.enabled || videoEdit.muteAudio}
+          onClick={() => {
+            onUpdateVideoEdit({
+              audio: { ...videoEdit.audio, enabled: !videoEdit.audio.enabled },
+            });
+            onChangeTab('lanjutan');
+            onSelectAdvancedCard?.('audio');
+          }}
+          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
+            videoEdit.audio.enabled || videoEdit.muteAudio
+              ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+              : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
+          }`}
+        >
+          <Volume2 className="h-3 w-3" aria-hidden="true" />
+          <span>Audio</span>
+        </button>
+
+        <button
+          type="button"
+          disabled={isProcessing}
+          data-testid="toggle-video-subtitle-btn"
+          aria-pressed={videoEdit.subtitle.enabled}
+          onClick={() => {
+            onUpdateVideoEdit({
+              subtitle: { ...videoEdit.subtitle, enabled: !videoEdit.subtitle.enabled },
+            });
+            onChangeTab('lanjutan');
+            onSelectAdvancedCard?.('subtitle');
+          }}
+          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
+            videoEdit.subtitle.enabled
+              ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
+              : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
+          }`}
+        >
+          <Captions className="h-3 w-3" aria-hidden="true" />
+          <span>Subtitle</span>
+        </button>
+      </div>
+
+      <SegmentedTabs
+        items={VIDEO_TABS}
+        value={activeTab}
+        onChange={onChangeTab}
+        ariaLabel="Menu studio video"
+      />
+    </div>
+  );
+}
+
+export function VideoExportDock({
+  selectedPresetId,
+  videoProcessStatus,
+  videoProgress,
+  videoProcessResult,
+  processedVideoUrl,
+  videoProcessError,
+  finishedBatchItems,
+  batchStatusLabel = null,
+  onPrepareAllZipItems,
+  onStartProcess,
+  onFallbackToSafe720p,
+  onCancelProcess,
+  compactHeader = false,
+}: VideoExportDockProps) {
+  const isProcessing = videoProcessStatus === 'processing';
+  const progressPct = videoProgress ? Math.round(videoProgress.ratio * 100) : 0;
+
+  return (
+    <div className={compactHeader ? '' : 'border-t border-[var(--border-hairline)] pt-4'}>
+      {!compactHeader && (
+        <h2 className="text-xs font-semibold text-[var(--text-primary)]">Simpan &amp; Bagikan</h2>
+      )}
+
+      {videoProcessError && (
+        <div
+          role="alert"
+          data-testid="video-error-alert"
+          className="mt-2 space-y-2 rounded-xl border border-[var(--status-err-border)] bg-[var(--status-err-bg)] px-3 py-2.5 text-xs text-[var(--status-err-ink)]"
+        >
+          <p>{videoProcessError}</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              data-testid="video-retry-btn"
+              onClick={onStartProcess}
+              className="rounded-lg border border-[var(--status-err-border)] bg-[var(--bg-surface)] px-2.5 py-1 text-[11px] font-semibold text-[var(--text-primary)] hover:border-[var(--border-active)]"
+            >
+              Coba Lagi
+            </button>
+            {onFallbackToSafe720p && (
+              <button
+                type="button"
+                data-testid="video-fallback-720p-btn"
+                onClick={onFallbackToSafe720p}
+                className="rounded-lg bg-[var(--accent-primary)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-on-accent)] hover:bg-[var(--accent-primary-hover)]"
+              >
+                Gunakan Mode Hemat RAM 720p
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {videoProcessResult?.notice && (
+        <div className="mt-2 rounded-xl border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-3 py-2 text-xs text-[var(--status-warn-ink)]">
+          {videoProcessResult.notice}
+        </div>
+      )}
+
+      {videoProcessStatus === 'cancelled' && (
+        <p
+          data-testid="video-cancelled-msg"
+          className="mt-2 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-2 text-xs text-[var(--text-secondary)]"
+        >
+          Pemrosesan video dibatalkan. Anda dapat mengubah pengaturan lalu memulai ulang.
+        </p>
+      )}
+
+      {isProcessing ? (
+        <div
+          data-testid="video-progress-box"
+          className="mt-2.5 flex flex-col gap-2.5 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5 lg:mt-0 lg:p-3"
+        >
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className="font-medium text-[var(--text-primary)]">
+              {getStageLabel(videoProgress)}
+            </span>
+            <span
+              data-testid="video-progress-pct"
+              className="font-semibold text-[var(--accent-highlight)] tabular-nums"
+            >
+              {progressPct}%
+            </span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--border-hairline)]">
+            <div
+              className="h-full rounded-full bg-[var(--accent-highlight)] transition-all duration-150"
+              style={{ width: `${Math.max(4, progressPct)}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--text-muted)] tabular-nums">
+            <span
+              data-testid="video-engine-status"
+              className="font-medium text-[var(--text-secondary)]"
+            >
+              {formatVideoEngineStatus(videoProgress, progressPct)}
+            </span>
+            <span>
+              {formatElapsedClock(videoProgress?.elapsedMs ?? 0)}
+            </span>
+          </div>
+          <Button
+            variant="danger"
+            size="md"
+            data-testid="cancel-video-btn"
+            onClick={onCancelProcess}
+            className="min-h-[42px] w-full"
+          >
+            <XCircle className="h-4 w-4" aria-hidden="true" />
+            <span>Batalkan</span>
+          </Button>
+        </div>
+      ) : (
+        <div className={`flex flex-col gap-2.5 ${compactHeader ? 'mt-0' : 'mt-2.5'}`}>
+          {videoProcessResult && processedVideoUrl && (
+            <ExportSharePanel
+              mediaKind="video"
+              readyBlob={videoProcessResult.outputBlob}
+              readyUrl={processedVideoUrl}
+              outputFileName={videoProcessResult.outputFileName}
+              outputMime={videoProcessResult.outputMime}
+              exportedWidth={videoProcessResult.outputWidth}
+              exportedHeight={videoProcessResult.outputHeight}
+              exportedBytes={videoProcessResult.outputBytes}
+              exportedFps={videoProcessResult.appliedFps ?? null}
+              selectedPresetId={selectedPresetId}
+              finishedBatchItems={finishedBatchItems}
+              batchStatusLabel={batchStatusLabel}
+              onPrepareAllZipItems={onPrepareAllZipItems}
+            />
+          )}
+
+          <Button
+            variant={videoProcessResult ? 'secondary' : 'primary'}
+            size="lg"
+            data-testid="process-video-btn"
+            onClick={onStartProcess}
+            className="min-h-[44px] w-full rounded-full font-semibold"
+          >
+            <Play className="h-4 w-4" aria-hidden="true" />
+            <span>{videoProcessResult ? 'Proses Ulang Video HD' : 'Proses Video HD'}</span>
+          </Button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function VideoControlPanel({
@@ -219,22 +555,45 @@ export function VideoControlPanel({
   capturedFrame,
   finishedBatchItems,
   batchStatusLabel = null,
+  activeTab: controlledTab,
+  onTabChange,
+  advancedCard: controlledAdvancedCard,
+  onAdvancedCardChange,
+  showHeader = true,
+  showFooter = true,
   onPrepareAllZipItems,
   onSelectPreset,
   onUpdateVideoEdit,
   onSelectColorGrade,
   onStartProcess,
+  onFallbackToSafe720p,
   onCancelProcess,
   onSeekPreview,
   onCaptureFrame,
   onEditCapturedFrameAsPhoto,
 }: VideoControlPanelProps) {
-  const [activeTab, setActiveTab] = useState<VideoTabId>('utama');
+  const [internalTab, setInternalTab] = useState<VideoTabId>('utama');
+  const activeTab = controlledTab ?? internalTab;
+  const setActiveTab = (tab: VideoTabId) => {
+    if (onTabChange) {
+      onTabChange(tab);
+    } else {
+      setInternalTab(tab);
+    }
+  };
+
   const [trimDrawerOpen, setTrimDrawerOpen] = useState(false);
   const [motionDrawerOpen, setMotionDrawerOpen] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState<'stabilize' | 'audio' | 'subtitle' | 'frame'>(
-    'stabilize'
-  );
+  const [internalAdvancedOpen, setInternalAdvancedOpen] = useState<VideoAdvancedCard>('stabilize');
+  const advancedOpen = controlledAdvancedCard ?? internalAdvancedOpen;
+  const setAdvancedOpen = (next: VideoAdvancedCard | ((prev: VideoAdvancedCard) => VideoAdvancedCard)) => {
+    const resolved = typeof next === 'function' ? next(advancedOpen) : next;
+    if (onAdvancedCardChange) {
+      onAdvancedCardChange(resolved);
+    } else {
+      setInternalAdvancedOpen(resolved);
+    }
+  };
   const [subError, setSubError] = useState<string | null>(null);
   const subFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -251,10 +610,6 @@ export function VideoControlPanel({
     videoEdit.trimEndSec,
     metadata.durationSec
   );
-  const progressPct = videoProgress ? Math.round(videoProgress.ratio * 100) : 0;
-
-  const enhanceOrGradeActive =
-    hasActiveEnhancements(videoEdit.enhanceSuite) || hasActiveColorGrade(videoEdit.colorGrade);
 
   const hasHeavyMobileFilters =
     deviceProfile.performanceTier === 'low-memory-mobile' &&
@@ -364,125 +719,16 @@ export function VideoControlPanel({
 
   return (
     <div className="flex flex-col gap-3.5">
-      {/* Compact Composable Active Module Pills */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={isProcessing}
-          data-testid="toggle-video-compress-btn"
-          aria-pressed={videoEdit.compressEnabled}
-          onClick={() => onUpdateVideoEdit({ compressEnabled: !videoEdit.compressEnabled })}
-          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
-            videoEdit.compressEnabled
-              ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] text-[var(--text-primary)]'
-              : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)]'
-          }`}
-        >
-          {videoEdit.compressEnabled && (
-            <Check className="h-3 w-3 text-[var(--accent-highlight)]" aria-hidden="true" />
-          )}
-          <span>Kompres</span>
-        </button>
-
-        <button
-          type="button"
-          disabled={isProcessing}
-          data-testid="toggle-video-enhance-btn"
-          aria-pressed={enhanceOrGradeActive}
-          onClick={() => {
-            if (!enhanceOrGradeActive) {
-              onUpdateVideoEdit({
-                enhanceSuite: applyEnhanceRecipe('hd-balanced', videoEdit.enhanceSuite),
-              });
-            } else if (hasActiveEnhancements(videoEdit.enhanceSuite)) {
-              onUpdateVideoEdit({ enhanceSuite: createDefaultEnhanceSuite() });
-            }
-            setActiveTab('tampilan');
-          }}
-          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
-            enhanceOrGradeActive
-              ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-              : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
-          }`}
-        >
-          <Focus className="h-3 w-3" aria-hidden="true" />
-          <span>Jernihkan</span>
-        </button>
-
-        <button
-          type="button"
-          disabled={isProcessing}
-          data-testid="toggle-video-stabilize-btn"
-          aria-pressed={videoEdit.stabilize.enabled}
-          onClick={() => {
-            onUpdateVideoEdit({
-              stabilize: { ...videoEdit.stabilize, enabled: !videoEdit.stabilize.enabled },
-            });
-            setActiveTab('lanjutan');
-            setAdvancedOpen('stabilize');
-          }}
-          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
-            videoEdit.stabilize.enabled
-              ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-              : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
-          }`}
-        >
-          <Activity className="h-3 w-3" aria-hidden="true" />
-          <span>Stabilkan</span>
-        </button>
-
-        <button
-          type="button"
-          disabled={isProcessing}
-          data-testid="toggle-video-audio-btn"
-          aria-pressed={videoEdit.audio.enabled || videoEdit.muteAudio}
-          onClick={() => {
-            onUpdateVideoEdit({
-              audio: { ...videoEdit.audio, enabled: !videoEdit.audio.enabled },
-            });
-            setActiveTab('lanjutan');
-            setAdvancedOpen('audio');
-          }}
-          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
-            videoEdit.audio.enabled || videoEdit.muteAudio
-              ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-              : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
-          }`}
-        >
-          <Volume2 className="h-3 w-3" aria-hidden="true" />
-          <span>Audio</span>
-        </button>
-
-        <button
-          type="button"
-          disabled={isProcessing}
-          data-testid="toggle-video-subtitle-btn"
-          aria-pressed={videoEdit.subtitle.enabled}
-          onClick={() => {
-            onUpdateVideoEdit({
-              subtitle: { ...videoEdit.subtitle, enabled: !videoEdit.subtitle.enabled },
-            });
-            setActiveTab('lanjutan');
-            setAdvancedOpen('subtitle');
-          }}
-          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
-            videoEdit.subtitle.enabled
-              ? 'border-[var(--border-active)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
-              : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
-          }`}
-        >
-          <Captions className="h-3 w-3" aria-hidden="true" />
-          <span>Subtitle</span>
-        </button>
-      </div>
-
-      {/* Strictly 3 Top-Level Studio Tabs */}
-      <SegmentedTabs
-        items={VIDEO_TABS}
-        value={activeTab}
-        onChange={setActiveTab}
-        ariaLabel="Menu studio video"
-      />
+      {showHeader && (
+        <VideoInspectorHeader
+          videoEdit={videoEdit}
+          isProcessing={isProcessing}
+          activeTab={activeTab}
+          onChangeTab={setActiveTab}
+          onUpdateVideoEdit={onUpdateVideoEdit}
+          onSelectAdvancedCard={setAdvancedOpen}
+        />
+      )}
 
       {isMobile4kOrHighFps && (
         <p
@@ -530,7 +776,7 @@ export function VideoControlPanel({
 
       {/* TAB 1: UTAMA */}
       {activeTab === 'utama' && (
-        <div className="space-y-5 sm:space-y-4">
+        <div key="video-tab-utama" className="km-tab-enter space-y-5 sm:space-y-4">
           <div className="space-y-2.5 sm:space-y-2">
             <div>
               <h2 className="text-xs font-semibold text-[var(--text-primary)]">Pilih Tujuan</h2>
@@ -545,6 +791,10 @@ export function VideoControlPanel({
             >
               {VIDEO_PRESET_IDS.map((id) => getMediaPreset(id)).map((preset) => {
                 const selected = preset.id === selectedPresetId;
+                const badgeMeta = VIDEO_PRESET_BADGE_STYLE[preset.id] ?? {
+                  dot: 'bg-[var(--accent-caramel)]',
+                  tag: preset.shortLabel,
+                };
                 return (
                   <button
                     key={preset.id}
@@ -554,14 +804,25 @@ export function VideoControlPanel({
                     disabled={isProcessing}
                     data-testid={`preset-${preset.id}`}
                     onClick={() => onSelectPreset(preset.id)}
-                    className={`flex min-h-[48px] shrink-0 snap-start flex-col items-start justify-center whitespace-nowrap rounded-xl border px-3.5 py-2 text-left transition-all active:scale-[0.985] disabled:opacity-60 md:min-h-[52px] md:whitespace-normal md:px-3 ${
+                    className={`flex min-h-[48px] shrink-0 snap-start flex-col items-start justify-center whitespace-nowrap rounded-2xl border px-3.5 py-2 text-left transition-all duration-150 hover:-translate-y-0.5 active:scale-[0.985] disabled:opacity-60 md:min-h-[54px] md:whitespace-normal md:px-3 ${
                       selected
-                        ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] text-[var(--text-primary)]'
+                        ? 'border-[var(--border-active)] bg-[var(--accent-gold-soft)] text-[var(--text-primary)] ring-1 ring-[var(--border-active)]/40'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
                     }`}
                   >
-                    <span className="text-xs font-semibold text-[var(--text-primary)]">
-                      {preset.label}
+                    <span className="flex w-full items-center justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span
+                          aria-hidden="true"
+                          className={`h-2 w-2 shrink-0 rounded-full ${badgeMeta.dot}`}
+                        />
+                        <span className="truncate text-xs font-semibold text-[var(--text-primary)]">
+                          {preset.label}
+                        </span>
+                      </span>
+                      <span className="shrink-0 rounded-md border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[9.5px] font-semibold text-[var(--text-secondary)]">
+                        {badgeMeta.tag}
+                      </span>
                     </span>
                     <span className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">
                       {preset.targetLimitLabel}
@@ -869,7 +1130,7 @@ export function VideoControlPanel({
 
       {/* TAB 2: TAMPILAN (Model Penjernih Video HD + 1080p HD Enhancer + 7 Live Color Grades) */}
       {activeTab === 'tampilan' && (
-        <div className="space-y-4">
+        <div key="video-tab-tampilan" className="km-tab-enter space-y-4">
           <div className="space-y-3 rounded-[22px] border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5">
             <div className="flex items-start justify-between gap-2">
               <div>
@@ -896,9 +1157,9 @@ export function VideoControlPanel({
                     data-testid={`video-clarity-model-${model.id}`}
                     aria-pressed={active}
                     onClick={() => onUpdateVideoEdit({ clarityModel: model.id })}
-                    className={`flex min-h-[52px] min-w-[162px] shrink-0 snap-start flex-col items-start justify-center rounded-2xl border px-3.5 py-2 text-left transition-all md:min-w-0 md:px-3 ${
+                    className={`flex min-h-[52px] min-w-[162px] shrink-0 snap-start flex-col items-start justify-center rounded-2xl border px-3.5 py-2 text-left transition-all duration-150 hover:-translate-y-0.5 md:min-w-0 md:px-3 ${
                       active
-                        ? 'border-[var(--border-active)] bg-[var(--accent-gold-soft)] text-[var(--text-primary)] ring-1 ring-[var(--border-active)]'
+                        ? 'border-[var(--border-active)] border-l-[3px] border-l-[var(--accent-gold)] bg-[var(--accent-gold-soft)] text-[var(--text-primary)] ring-1 ring-[var(--border-active)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
                     }`}
                   >
@@ -947,7 +1208,7 @@ export function VideoControlPanel({
 
       {/* TAB 3: LANJUTAN (Stabilizer, Audio, Subtitle, Ambil Frame) */}
       {activeTab === 'lanjutan' && (
-        <div className="space-y-2.5">
+        <div key="video-tab-lanjutan" className="km-tab-enter space-y-2.5">
           {/* Card: Stabilkan Video */}
           <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3">
             <div className="flex items-center justify-between gap-2">
@@ -1527,113 +1788,23 @@ export function VideoControlPanel({
         </div>
       )}
 
-      {/* Action / Progress / Export */}
-      <div className="border-t border-[var(--border-hairline)] pt-4">
-        <h2 className="text-xs font-semibold text-[var(--text-primary)]">Simpan &amp; Bagikan</h2>
-
-        {videoProcessError && (
-          <div
-            role="alert"
-            data-testid="video-error-alert"
-            className="mt-2 rounded-xl border border-[var(--status-err-border)] bg-[var(--status-err-bg)] px-3 py-2 text-xs text-[var(--status-err-ink)]"
-          >
-            {videoProcessError}
-          </div>
-        )}
-
-        {videoProcessResult?.notice && (
-          <div className="mt-2 rounded-xl border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-3 py-2 text-xs text-[var(--status-warn-ink)]">
-            {videoProcessResult.notice}
-          </div>
-        )}
-
-        {videoProcessStatus === 'cancelled' && (
-          <p
-            data-testid="video-cancelled-msg"
-            className="mt-2 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-3 py-2 text-xs text-[var(--text-secondary)]"
-          >
-            Pemrosesan video dibatalkan. Anda dapat mengubah pengaturan lalu memulai ulang.
-          </p>
-        )}
-
-        {isProcessing ? (
-          <div
-            data-testid="video-progress-box"
-            className="mt-2.5 flex flex-col gap-2.5 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5"
-          >
-            <div className="flex items-center justify-between gap-2 text-xs">
-              <span className="font-medium text-[var(--text-primary)]">
-                {getStageLabel(videoProgress)}
-              </span>
-              <span
-                data-testid="video-progress-pct"
-                className="font-semibold text-[var(--accent-highlight)] tabular-nums"
-              >
-                {progressPct}%
-              </span>
-            </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--border-hairline)]">
-              <div
-                className="h-full rounded-full bg-[var(--accent-highlight)] transition-all duration-150"
-                style={{ width: `${Math.max(4, progressPct)}%` }}
-              />
-            </div>
-            <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--text-muted)] tabular-nums">
-              <span
-                data-testid="video-engine-status"
-                className="font-medium text-[var(--text-secondary)]"
-              >
-                {formatVideoEngineStatus(videoProgress, progressPct)}
-              </span>
-              <span>
-                Waktu:{' '}
-                {videoProgress ? (videoProgress.elapsedMs / 1000).toFixed(1).replace('.', ',') : '0,0'} dtk
-              </span>
-            </div>
-            <Button
-              variant="danger"
-              size="md"
-              data-testid="cancel-video-btn"
-              onClick={onCancelProcess}
-              className="min-h-[42px] w-full"
-            >
-              <XCircle className="h-4 w-4" aria-hidden="true" />
-              <span>Batalkan</span>
-            </Button>
-          </div>
-        ) : (
-          <div className="mt-2.5 flex flex-col gap-2.5">
-            {videoProcessResult && processedVideoUrl && (
-              <ExportSharePanel
-                mediaKind="video"
-                readyBlob={videoProcessResult.outputBlob}
-                readyUrl={processedVideoUrl}
-                outputFileName={videoProcessResult.outputFileName}
-                outputMime={videoProcessResult.outputMime}
-                exportedWidth={videoProcessResult.outputWidth}
-                exportedHeight={videoProcessResult.outputHeight}
-                exportedBytes={videoProcessResult.outputBytes}
-                exportedFps={videoProcessResult.appliedFps ?? null}
-                selectedPresetId={selectedPresetId}
-                finishedBatchItems={finishedBatchItems}
-                batchStatusLabel={batchStatusLabel}
-                onPrepareAllZipItems={onPrepareAllZipItems}
-              />
-            )}
-
-            <Button
-              variant={videoProcessResult ? 'secondary' : 'primary'}
-              size="lg"
-              data-testid="process-video-btn"
-              onClick={onStartProcess}
-              className="min-h-[44px] w-full rounded-full font-semibold"
-            >
-              <Play className="h-4 w-4" aria-hidden="true" />
-              <span>{videoProcessResult ? 'Proses Ulang Video HD' : 'Proses Video HD'}</span>
-            </Button>
-          </div>
-        )}
-      </div>
+      {showFooter && (
+        <VideoExportDock
+          videoEdit={videoEdit}
+          selectedPresetId={selectedPresetId}
+          videoProcessStatus={videoProcessStatus}
+          videoProgress={videoProgress}
+          videoProcessResult={videoProcessResult}
+          processedVideoUrl={processedVideoUrl}
+          videoProcessError={videoProcessError}
+          finishedBatchItems={finishedBatchItems}
+          batchStatusLabel={batchStatusLabel}
+          onPrepareAllZipItems={onPrepareAllZipItems}
+          onStartProcess={onStartProcess}
+          onFallbackToSafe720p={onFallbackToSafe720p}
+          onCancelProcess={onCancelProcess}
+        />
+      )}
     </div>
   );
 }

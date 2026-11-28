@@ -330,17 +330,53 @@ export async function runMediaRecorderVideoTranscode(
       let finished = false;
       let lastDrawAt = -1000;
       const frameIntervalMs = 1000 / targetFps;
+      const playStartedAt = Date.now();
+      let lastAdvanceAt = playStartedAt;
+      let lastObservedTime = video.currentTime;
+      const maxWallMs = Math.max(15_000, Math.round(trim.durationSec * 1000 * 2.5 + 10_000));
+      let pollId: ReturnType<typeof setInterval> | null = null;
+      let waitingTimerId: ReturnType<typeof setTimeout> | null = null;
+
+      const detachListeners = () => {
+        if (pollId !== null) {
+          clearInterval(pollId);
+          pollId = null;
+        }
+        if (waitingTimerId !== null) {
+          clearTimeout(waitingTimerId);
+          waitingTimerId = null;
+        }
+        signal?.removeEventListener('abort', onAbort);
+        video.removeEventListener('ended', onVideoEnded);
+        video.removeEventListener('error', onVideoError);
+        video.removeEventListener('stalled', onVideoStalledOrWaiting);
+        video.removeEventListener('waiting', onVideoStalledOrWaiting);
+      };
 
       const finish = () => {
         if (finished) return;
         finished = true;
-        signal?.removeEventListener('abort', onAbort);
-        video.removeEventListener('ended', onVideoEnded);
+        detachListeners();
         if (cancelled || signal?.aborted) {
           reject(new VideoCancelledError());
         } else {
           resolve();
         }
+      };
+
+      const failWithFallback = (message: string) => {
+        if (finished) return;
+        finished = true;
+        detachListeners();
+        try {
+          if (recorder && recorder.state !== 'inactive') {
+            recorder.onstop = null;
+            recorder.stop();
+          }
+        } catch {
+          // Ignore stop errors after stall
+        }
+        reject(new VideoFallbackRequiredError(message));
       };
 
       const stopRecorderOnce = () => {
@@ -360,29 +396,73 @@ export async function runMediaRecorderVideoTranscode(
         stopRecorderOnce();
       };
 
+      const onVideoError = () => {
+        failWithFallback('Pemutar hardware HP mengalami galat — beralih ke mode CPU.');
+      };
+
+      const onVideoStalledOrWaiting = () => {
+        if (finished || cancelled || waitingTimerId !== null) return;
+        waitingTimerId = setTimeout(() => {
+          waitingTimerId = null;
+          if (!finished && !cancelled && video.paused) {
+            void video.play().catch(() => {});
+          }
+        }, 1200);
+      };
+
       const onAbort = () => {
         cancelled = true;
         stopRecorderOnce();
+        // Force reject if MediaRecorder fails to emit onstop promptly on WebKit/mobile
+        setTimeout(() => finish(), 350);
       };
 
       recorder.onstop = finish;
       recorder.onerror = () => {
-        if (!finished) {
-          finished = true;
-          signal?.removeEventListener('abort', onAbort);
-          video.removeEventListener('ended', onVideoEnded);
-          reject(new VideoFallbackRequiredError('Perekam hardware MP4 berhenti tiba-tiba.'));
-        }
+        failWithFallback('Perekam hardware MP4 berhenti tiba-tiba.');
       };
       signal?.addEventListener('abort', onAbort, { once: true });
       video.addEventListener('ended', onVideoEnded, { once: true });
+      video.addEventListener('error', onVideoError);
+      video.addEventListener('stalled', onVideoStalledOrWaiting);
+      video.addEventListener('waiting', onVideoStalledOrWaiting);
+
+      pollId = setInterval(() => {
+        if (finished || cancelled || signal?.aborted) return;
+        const nowMs = Date.now();
+        const curTime = video.currentTime;
+        if (Math.abs(curTime - lastObservedTime) >= 0.01) {
+          lastObservedTime = curTime;
+          lastAdvanceAt = nowMs;
+        }
+        if (curTime >= trim.endSec - 0.04 || video.ended) {
+          drawFrame();
+          stopRecorderOnce();
+          return;
+        }
+        if (nowMs - lastAdvanceAt >= 10_000) {
+          failWithFallback(
+            'Pemutaran hardware HP terhenti tanpa progres (10 dtk) — beralih ke mode CPU.'
+          );
+          return;
+        }
+        if (nowMs - playStartedAt >= maxWallMs) {
+          failWithFallback(
+            'Batas waktu mode cepat hardware HP terlampaui — beralih ke mode CPU.'
+          );
+        }
+      }, 400);
 
       const tick = (now: number) => {
         if (finished || cancelled || signal?.aborted) {
           return;
         }
         const curTime = video.currentTime;
-        if (curTime >= trim.endSec - 0.03 || video.ended) {
+        if (Math.abs(curTime - lastObservedTime) >= 0.01) {
+          lastObservedTime = curTime;
+          lastAdvanceAt = Date.now();
+        }
+        if (curTime >= trim.endSec - 0.04 || video.ended) {
           drawFrame();
           stopRecorderOnce();
           return;
@@ -424,15 +504,9 @@ export async function runMediaRecorderVideoTranscode(
           tick(performance.now());
         },
         () => {
-          if (!finished) {
-            finished = true;
-            stopRecorderOnce();
-            reject(
-              new VideoFallbackRequiredError(
-                'Pemutaran latar belakang hardware tidak diizinkan browser — beralih ke mode CPU.'
-              )
-            );
-          }
+          failWithFallback(
+            'Pemutaran latar belakang hardware tidak diizinkan browser — beralih ke mode CPU.'
+          );
         }
       );
     });

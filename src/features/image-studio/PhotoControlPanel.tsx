@@ -1,13 +1,23 @@
 import { useEffect, useState } from 'react';
 import {
+  Aperture,
+  Check,
   ChevronDown,
   Crop,
+  Droplets,
   Eye,
   FlipHorizontal2,
   FlipVertical2,
+  Focus,
+  History,
   Lock,
+  Palette,
   RotateCcw,
   RotateCw,
+  ScanFace,
+  Sun,
+  User,
+  Wind,
 } from 'lucide-react';
 import { Button } from '../../design-system/components/Button';
 import { SegmentedTabs } from '../../design-system/components/SegmentedTabs';
@@ -38,7 +48,129 @@ import {
 } from '../../presets/mediaPresets';
 import type { DeviceProfile } from '../../shared/utils/deviceCapability';
 
-type PhotoTabId = 'utama' | 'tampilan' | 'edit';
+export type PhotoTabId = 'utama' | 'tampilan' | 'edit';
+
+const PRESET_BADGE_STYLE: Record<string, { dot: string; tag: string }> = {
+  'whatsapp-hd': { dot: 'bg-[var(--accent-olive)]', tag: 'WA HD' },
+  'whatsapp-status': { dot: 'bg-[var(--accent-olive)]', tag: 'Status' },
+  'instagram-story': { dot: 'bg-[var(--accent-terracotta)]', tag: 'Reels' },
+  'instagram-feed': { dot: 'bg-[var(--accent-terracotta)]', tag: 'Feed' },
+  'tiktok-hd': { dot: 'bg-[var(--accent-gold)]', tag: 'TikTok' },
+  'web-light': { dot: 'bg-[var(--accent-caramel)]', tag: 'WebP' },
+  'archive-hd': { dot: 'bg-[var(--accent-gold)]', tag: 'Arsip' },
+  custom: { dot: 'bg-[var(--accent-taupe)]', tag: 'Manual' },
+};
+
+const PRO_TOOL_ICONS = {
+  sharpen: Focus,
+  retouch: Droplets,
+  'enhance-face': User,
+  deblur: Aperture,
+  dehaze: Sun,
+  'remove-motion-blur': Wind,
+  restore: History,
+  colourise: Palette,
+  'face-restoration': ScanFace,
+} satisfies Record<ProPhotoToolId, typeof Focus>;
+
+export interface PhotoInspectorHeaderProps {
+  imageEdit: ImageEditState;
+  activeTab: PhotoTabId;
+  onChangeTab: (tab: PhotoTabId) => void;
+  onResetPhoto?: () => void;
+}
+
+export function PhotoInspectorHeader({
+  imageEdit,
+  activeTab,
+  onChangeTab,
+  onResetPhoto,
+}: PhotoInspectorHeaderProps) {
+  const activeTools = imageEdit.proTools ?? [];
+  const filterActive = imageEdit.photoFilterId !== 'original';
+  const hasModifications =
+    activeTools.length > 0 ||
+    filterActive ||
+    imageEdit.targetResolution !== 'original' ||
+    imageEdit.crop !== null ||
+    imageEdit.straightenDeg !== 0 ||
+    imageEdit.rotationDeg > 0;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+        <button
+          type="button"
+          onClick={() => onChangeTab('tampilan')}
+          className="rounded-full border border-[var(--border-active)] bg-[var(--bg-subtle)] px-2.5 py-0.5 font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--border-strong)]"
+        >
+          {PHOTO_QUALITY_MODEL_LABELS[imageEdit.qualityModel] ?? 'RealPhoto'}
+        </button>
+        {activeTools.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onChangeTab('tampilan')}
+            className="rounded-full border border-[var(--border-active)] bg-[var(--accent-gold-soft)] px-2.5 py-0.5 font-semibold text-[var(--accent-gold)]"
+          >
+            {activeTools.length} Alat Foto
+          </button>
+        )}
+        {imageEdit.targetResolution !== 'original' && (
+          <button
+            type="button"
+            onClick={() => onChangeTab('tampilan')}
+            className="rounded-full border border-[var(--border-active)] bg-[var(--accent-primary)]/18 px-2.5 py-0.5 font-semibold text-[var(--accent-highlight)]"
+          >
+            {imageEdit.targetResolution.toUpperCase()}
+          </button>
+        )}
+        {filterActive && (
+          <button
+            type="button"
+            onClick={() => onChangeTab('tampilan')}
+            className="rounded-full border border-[var(--border-active)] bg-[var(--accent-primary)]/18 px-2.5 py-0.5 font-semibold text-[var(--accent-highlight)]"
+          >
+            Filter Aktif
+          </button>
+        )}
+        {(imageEdit.crop !== null || imageEdit.straightenDeg !== 0 || imageEdit.rotationDeg > 0) && (
+          <button
+            type="button"
+            onClick={() => onChangeTab('edit')}
+            className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 py-0.5 font-medium text-[var(--text-secondary)]"
+          >
+            Bingkai Diubah
+          </button>
+        )}
+        {hasModifications && (
+          <>
+            <span className="rounded-full border border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] px-2.5 py-0.5 font-medium text-[var(--status-ok-ink)]">
+              Tersesuaikan
+            </span>
+            {onResetPhoto && (
+              <button
+                type="button"
+                data-testid="photo-quick-reset-btn"
+                onClick={onResetPhoto}
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-0.5 font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+              >
+                <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                <span>Atur Ulang</span>
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      <SegmentedTabs
+        items={PHOTO_TABS}
+        value={activeTab}
+        onChange={onChangeTab}
+        ariaLabel="Menu studio foto"
+      />
+    </div>
+  );
+}
 
 export interface PhotoControlPanelProps {
   selectedPresetId: MediaPresetId;
@@ -49,6 +181,9 @@ export interface PhotoControlPanelProps {
   avifSupported: boolean;
   isCropping: boolean;
   holdOriginalActive: boolean;
+  activeTab?: PhotoTabId;
+  onTabChange?: (tab: PhotoTabId) => void;
+  showHeader?: boolean;
   onHoldOriginalChange: (held: boolean) => void;
   onSelectPreset: (id: MediaPresetId) => void;
   onUpdateImageEdit: (
@@ -142,6 +277,9 @@ export function PhotoControlPanel({
   avifSupported,
   isCropping,
   holdOriginalActive,
+  activeTab: controlledTab,
+  onTabChange,
+  showHeader = true,
   onHoldOriginalChange,
   onSelectPreset,
   onUpdateImageEdit,
@@ -154,7 +292,15 @@ export function PhotoControlPanel({
   onRequestThumbnail,
   onResetPhoto,
 }: PhotoControlPanelProps) {
-  const [activeTab, setActiveTab] = useState<PhotoTabId>('utama');
+  const [internalTab, setInternalTab] = useState<PhotoTabId>('utama');
+  const activeTab = controlledTab ?? internalTab;
+  const setActiveTab = (tab: PhotoTabId) => {
+    if (onTabChange) {
+      onTabChange(tab);
+    } else {
+      setInternalTab(tab);
+    }
+  };
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [lightDrawerOpen, setLightDrawerOpen] = useState(true);
   const [colorDrawerOpen, setColorDrawerOpen] = useState(false);
@@ -215,87 +361,18 @@ export function PhotoControlPanel({
 
   return (
     <div className="flex flex-col gap-3.5">
-      {/* Subtle Active Pill Summary */}
-      <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-        <button
-          type="button"
-          onClick={() => setActiveTab('tampilan')}
-          className="rounded-full border border-[var(--border-active)] bg-[var(--bg-subtle)] px-2.5 py-0.5 font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--border-strong)]"
-        >
-          {PHOTO_QUALITY_MODEL_LABELS[imageEdit.qualityModel] ?? 'RealPhoto'}
-        </button>
-        {activeTools.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setActiveTab('tampilan')}
-            className="rounded-full border border-[var(--border-active)] bg-[var(--accent-gold-soft)] px-2.5 py-0.5 font-semibold text-[var(--accent-gold)]"
-          >
-            {activeTools.length} Alat Foto
-          </button>
-        )}
-        {imageEdit.targetResolution !== 'original' && (
-          <button
-            type="button"
-            onClick={() => setActiveTab('tampilan')}
-            className="rounded-full border border-[var(--border-active)] bg-[var(--accent-primary)]/18 px-2.5 py-0.5 font-semibold text-[var(--accent-highlight)]"
-          >
-            {imageEdit.targetResolution.toUpperCase()}
-          </button>
-        )}
-        {filterActive && (
-          <button
-            type="button"
-            onClick={() => setActiveTab('tampilan')}
-            className="rounded-full border border-[var(--border-active)] bg-[var(--accent-primary)]/18 px-2.5 py-0.5 font-semibold text-[var(--accent-highlight)]"
-          >
-            Filter Aktif
-          </button>
-        )}
-        {(imageEdit.crop !== null || imageEdit.straightenDeg !== 0 || imageEdit.rotationDeg > 0) && (
-          <button
-            type="button"
-            onClick={() => setActiveTab('edit')}
-            className="rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 py-0.5 font-medium text-[var(--text-secondary)]"
-          >
-            Bingkai Diubah
-          </button>
-        )}
-        {(activeTools.length > 0 ||
-          filterActive ||
-          imageEdit.targetResolution !== 'original' ||
-          imageEdit.crop !== null ||
-          imageEdit.straightenDeg !== 0 ||
-          imageEdit.rotationDeg > 0) && (
-          <>
-            <span className="rounded-full border border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] px-2.5 py-0.5 font-medium text-[var(--status-ok-ink)]">
-              Tersesuaikan
-            </span>
-            {onResetPhoto && (
-              <button
-                type="button"
-                data-testid="photo-quick-reset-btn"
-                onClick={onResetPhoto}
-                className="inline-flex items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-0.5 font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
-              >
-                <RotateCcw className="h-3 w-3" aria-hidden="true" />
-                <span>Atur Ulang</span>
-              </button>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Strictly 3 Top-Level Tabs */}
-      <SegmentedTabs
-        items={PHOTO_TABS}
-        value={activeTab}
-        onChange={setActiveTab}
-        ariaLabel="Menu studio foto"
-      />
+      {showHeader && (
+        <PhotoInspectorHeader
+          imageEdit={imageEdit}
+          activeTab={activeTab}
+          onChangeTab={setActiveTab}
+          onResetPhoto={onResetPhoto}
+        />
+      )}
 
       {/* TAB 1: TUJUAN & FORMAT */}
       {activeTab === 'utama' && (
-        <div className="space-y-5 sm:space-y-4">
+        <div key="photo-tab-utama" className="km-tab-enter space-y-5 sm:space-y-4">
           <div className="space-y-2.5 sm:space-y-2">
             <div>
               <h2 className="text-xs font-semibold text-[var(--text-primary)]">Pilih Tujuan</h2>
@@ -310,6 +387,10 @@ export function PhotoControlPanel({
             >
               {photoPresets.map((preset) => {
                 const selected = preset.id === selectedPresetId;
+                const badgeMeta = PRESET_BADGE_STYLE[preset.id] ?? {
+                  dot: 'bg-[var(--accent-caramel)]',
+                  tag: preset.shortLabel,
+                };
                 return (
                   <button
                     key={preset.id}
@@ -318,14 +399,25 @@ export function PhotoControlPanel({
                     aria-checked={selected}
                     data-testid={`preset-${preset.id}`}
                     onClick={() => onSelectPreset(preset.id)}
-                    className={`flex min-h-[48px] shrink-0 snap-start flex-col items-start justify-center whitespace-nowrap rounded-xl border px-3.5 py-2 text-left transition-all duration-150 active:scale-[0.985] md:min-h-[52px] md:whitespace-normal md:px-3 ${
+                    className={`flex min-h-[48px] shrink-0 snap-start flex-col items-start justify-center whitespace-nowrap rounded-2xl border px-3.5 py-2 text-left transition-all duration-150 hover:-translate-y-0.5 active:scale-[0.985] md:min-h-[54px] md:whitespace-normal md:px-3 ${
                       selected
-                        ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] text-[var(--text-primary)] shadow-[var(--glass-highlight)]'
+                        ? 'border-[var(--border-active)] bg-[var(--accent-gold-soft)] text-[var(--text-primary)] shadow-[var(--glass-highlight)] ring-1 ring-[var(--border-active)]/40'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-active)]'
                     }`}
                   >
-                    <span className="text-xs font-semibold text-[var(--text-primary)]">
-                      {preset.label}
+                    <span className="flex w-full items-center justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span
+                          aria-hidden="true"
+                          className={`h-2 w-2 shrink-0 rounded-full ${badgeMeta.dot}`}
+                        />
+                        <span className="truncate text-xs font-semibold text-[var(--text-primary)]">
+                          {preset.label}
+                        </span>
+                      </span>
+                      <span className="shrink-0 rounded-md border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[9.5px] font-semibold text-[var(--text-secondary)]">
+                        {badgeMeta.tag}
+                      </span>
                     </span>
                     <span className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">
                       {preset.targetLimitLabel}
@@ -497,7 +589,7 @@ export function PhotoControlPanel({
 
       {/* TAB 2: KUALITAS & ALAT */}
       {activeTab === 'tampilan' && (
-        <div className="space-y-5 sm:space-y-4">
+        <div key="photo-tab-tampilan" className="km-tab-enter space-y-5 sm:space-y-4">
           {/* 9 Real Pixel-Level Pro Photo Tools */}
           <section className="space-y-3 rounded-[22px] bg-[var(--bg-surface)]/80 p-3 sm:border sm:border-[var(--border-hairline)] sm:bg-[var(--bg-elevated)] sm:p-3.5 sm:shadow-[var(--glass-highlight)]">
             <div className="flex items-center justify-between gap-2">
@@ -539,6 +631,7 @@ export function PhotoControlPanel({
             >
               {PRO_PHOTO_TOOL_META.map((tool, idx) => {
                 const active = activeTools.includes(tool.id);
+                const ToolIcon = PRO_TOOL_ICONS[tool.id];
                 return (
                   <button
                     key={tool.id}
@@ -547,20 +640,21 @@ export function PhotoControlPanel({
                     aria-pressed={active}
                     title={tool.desc}
                     onClick={() => toggleProTool(tool.id)}
-                    className={`flex min-h-[44px] flex-col items-start justify-center rounded-2xl border px-3 py-2 text-left transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.985] md:min-h-[50px] ${
+                    className={`flex min-h-[44px] flex-col items-start justify-center rounded-2xl border px-3 py-2 text-left transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 active:scale-[0.985] md:min-h-[50px] ${
                       idx === 8 ? 'col-span-2' : ''
                     } ${
                       active
-                        ? 'border-[var(--border-active)] bg-[var(--accent-gold-soft)] text-[var(--text-primary)] ring-1 ring-[var(--border-active)]'
+                        ? 'border-[var(--border-active)] border-l-[3px] border-l-[var(--accent-gold)] bg-[var(--accent-gold-soft)] text-[var(--text-primary)] ring-1 ring-[var(--border-active)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
                     }`}
                   >
                     <span
-                      className={`w-full truncate whitespace-nowrap text-[11.5px] font-semibold leading-tight ${
+                      className={`flex w-full items-center gap-1.5 text-[11.5px] font-semibold leading-tight ${
                         active ? 'text-[var(--accent-highlight)]' : 'text-[var(--text-primary)]'
                       }`}
                     >
-                      {tool.title}
+                      <ToolIcon className="h-3.5 w-3.5 shrink-0 opacity-85" aria-hidden="true" />
+                      <span className="truncate whitespace-nowrap">{tool.title}</span>
                     </span>
                     <span className="mt-0.5 hidden line-clamp-1 text-[10px] leading-snug text-[var(--text-muted)] md:block">
                       {tool.desc}
@@ -852,7 +946,7 @@ export function PhotoControlPanel({
                     aria-pressed={active}
                     onClick={() => onSelectPhotoFilter(look.id)}
                     title={look.description}
-                    className={`flex min-w-0 flex-col overflow-hidden rounded-xl border text-left transition-all ${
+                    className={`group flex min-w-0 flex-col overflow-hidden rounded-xl border text-left transition-all duration-150 hover:-translate-y-0.5 ${
                       active
                         ? 'border-[var(--border-active)] bg-[var(--bg-subtle)] ring-1 ring-[var(--border-active)]'
                         : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] hover:border-[var(--border-active)]'
@@ -864,16 +958,29 @@ export function PhotoControlPanel({
                           src={baseThumbnailUrl}
                           alt={look.title}
                           style={{ filter: cssFilter === 'none' ? undefined : cssFilter }}
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                         />
                       ) : (
                         <div
-                          style={{ filter: cssFilter === 'none' ? undefined : cssFilter }}
-                          className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#3B2A1F] via-[#6F4E37] to-[#B08968]/80 text-[9px] font-semibold text-[#FFF9F0]/90"
+                          style={{ background: look.swatchGradient }}
+                          className="flex h-full w-full items-center justify-center text-[9px] font-semibold text-white/95"
                         >
                           {look.badge}
                         </div>
                       )}
+                      {active && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-primary)] text-[var(--ink-on-accent)] shadow"
+                        >
+                          <Check className="h-2.5 w-2.5" />
+                        </span>
+                      )}
+                      <span
+                        aria-hidden="true"
+                        style={{ background: look.swatchGradient }}
+                        className="absolute inset-x-0 bottom-0 h-1 opacity-90"
+                      />
                     </div>
                     <div className="w-full px-2 py-1.5">
                       <span className="block truncate text-[10.5px] font-semibold text-[var(--text-primary)]">
@@ -909,7 +1016,7 @@ export function PhotoControlPanel({
 
       {/* TAB 3: EDIT & BINGKAI */}
       {activeTab === 'edit' && (
-        <div className="flex flex-col gap-4 sm:gap-3.5">
+        <div key="photo-tab-edit" className="km-tab-enter flex flex-col gap-4 sm:gap-3.5">
           <div className="grid grid-cols-2 gap-2.5">
             <Button
               variant={isCropping ? 'primary' : 'secondary'}

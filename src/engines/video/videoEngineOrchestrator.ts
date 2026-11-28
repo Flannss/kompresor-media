@@ -103,13 +103,87 @@ async function checkHasDecodableAudio(
   }
 }
 
+export const DEFAULT_ORCHESTRATOR_STALL_MS = 15_000;
+
+async function runTierWithStallWatchdog<T>(params: {
+  run: (tierProgress: (p: VideoProcessProgress) => void, tierSignal: AbortSignal) => Promise<T>;
+  onProgress: (p: VideoProcessProgress) => void;
+  outerSignal?: AbortSignal;
+  stallTimeoutMs: number;
+  stallMessage: string;
+}): Promise<T> {
+  const { run, onProgress, outerSignal, stallTimeoutMs, stallMessage } = params;
+  if (outerSignal?.aborted) {
+    throw new VideoCancelledError();
+  }
+
+  const tierController = new AbortController();
+  let lastProgressAt = Date.now();
+  let stalled = false;
+  let pollId: ReturnType<typeof setInterval> | null = null;
+  let rejectWatchdog: ((reason?: unknown) => void) | null = null;
+
+  const onOuterAbort = () => {
+    tierController.abort();
+    rejectWatchdog?.(new VideoCancelledError());
+  };
+  outerSignal?.addEventListener('abort', onOuterAbort, { once: true });
+
+  const tierProgress = (p: VideoProcessProgress) => {
+    if (tierController.signal.aborted || outerSignal?.aborted) return;
+    lastProgressAt = Date.now();
+    onProgress(p);
+  };
+
+  try {
+    const checkIntervalMs = Math.min(500, Math.max(25, Math.floor(stallTimeoutMs / 4)));
+    return await Promise.race([
+      run(tierProgress, tierController.signal),
+      new Promise<never>((_resolve, reject) => {
+        rejectWatchdog = reject;
+        pollId = setInterval(() => {
+          if (outerSignal?.aborted) {
+            tierController.abort();
+            reject(new VideoCancelledError());
+            return;
+          }
+          if (tierController.signal.aborted) return;
+          if (Date.now() - lastProgressAt >= stallTimeoutMs) {
+            stalled = true;
+            tierController.abort();
+            reject(new VideoFallbackRequiredError(stallMessage));
+          }
+        }, checkIntervalMs);
+      }),
+    ]);
+  } catch (err) {
+    if (outerSignal?.aborted) {
+      throw new VideoCancelledError();
+    }
+    if (stalled) {
+      throw err instanceof VideoFallbackRequiredError
+        ? err
+        : new VideoFallbackRequiredError(stallMessage);
+    }
+    throw err;
+  } finally {
+    if (pollId !== null) {
+      clearInterval(pollId);
+    }
+    outerSignal?.removeEventListener('abort', onOuterAbort);
+  }
+}
+
 export async function processVideo(
   request: VideoProcessRequest,
   onProgress: (progress: VideoProcessProgress) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: { tier1StallTimeoutMs?: number; tier2StallTimeoutMs?: number }
 ): Promise<VideoProcessResult> {
   const t0 = performance.now();
   const formatMeta = getVideoFormatMeta(request.edit.outputFormat);
+  const tier1StallMs = options?.tier1StallTimeoutMs ?? DEFAULT_ORCHESTRATOR_STALL_MS;
+  const tier2StallMs = options?.tier2StallTimeoutMs ?? DEFAULT_ORCHESTRATOR_STALL_MS;
   const useFfmpeg =
     request.preferredBackend === 'ffmpeg-wasm-st' ||
     ((!request.preferredBackend || request.preferredBackend === 'auto') &&
@@ -137,13 +211,28 @@ export async function processVideo(
   if (useFfmpeg) {
     output = await runFfmpegVideoTranscode(request, onProgress, signal);
   } else if (request.preferredBackend === 'mediarecorder-native') {
-    output = await runMediaRecorderVideoTranscode(request, onProgress, signal);
+    output = await runTierWithStallWatchdog({
+      run: (tp, ts) => runMediaRecorderVideoTranscode(request, tp, ts),
+      onProgress,
+      outerSignal: signal,
+      stallTimeoutMs: tier2StallMs,
+      stallMessage: 'Mode Cepat Hardware HP terlalu lama tanpa progres.',
+    });
   } else {
     try {
-      output = await runWebCodecsVideoTranscode(request, onProgress, signal);
+      output = await runTierWithStallWatchdog({
+        run: (tp, ts) => runWebCodecsVideoTranscode(request, tp, ts),
+        onProgress,
+        outerSignal: signal,
+        stallTimeoutMs: tier1StallMs,
+        stallMessage: 'Mode Cepat Hardware WebCodecs terlalu lama tanpa progres — beralih otomatis.',
+      });
     } catch (err) {
-      if (err instanceof VideoCancelledError || signal?.aborted) {
+      if ((err instanceof VideoCancelledError && signal?.aborted) || signal?.aborted) {
         throw new VideoCancelledError();
+      }
+      if (err instanceof VideoCancelledError) {
+        throw err;
       }
       if (
         err instanceof VideoFallbackRequiredError ||
@@ -154,7 +243,13 @@ export async function processVideo(
         if (supportsMediaRecorderContainer && canUseMediaRecorderMp4()) {
           try {
             backendUsed = 'mediarecorder-native';
-            output = await runMediaRecorderVideoTranscode(request, onProgress, signal);
+            output = await runTierWithStallWatchdog({
+              run: (tp, ts) => runMediaRecorderVideoTranscode(request, tp, ts),
+              onProgress,
+              outerSignal: signal,
+              stallTimeoutMs: tier2StallMs,
+              stallMessage: 'Mode Cepat Hardware HP terlalu lama — beralih ke CPU.',
+            });
           } catch (mrErr) {
             if (mrErr instanceof VideoCancelledError || signal?.aborted) {
               throw new VideoCancelledError();

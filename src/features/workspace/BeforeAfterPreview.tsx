@@ -94,7 +94,7 @@ export function BeforeAfterPreview({
       <div
         data-testid="photo-stage-frame"
         data-zoom={zoomLevel}
-        className={`relative flex max-h-[260px] sm:max-h-[58vh] w-full max-w-[820px] items-center justify-center overflow-hidden rounded-[22px] border border-[var(--border-hairline)] transition-colors ${getBackdropClasses(backdrop)} ${
+        className={`relative flex max-h-[260px] w-full max-w-[820px] items-center justify-center overflow-hidden rounded-[22px] border border-[var(--border-hairline)] transition-colors sm:max-h-[58vh] lg:max-h-[calc(100dvh-230px)] ${getBackdropClasses(backdrop)} ${
           isSideBySideActive ? 'p-2 sm:p-2.5' : ''
         }`}
         style={{ boxShadow: 'var(--stage-shadow)' }}
@@ -110,7 +110,7 @@ export function BeforeAfterPreview({
                 src={originalUrl}
                 alt={`${fileName} (Asli)`}
                 style={zoomStyle}
-                className="block max-h-[220px] w-full object-contain transition-transform duration-200 sm:max-h-[52vh]"
+                className="block max-h-[220px] w-full object-contain transition-transform duration-200 sm:max-h-[52vh] lg:max-h-[calc(100dvh-250px)]"
                 draggable={false}
               />
               <span className="pointer-events-none absolute left-2 top-2 rounded-md bg-[var(--surface-badge)] px-2 py-0.5 text-[11px] font-medium text-white">
@@ -124,7 +124,7 @@ export function BeforeAfterPreview({
                 src={showOriginalOnly ? originalUrl : processedUrl}
                 alt={`${fileName} (Hasil)`}
                 style={zoomStyle}
-                className="block max-h-[220px] w-full object-contain transition-transform duration-200 sm:max-h-[52vh]"
+                className="block max-h-[220px] w-full object-contain transition-transform duration-200 sm:max-h-[52vh] lg:max-h-[calc(100dvh-250px)]"
                 draggable={false}
               />
               <span className="pointer-events-none absolute right-2 top-2 rounded-md bg-[var(--accent-primary)] px-2 py-0.5 text-[11px] font-medium text-white">
@@ -146,7 +146,7 @@ export function BeforeAfterPreview({
               data-testid="preview-image"
               src={processedUrl}
               alt={`${fileName} (Hasil)`}
-              className="block max-h-[250px] w-auto max-w-full object-contain sm:max-h-[58vh]"
+              className="block max-h-[250px] w-auto max-w-full object-contain sm:max-h-[58vh] lg:max-h-[calc(100dvh-240px)]"
               draggable={false}
             />
             <img
@@ -179,7 +179,7 @@ export function BeforeAfterPreview({
               src={displayUrl}
               alt={fileName}
               style={zoomStyle}
-              className="block max-h-[250px] w-auto max-w-full object-contain transition-transform duration-200 sm:max-h-[58vh]"
+              className="block max-h-[250px] w-auto max-w-full object-contain transition-transform duration-200 sm:max-h-[58vh] lg:max-h-[calc(100dvh-240px)]"
             />
             {processedUrl && (
               <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-[var(--surface-badge)] px-2 py-0.5 text-[11px] font-medium text-white">

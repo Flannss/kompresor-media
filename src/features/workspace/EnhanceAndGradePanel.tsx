@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, Eye } from 'lucide-react';
+import { Check, ChevronDown, Eye } from 'lucide-react';
 import type {
   ColorGradeId,
   ColorGradeState,
@@ -620,7 +620,7 @@ export function EnhanceAndGradePanel({
                 aria-pressed={active}
                 onClick={() => onSelectColorGrade(look.id)}
                 title={look.description}
-                className={`group flex flex-col overflow-hidden rounded-xl border text-left transition-all ${
+                className={`group flex flex-col overflow-hidden rounded-xl border text-left transition-all duration-150 hover:-translate-y-0.5 ${
                   active
                     ? 'border-[var(--border-active)] bg-[var(--accent-deep)]/25 ring-1 ring-[var(--border-active)]'
                     : 'border-[var(--border-hairline)] bg-[var(--bg-elevated)] hover:border-[var(--border-active)]'
@@ -632,19 +632,32 @@ export function EnhanceAndGradePanel({
                       src={baseThumbnailUrl}
                       alt={look.title}
                       style={{ filter: cssFilter === 'none' ? undefined : cssFilter }}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
                   ) : (
                     <div
-                      style={{ filter: cssFilter === 'none' ? undefined : cssFilter }}
-                      className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#3B2A1F] via-[#6F4E37] to-[#B08968]/75 text-[10px] font-semibold text-[#FFF9F0]/90"
+                      style={{ background: look.swatchGradient }}
+                      className="flex h-full w-full items-end justify-start p-2 text-[10px] font-semibold text-white/95"
                     >
-                      {look.badge}
+                      <span className="rounded bg-black/35 px-1.5 py-0.5">{look.badge}</span>
                     </div>
                   )}
                   <span className="absolute right-1.5 top-1.5 rounded-md bg-[var(--surface-badge)] px-1.5 py-0.5 text-[9px] font-semibold text-white">
                     {look.badge}
                   </span>
+                  {active && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent-primary)] text-[var(--ink-on-accent)] shadow"
+                    >
+                      <Check className="h-3 w-3" />
+                    </span>
+                  )}
+                  <span
+                    aria-hidden="true"
+                    style={{ background: look.swatchGradient }}
+                    className="absolute inset-x-0 bottom-0 h-1 opacity-90"
+                  />
                 </div>
                 <div className="px-2 py-1.5">
                   <span className="block truncate text-[11px] font-semibold text-[var(--text-primary)]">

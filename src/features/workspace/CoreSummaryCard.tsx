@@ -25,6 +25,7 @@ export interface CoreSummaryCardProps {
   needsFullResExport?: boolean;
   videoEdit: VideoEditState;
   videoProcessResult: VideoProcessResult | null;
+  compactOnDesktop?: boolean;
 }
 
 export function CoreSummaryCard({
@@ -36,6 +37,7 @@ export function CoreSummaryCard({
   needsFullResExport = false,
   videoEdit,
   videoProcessResult,
+  compactOnDesktop = false,
 }: CoreSummaryCardProps) {
   const isImage = metadata.kind === 'image';
   const presetSpec = getMediaPreset(selectedPresetId);
@@ -122,10 +124,20 @@ export function CoreSummaryCard({
     <section
       data-testid="core-summary-card"
       aria-label="Ringkasan Inti"
-      className="rounded-[22px] border border-[var(--border-hairline)] bg-[var(--bg-elevated)] p-3.5 shadow-[var(--glass-highlight)]"
+      className={`rounded-[22px] border border-[var(--border-hairline)] bg-[var(--bg-elevated)] shadow-[var(--glass-highlight)] ${
+        compactOnDesktop ? 'p-3.5 lg:rounded-xl lg:px-3 lg:py-2' : 'p-3.5'
+      }`}
     >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+      <div
+        className={`flex items-center justify-between gap-2 ${
+          compactOnDesktop ? 'mb-2 lg:mb-1' : 'mb-2'
+        }`}
+      >
+        <h2
+          className={`font-semibold uppercase tracking-wider text-[var(--text-muted)] ${
+            compactOnDesktop ? 'text-[11px] lg:text-[10px]' : 'text-[11px]'
+          }`}
+        >
           Ringkasan Inti
         </h2>
         {elapsedSecText && (
@@ -138,7 +150,13 @@ export function CoreSummaryCard({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 text-xs tabular-nums">
+      <div
+        className={`grid grid-cols-2 text-xs tabular-nums ${
+          compactOnDesktop
+            ? 'gap-3 lg:grid-cols-3 lg:gap-x-2.5 lg:gap-y-1.5'
+            : 'gap-3'
+        }`}
+      >
         <div className="min-w-0">
           <span className="block text-[10px] text-[var(--text-muted)]">Resolusi</span>
           <span
@@ -190,20 +208,30 @@ export function CoreSummaryCard({
           </span>
         </div>
 
-        <div className="min-w-0">
-          <span className="block text-[10px] text-[var(--text-muted)]">Modul Aktif</span>
-          <div
-            data-testid="core-summary-modules"
-            className="mt-1 flex flex-wrap gap-1.5"
-          >
-            {activeModules.map((mod) => (
-              <span
-                key={mod}
-                className="rounded-md border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-secondary)]"
-              >
-                {mod}
-              </span>
-            ))}
+        <div className={`min-w-0 ${compactOnDesktop ? 'lg:col-span-3' : ''}`}>
+          <div className={compactOnDesktop ? 'lg:flex lg:items-center lg:gap-2' : ''}>
+            <span
+              className={`block text-[10px] text-[var(--text-muted)] ${
+                compactOnDesktop ? 'lg:shrink-0' : ''
+              }`}
+            >
+              Modul Aktif
+            </span>
+            <div
+              data-testid="core-summary-modules"
+              className={`flex flex-wrap gap-1.5 ${
+                compactOnDesktop ? 'mt-1 lg:mt-0 lg:gap-1' : 'mt-1'
+              }`}
+            >
+              {activeModules.map((mod) => (
+                <span
+                  key={mod}
+                  className="rounded-md border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-secondary)]"
+                >
+                  {mod}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </div>

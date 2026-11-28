@@ -36,6 +36,67 @@ export class VideoFallbackRequiredError extends Error {
   }
 }
 
+export const DEFAULT_WEBCODECS_STALL_MS = 15_000;
+
+/**
+ * Normalizes VFR / smartphone frame timestamps to strictly increasing microseconds so
+ * WebCodecs VideoEncoder & MP4/MOV muxers never deadlock on duplicate/zero PTS deltas.
+ */
+export function normalizeMonotonicTimestampUs(rawTsUs: number, lastTsUs: number): number {
+  const safeRaw = Number.isFinite(rawTsUs) ? Math.max(0, Math.round(rawTsUs)) : 0;
+  return lastTsUs < 0 ? safeRaw : Math.max(lastTsUs + 1, safeRaw);
+}
+
+async function runWithStallWatchdog<T>(params: {
+  promise: Promise<T>;
+  stallTimeoutMs: number;
+  getLastActivityAt: () => number;
+  onStall: () => void;
+  onAbortCleanup?: () => void;
+  signal?: AbortSignal;
+  stallMessage: string;
+}): Promise<T> {
+  const { promise, stallTimeoutMs, getLastActivityAt, onStall, onAbortCleanup, signal, stallMessage } =
+    params;
+
+  if (signal?.aborted) {
+    onAbortCleanup?.();
+    throw new VideoCancelledError();
+  }
+
+  let pollId: ReturnType<typeof setInterval> | null = null;
+  let onAbort: (() => void) | null = null;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        onAbort = () => {
+          onAbortCleanup?.();
+          reject(new VideoCancelledError());
+        };
+        signal?.addEventListener('abort', onAbort, { once: true });
+
+        const checkIntervalMs = Math.min(500, Math.max(25, Math.floor(stallTimeoutMs / 4)));
+        pollId = setInterval(() => {
+          if (signal?.aborted) return;
+          if (Date.now() - getLastActivityAt() >= stallTimeoutMs) {
+            onStall();
+            reject(new VideoFallbackRequiredError(stallMessage));
+          }
+        }, checkIntervalMs);
+      }),
+    ]);
+  } finally {
+    if (pollId !== null) {
+      clearInterval(pollId);
+    }
+    if (onAbort) {
+      signal?.removeEventListener('abort', onAbort);
+    }
+  }
+}
+
 export interface WebCodecsTranscodeOutput {
   outputBlob: Blob;
   outputFileName: string;
@@ -461,12 +522,22 @@ function createGpuVideoFrameProcessor(params: {
   targetFps?: number | null;
   cues: SubtitleCue[];
   useHardsub: boolean;
+  onFrameActivity?: () => void;
 }): {
   process: NonNullable<ConversionVideoOptions['process']>;
   getEngineModeLabel: () => string;
   dispose: () => void;
 } {
-  const { VideoSampleCtor, edit, width, height, targetFps = null, cues, useHardsub } = params;
+  const {
+    VideoSampleCtor,
+    edit,
+    width,
+    height,
+    targetFps = null,
+    cues,
+    useHardsub,
+    onFrameActivity,
+  } = params;
   const visual = resolveGpuVisualParams(edit);
   const coverFit = edit.enhanceSuite.upscale1080.enabled && !edit.enhanceSuite.upscale1080.keepAspect;
 
@@ -478,6 +549,7 @@ function createGpuVideoFrameProcessor(params: {
   let usedWebGl = false;
   let used2dCanvas = false;
   let lastEmittedFpsSlot: number | null = null;
+  let lastOutputTsUs = -1;
 
   const ensure2dContext = () => {
     if (!fallbackCanvas) {
@@ -508,6 +580,8 @@ function createGpuVideoFrameProcessor(params: {
       usedWebGl && !used2dCanvas ? 'WebGL GPU' : glHandle ? 'WebGL GPU' : 'Canvas GPU',
 
     process: (sample) => {
+      onFrameActivity?.();
+
       // Early 60fps -> 30fps skip BEFORE GPU/canvas drawing or VideoFrame allocation
       if (targetFps && targetFps > 0) {
         const slot = Math.floor(sample.timestamp * targetFps + 1e-4);
@@ -516,6 +590,14 @@ function createGpuVideoFrameProcessor(params: {
         }
         lastEmittedFpsSlot = slot;
       }
+
+      // Normalize VFR / duplicate timestamps to strictly increasing microseconds
+      const rawTsSec = Number.isFinite(sample.timestamp) ? sample.timestamp : 0;
+      const monotonicTsUs = normalizeMonotonicTimestampUs(rawTsSec * 1_000_000, lastOutputTsUs);
+      lastOutputTsUs = monotonicTsUs;
+      const outTimestampSec = monotonicTsUs / 1_000_000;
+      const outDurationSec =
+        Number.isFinite(sample.duration) && sample.duration > 0 ? sample.duration : 1 / 60;
 
       if (!useHardsub && glHandle && sample.rotation === 0 && !sample.flip) {
         const vf = sample.toVideoFrame();
@@ -539,8 +621,8 @@ function createGpuVideoFrameProcessor(params: {
 
           usedWebGl = true;
           return new VideoSampleCtor(canvas, {
-            timestamp: sample.timestamp,
-            duration: sample.duration,
+            timestamp: outTimestampSec,
+            duration: outDurationSec,
             colorSpace: BT709_COLOR_SPACE,
           });
         } catch {
@@ -575,15 +657,15 @@ function createGpuVideoFrameProcessor(params: {
       ctx.restore();
 
       if (useHardsub) {
-        const active = findActiveCuesAtTime(cues, sample.timestamp);
+        const active = findActiveCuesAtTime(cues, rawTsSec);
         if (active.length > 0) {
           drawHardsubCuesOnCanvas(ctx, width, height, active, edit.subtitle.size, edit.subtitle.position);
         }
       }
 
       return new VideoSampleCtor(canvas, {
-        timestamp: sample.timestamp,
-        duration: sample.duration,
+        timestamp: outTimestampSec,
+        duration: outDurationSec,
         colorSpace: BT709_COLOR_SPACE,
       });
     },
@@ -613,7 +695,8 @@ export async function runWebCodecsVideoTranscode(
   request: VideoProcessRequest,
   onProgress: (progress: VideoProcessProgress) => void,
   signal?: AbortSignal,
-  cuesAlreadyTrimmed = false
+  cuesAlreadyTrimmed = false,
+  options?: { stallTimeoutMs?: number }
 ): Promise<WebCodecsTranscodeOutput> {
   if (signal?.aborted) {
     throw new VideoCancelledError();
@@ -733,24 +816,56 @@ export async function runWebCodecsVideoTranscode(
     formats: ALL_FORMATS,
     source: new BlobSource(file),
   });
+  const stallTimeoutMs = options?.stallTimeoutMs ?? DEFAULT_WEBCODECS_STALL_MS;
+  let lastActivityAt = Date.now();
+  const touchActivity = () => {
+    lastActivityAt = Date.now();
+  };
 
   try {
-    const primaryVideo = await input.getPrimaryVideoTrack();
+    onProgress({
+      requestId,
+      backend: 'webcodecs-mediabunny',
+      stage: 'demuxing',
+      ratio: 0.04,
+      elapsedMs: performance.now() - t0,
+      detail: 'Membaca video & trek audio…',
+    });
+
+    const primaryVideo = await runWithStallWatchdog({
+      promise: input.getPrimaryVideoTrack(),
+      stallTimeoutMs,
+      getLastActivityAt: () => lastActivityAt,
+      onStall: () => input.dispose(),
+      signal,
+      stallMessage: 'Pembacaan trek video WebCodecs terlalu lama — beralih ke mode berikutnya.',
+    });
+    touchActivity();
+
     if (!primaryVideo) {
       throw new VideoFallbackRequiredError('Trek video tidak terbaca oleh demuxer WebCodecs.');
     }
 
     const muted = isAudioMuted(edit);
     const audioBitrateBps = Math.min(160_000, Math.max(128_000, getEffectiveAudioBitrateKbps(edit) * 1000));
-    const primaryAudio = await input.getPrimaryAudioTrack();
-    if (!muted && primaryAudio) {
-      const canAud = await canEncodeAudio(selectedAudioCodec, {
-        quality: new Quality({ bitrate: audioBitrateBps, bitrateMode: 'variable' }),
-      });
-      if (!canAud) {
-        throw new VideoFallbackRequiredError(
-          `Encoder audio ${selectedAudioCodec.toUpperCase()} tidak tersedia.`
-        );
+    const primaryAudio = await input.getPrimaryAudioTrack().catch(() => null);
+    let discardAudio = muted || !primaryAudio;
+
+    // Safely bypass audio track if absent, 0-channel, or non-decodable so audio-less/exotic clips never stall
+    if (!discardAudio && primaryAudio) {
+      const channels = await primaryAudio.getNumberOfChannels().catch(() => 0);
+      const decodable = await primaryAudio.canDecode().catch(() => false);
+      if (channels <= 0 || !decodable) {
+        discardAudio = true;
+      } else {
+        const canAud = await canEncodeAudio(selectedAudioCodec, {
+          quality: new Quality({ bitrate: audioBitrateBps, bitrateMode: 'variable' }),
+        }).catch(() => false);
+        if (!canAud) {
+          throw new VideoFallbackRequiredError(
+            `Encoder audio ${selectedAudioCodec.toUpperCase()} tidak tersedia.`
+          );
+        }
       }
     }
 
@@ -790,6 +905,7 @@ export async function runWebCodecsVideoTranscode(
       targetFps: effectiveFps ?? null,
       cues: shiftedCues,
       useHardsub,
+      onFrameActivity: touchActivity,
     });
 
     const coverFit =
@@ -811,16 +927,17 @@ export async function runWebCodecsVideoTranscode(
 
     let conversion: Awaited<ReturnType<typeof Conversion.init>>;
     try {
-      conversion = await Conversion.init({
-        input,
-        output,
-        tracks: 'primary',
-        copy: false,
-        showWarnings: false,
-        ...(trim.isTrimmed ? { trim: { start: trim.startSec, end: trim.endSec } } : {}),
-        video: videoOptions,
-        audio:
-          muted || !primaryAudio
+      touchActivity();
+      conversion = await runWithStallWatchdog({
+        promise: Conversion.init({
+          input,
+          output,
+          tracks: 'primary',
+          copy: false,
+          showWarnings: false,
+          ...(trim.isTrimmed ? { trim: { start: trim.startSec, end: trim.endSec } } : {}),
+          video: videoOptions,
+          audio: discardAudio
             ? { discard: true }
             : {
                 codec: selectedAudioCodec,
@@ -830,11 +947,21 @@ export async function runWebCodecsVideoTranscode(
                 }),
                 forceTranscode: edit.outputFormat === 'webm',
               },
+        }),
+        stallTimeoutMs,
+        getLastActivityAt: () => lastActivityAt,
+        onStall: () => gpuProcessor.dispose(),
+        onAbortCleanup: () => gpuProcessor.dispose(),
+        signal,
+        stallMessage: 'Inisialisasi hardware WebCodecs terlalu lama — beralih ke mode berikutnya.',
       });
     } catch (initErr) {
       gpuProcessor.dispose();
-      if (initErr instanceof ConversionCanceledError || signal?.aborted) {
+      if (initErr instanceof VideoCancelledError || initErr instanceof ConversionCanceledError || signal?.aborted) {
         throw new VideoCancelledError();
+      }
+      if (initErr instanceof VideoFallbackRequiredError) {
+        throw initErr;
       }
       throw new VideoFallbackRequiredError(
         initErr instanceof Error ? initErr.message : 'Inisialisasi hardware WebCodecs gagal.'
@@ -850,8 +977,10 @@ export async function runWebCodecsVideoTranscode(
       throw new VideoFallbackRequiredError(`WebCodecs tidak dapat memproses trek (${reason}).`);
     }
 
+    touchActivity();
     conversion.onProgress = (progressRatio) => {
       if (signal?.aborted) return;
+      touchActivity();
       const clamped = Math.min(
         0.98,
         Math.max(0.05, Number.isFinite(progressRatio) ? progressRatio : 0)
@@ -868,22 +997,31 @@ export async function runWebCodecsVideoTranscode(
       });
     };
 
-    const onAbort = () => {
-      void conversion.cancel();
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
-
     try {
-      await conversion.execute();
+      await runWithStallWatchdog({
+        promise: conversion.execute(),
+        stallTimeoutMs,
+        getLastActivityAt: () => lastActivityAt,
+        onStall: () => {
+          void conversion.cancel();
+        },
+        onAbortCleanup: () => {
+          void conversion.cancel();
+        },
+        signal,
+        stallMessage: 'Penyandian hardware WebCodecs terhenti (15 dtk) — beralih ke mode berikutnya.',
+      });
     } catch (err) {
-      if (err instanceof ConversionCanceledError || signal?.aborted) {
+      if (err instanceof VideoCancelledError || err instanceof ConversionCanceledError || signal?.aborted) {
         throw new VideoCancelledError();
+      }
+      if (err instanceof VideoFallbackRequiredError) {
+        throw err;
       }
       throw new VideoFallbackRequiredError(
         err instanceof Error ? err.message : 'Eksekusi hardware WebCodecs gagal.'
       );
     } finally {
-      signal?.removeEventListener('abort', onAbort);
       gpuProcessor.dispose();
     }
 
