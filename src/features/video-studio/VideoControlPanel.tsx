@@ -829,7 +829,7 @@ export function VideoControlPanel({
 
       {/* TAB 1: UTAMA */}
       {activeTab === 'utama' && (
-        <div key="video-tab-utama" className="km-tab-enter space-y-5">
+        <div key="video-tab-utama" className="km-tab-enter space-y-6">
           <div className="space-y-3">
             <div>
               <h2 className="text-xs font-semibold text-[var(--text-primary)]">Pilih Tujuan</h2>
@@ -838,7 +838,7 @@ export function VideoControlPanel({
               </p>
             </div>
             <div
-              className="no-scrollbar -mx-1 -my-2.5 flex snap-x gap-2.5 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-2 md:gap-2.5 md:overflow-visible md:p-0"
+              className="no-scrollbar -mx-1 -my-2.5 flex snap-x gap-3 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-2 md:gap-3 md:overflow-visible md:p-0"
               role="radiogroup"
               aria-label="Pilih tujuan video"
             >
@@ -857,27 +857,25 @@ export function VideoControlPanel({
                     disabled={isProcessing}
                     data-testid={`preset-${preset.id}`}
                     onClick={() => onSelectPreset(preset.id)}
-                    className={`glass-frosted-card flex min-h-[54px] shrink-0 snap-start flex-col items-start justify-center whitespace-nowrap rounded-2xl border px-3.5 py-3 text-left transition-all duration-150 hover:-translate-y-0.5 active:scale-[0.985] disabled:opacity-60 md:min-h-[60px] md:whitespace-normal ${
+                    className={`glass-frosted-card flex min-h-[68px] min-w-[192px] max-w-[236px] shrink-0 snap-start flex-col items-start justify-between overflow-hidden whitespace-normal rounded-2xl border px-3.5 py-3 text-left transition-all duration-150 hover:-translate-y-0.5 active:scale-[0.985] disabled:opacity-60 md:min-h-[76px] md:min-w-0 md:max-w-full ${
                       selected
                         ? 'border-[var(--border-active)] [background-image:var(--accent-wash-gradient)] text-[var(--text-primary)] ring-1 ring-[var(--border-strong)]'
                         : 'text-[var(--text-secondary)] hover:border-[var(--border-active)]'
                     }`}
                   >
-                    <span className="flex w-full items-center justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span
-                          aria-hidden="true"
-                          className={`h-2 w-2 shrink-0 rounded-full ${badgeMeta.dot}`}
-                        />
-                        <span className="truncate text-xs font-semibold text-[var(--text-primary)]">
-                          {preset.label}
-                        </span>
-                      </span>
-                      <span className="glass-inner-rim shrink-0 rounded-md border px-2 py-0.5 text-[9.5px] font-semibold text-[var(--text-secondary)]">
+                    <span className="mb-1.5 flex w-full min-w-0 items-center justify-between gap-2">
+                      <span
+                        aria-hidden="true"
+                        className={`h-2 w-2 shrink-0 rounded-full ${badgeMeta.dot}`}
+                      />
+                      <span className="glass-inner-rim max-w-full shrink-0 truncate rounded-md border px-2 py-0.5 text-[9.5px] font-semibold leading-tight text-[var(--text-secondary)]">
                         {badgeMeta.tag}
                       </span>
                     </span>
-                    <span className="mt-1.5 text-[11px] leading-snug text-[var(--text-muted)]">
+                    <span className="w-full min-w-0 break-words text-xs font-semibold leading-snug text-[var(--text-primary)]">
+                      {preset.label}
+                    </span>
+                    <span className="mt-1 w-full min-w-0 break-words text-[11px] leading-snug text-[var(--text-muted)]">
                       {preset.targetLimitLabel}
                     </span>
                   </button>
@@ -889,10 +887,10 @@ export function VideoControlPanel({
           {isLongPresetActive && (
             <div
               data-testid="long-video-profile-panel"
-              className="glass-frosted-card space-y-3.5 rounded-[22px] border border-[var(--border-strong)] p-4"
+              className="glass-frosted-card min-w-0 max-w-full space-y-3.5 overflow-hidden rounded-[22px] border border-[var(--border-strong)] p-4"
             >
-              <div className="flex items-center justify-between gap-2.5">
-                <div>
+              <div className="flex min-w-0 items-start justify-between gap-2.5">
+                <div className="min-w-0 flex-1">
                   <h3 className="text-xs font-semibold text-[var(--text-primary)]">
                     Profil Video Panjang (30+ Menit)
                   </h3>
@@ -900,12 +898,12 @@ export function VideoControlPanel({
                     Diproses secara streaming MP4 hemat RAM dengan estimasi ukuran terkontrol.
                   </p>
                 </div>
-                <span className="glass-inner-rim shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold text-[var(--text-primary)]">
+                <span className="glass-inner-rim shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold text-[var(--text-primary)]">
                   30+ Menit
                 </span>
               </div>
               <div
-                className="grid grid-cols-1 gap-2.5 sm:grid-cols-3"
+                className="grid grid-cols-1 gap-3"
                 role="radiogroup"
                 aria-label="Pilih profil video panjang"
               >
@@ -927,23 +925,23 @@ export function VideoControlPanel({
                           presetId: 'long-video',
                         })
                       }
-                      className={`glass-inner-rim flex flex-col items-start justify-between gap-1.5 rounded-xl border p-3 text-left transition-all ${
+                      className={`glass-inner-rim flex min-w-0 max-w-full flex-col items-start justify-between gap-1.5 overflow-hidden rounded-xl border p-3.5 text-left transition-all ${
                         selected
                           ? 'border-[var(--border-active)] [background-image:var(--accent-wash-gradient)] text-[var(--text-primary)] ring-1 ring-[var(--border-strong)]'
                           : 'text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
                       }`}
                     >
-                      <span className="flex w-full items-center justify-between gap-2">
-                        <span className="text-xs font-semibold text-[var(--text-primary)]">
+                      <span className="flex w-full min-w-0 items-center justify-between gap-2">
+                        <span className="min-w-0 break-words text-xs font-semibold text-[var(--text-primary)]">
                           {spec.label}
                         </span>
                         {spec.badge && (
-                          <span className="glass-inner-rim shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-semibold text-[var(--text-primary)]">
+                          <span className="glass-inner-rim shrink-0 whitespace-nowrap rounded border px-2 py-0.5 text-[9.5px] font-semibold text-[var(--text-primary)]">
                             {spec.badge}
                           </span>
                         )}
                       </span>
-                      <span className="text-[10.5px] leading-snug text-[var(--text-muted)]">
+                      <span className="w-full min-w-0 break-words text-[11px] leading-snug text-[var(--text-muted)]">
                         {spec.summary}
                       </span>
                     </button>
@@ -953,7 +951,7 @@ export function VideoControlPanel({
             </div>
           )}
 
-          <div className="glass-frosted-card space-y-4 rounded-[22px] border p-4">
+          <div className="glass-frosted-card min-w-0 max-w-full space-y-4 overflow-hidden rounded-[22px] border p-4">
             {estimatedOutputBytes > 0 && (
               <div
                 data-testid="video-size-estimator"
@@ -971,7 +969,7 @@ export function VideoControlPanel({
               <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                 Format Output
               </span>
-              <div className="no-scrollbar -mx-1 -my-2.5 mt-1.5 flex snap-x gap-2 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-4 md:gap-2 md:overflow-visible md:p-0">
+              <div className="no-scrollbar -mx-1 -my-2.5 mt-1.5 flex min-w-0 max-w-full snap-x gap-2 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-4 md:gap-2.5 md:overflow-visible md:p-0">
                 {VIDEO_FORMAT_OPTIONS.map((opt) => {
                   const active = videoEdit.outputFormat === opt.value;
                   return (
@@ -982,7 +980,7 @@ export function VideoControlPanel({
                       data-testid={`video-fmt-${opt.value}`}
                       aria-pressed={active}
                       onClick={() => onUpdateVideoEdit({ outputFormat: opt.value })}
-                      className={`min-h-[42px] min-w-[74px] shrink-0 snap-start whitespace-nowrap rounded-xl border px-3.5 text-xs font-semibold transition-all disabled:opacity-50 md:min-h-[38px] md:min-w-0 md:px-0 ${
+                      className={`min-h-[42px] min-w-[74px] max-w-full shrink-0 snap-start overflow-hidden whitespace-nowrap rounded-xl border px-3 text-xs font-semibold transition-all disabled:opacity-50 md:min-h-[38px] md:min-w-0 md:px-1.5 ${
                         active
                           ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'glass-inner-rim text-[var(--text-primary)] hover:border-[var(--border-active)]'
@@ -999,7 +997,7 @@ export function VideoControlPanel({
               <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                 Resolusi Output
               </span>
-              <div className="no-scrollbar -mx-1 -my-2.5 mt-1.5 flex snap-x gap-2 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-4 md:gap-2 md:overflow-visible md:p-0">
+              <div className="no-scrollbar -mx-1 -my-2.5 mt-1.5 flex min-w-0 max-w-full snap-x gap-2 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-2 md:gap-2.5 md:overflow-visible md:p-0">
                 {RESOLUTION_OPTIONS.map((opt) => {
                   const isLocked2k = opt.value === '2k' && !deviceProfile.allow2KVideoExport;
                   const active = videoEdit.targetResolution === opt.value;
@@ -1021,13 +1019,15 @@ export function VideoControlPanel({
                           maxHeightPx: opt.maxHeightPx,
                         })
                       }
-                      className={`inline-flex min-h-[44px] shrink-0 snap-start items-center justify-center gap-1 whitespace-nowrap rounded-xl border px-3.5 text-[11.5px] font-medium tabular-nums transition-all disabled:cursor-not-allowed disabled:opacity-45 md:min-h-[40px] md:px-2 md:text-[11px] ${
+                      className={`inline-flex min-h-[44px] min-w-[114px] max-w-full shrink-0 snap-start items-center justify-center gap-1 overflow-hidden whitespace-nowrap rounded-xl border px-3.5 text-[11.5px] font-medium tabular-nums transition-all disabled:cursor-not-allowed disabled:opacity-45 md:min-h-[40px] md:min-w-0 md:px-2.5 md:text-[11px] ${
                         active
                           ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'glass-inner-rim text-[var(--text-primary)] hover:border-[var(--border-active)]'
                       }`}
                     >
-                      <span>{opt.badge ? `${opt.label} · ${opt.badge}` : opt.label}</span>
+                      <span className="truncate">
+                        {opt.badge ? `${opt.label} · ${opt.badge}` : opt.label}
+                      </span>
                       {isLocked2k && <Lock className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />}
                     </button>
                   );
@@ -1047,7 +1047,7 @@ export function VideoControlPanel({
               <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                 Kualitas Video
               </span>
-              <div className="no-scrollbar -mx-1 -my-2.5 mt-1.5 flex snap-x gap-2 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-3 md:gap-2 md:overflow-visible md:p-0">
+              <div className="no-scrollbar -mx-1 -my-2.5 mt-1.5 flex min-w-0 max-w-full snap-x gap-2 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-3 md:gap-2.5 md:overflow-visible md:p-0">
                 {QUALITY_TIER_OPTIONS.map((opt) => {
                   const active = videoEdit.qualityTier === opt.value;
                   return (
@@ -1058,13 +1058,13 @@ export function VideoControlPanel({
                       data-testid={`video-tier-${opt.value}`}
                       aria-pressed={active}
                       onClick={() => onUpdateVideoEdit({ qualityTier: opt.value })}
-                      className={`min-h-[42px] min-w-[98px] shrink-0 snap-start whitespace-nowrap rounded-xl border px-3.5 text-xs font-medium transition-all disabled:opacity-50 md:min-h-[38px] md:min-w-0 md:px-0 ${
+                      className={`min-h-[42px] min-w-[98px] max-w-full shrink-0 snap-start overflow-hidden whitespace-nowrap rounded-xl border px-3.5 text-xs font-medium transition-all disabled:opacity-50 md:min-h-[38px] md:min-w-0 md:px-2 ${
                         active
                           ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'glass-inner-rim text-[var(--text-primary)] hover:border-[var(--border-active)]'
                       }`}
                     >
-                      {opt.label}
+                      <span className="block truncate">{opt.label}</span>
                     </button>
                   );
                 })}
@@ -1114,18 +1114,18 @@ export function VideoControlPanel({
           </div>
 
           {/* Expandable Potong Durasi */}
-          <div className="glass-frosted-card rounded-[22px] border p-4">
+          <div className="glass-frosted-card min-w-0 max-w-full overflow-hidden rounded-[22px] border p-4">
             <button
               type="button"
               data-testid="video-trim-drawer-btn"
               onClick={() => setTrimDrawerOpen((v) => !v)}
-              className="flex min-h-[36px] w-full items-center justify-between text-xs font-semibold text-[var(--text-primary)]"
+              className="flex min-h-[36px] w-full min-w-0 items-center justify-between gap-2 text-xs font-semibold text-[var(--text-primary)]"
             >
-              <span className="flex items-center gap-2">
-                <Scissors className="h-3.5 w-3.5 text-[var(--text-secondary)]" aria-hidden="true" />
-                <span>Potong Durasi</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <Scissors className="h-3.5 w-3.5 shrink-0 text-[var(--text-secondary)]" aria-hidden="true" />
+                <span className="truncate">Potong Durasi</span>
               </span>
-              <span className="flex items-center gap-2.5 text-[11px] text-[var(--text-primary)] tabular-nums">
+              <span className="flex shrink-0 items-center gap-2.5 text-[11px] text-[var(--text-primary)] tabular-nums">
                 <span data-testid="trim-duration-badge">
                   {trim.durationSec.toFixed(1).replace('.', ',')} dtk
                 </span>
@@ -1322,10 +1322,10 @@ export function VideoControlPanel({
 
       {/* TAB 2: TAMPILAN (Model Penjernih Video HD + 1080p HD Enhancer + 7 Live Color Grades) */}
       {activeTab === 'tampilan' && (
-        <div key="video-tab-tampilan" className="km-tab-enter space-y-5">
-          <div className="glass-frosted-card space-y-3.5 rounded-[22px] border p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
+        <div key="video-tab-tampilan" className="km-tab-enter space-y-6">
+          <div className="glass-frosted-card min-w-0 max-w-full space-y-3.5 overflow-hidden rounded-[22px] border p-4">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
                 <span className="block text-xs font-semibold text-[var(--text-primary)]">
                   Model Penjernih Video
                 </span>
@@ -1333,12 +1333,12 @@ export function VideoControlPanel({
                   Pilih tingkat ketajaman agar video tetap bening setelah diunggah.
                 </span>
               </div>
-              <span className="glass-inner-rim shrink-0 rounded-full border px-3 py-1 text-[11px] font-medium text-[var(--text-primary)]">
+              <span className="glass-inner-rim shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-medium text-[var(--text-primary)]">
                 {VIDEO_CLARITY_MODELS.find((m) => m.id === videoEdit.clarityModel)?.title ??
                   'Natural HD'}
               </span>
             </div>
-            <div className="no-scrollbar -mx-1 -my-2.5 flex snap-x gap-2.5 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-2 md:gap-2.5 md:overflow-visible md:p-0">
+            <div className="no-scrollbar -mx-1 -my-2.5 flex snap-x gap-3 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-2 md:gap-3 md:overflow-visible md:p-0">
               {VIDEO_CLARITY_MODELS.map((model) => {
                 const active = videoEdit.clarityModel === model.id;
                 return (
@@ -1349,23 +1349,21 @@ export function VideoControlPanel({
                     data-testid={`video-clarity-model-${model.id}`}
                     aria-pressed={active}
                     onClick={() => onUpdateVideoEdit({ clarityModel: model.id })}
-                    className={`glass-inner-rim flex min-h-[58px] min-w-[168px] shrink-0 snap-start flex-col items-start justify-center rounded-2xl border px-3.5 py-2.5 text-left transition-all duration-150 hover:-translate-y-0.5 md:min-w-0 ${
+                    className={`glass-inner-rim flex min-h-[70px] min-w-[184px] max-w-[224px] shrink-0 snap-start flex-col items-start justify-between overflow-hidden whitespace-normal rounded-2xl border px-3.5 py-3 text-left transition-all duration-150 hover:-translate-y-0.5 md:min-h-[74px] md:min-w-0 md:max-w-full ${
                       active
                         ? 'border-[var(--border-active)] border-l-[3px] border-l-[var(--border-active)] [background-image:var(--accent-wash-gradient)] text-[var(--text-primary)] ring-1 ring-[var(--border-strong)]'
                         : 'text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
                     }`}
                   >
-                    <span className="flex w-full items-center justify-between gap-2">
-                      <span className="truncate whitespace-nowrap text-xs font-semibold text-[var(--text-primary)]">
-                        {model.title}
+                    {model.badge && (
+                      <span className="glass-inner-rim mb-1.5 inline-flex max-w-full shrink-0 truncate rounded-md border px-2 py-0.5 text-[9.5px] font-semibold leading-tight text-[var(--text-secondary)]">
+                        {model.badge}
                       </span>
-                      {model.badge && (
-                        <span className="shrink-0 rounded-md border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-1.5 py-0.5 text-[9px] font-semibold text-[var(--text-secondary)]">
-                          {model.badge}
-                        </span>
-                      )}
+                    )}
+                    <span className="w-full min-w-0 break-words text-xs font-semibold leading-snug text-[var(--text-primary)]">
+                      {model.title}
                     </span>
-                    <span className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-[var(--text-muted)]">
+                    <span className="mt-1 line-clamp-2 w-full min-w-0 text-[11px] leading-snug text-[var(--text-muted)]">
                       {model.desc}
                     </span>
                   </button>
@@ -1403,19 +1401,19 @@ export function VideoControlPanel({
 
       {/* TAB 3: LANJUTAN (Stabilizer, Audio, Subtitle, Ambil Frame) */}
       {activeTab === 'lanjutan' && (
-        <div key="video-tab-lanjutan" className="km-tab-enter space-y-3.5">
+        <div key="video-tab-lanjutan" className="km-tab-enter space-y-4">
           {/* Card: Stabilkan Video */}
-          <div className="glass-frosted-card rounded-[22px] border p-4">
+          <div className="glass-frosted-card min-w-0 max-w-full overflow-hidden rounded-[22px] border p-4">
             <div className="flex items-center justify-between gap-2.5">
               <button
                 type="button"
                 onClick={() =>
                   setAdvancedOpen((prev) => (prev === 'stabilize' ? 'audio' : 'stabilize'))
                 }
-                className="flex flex-1 items-center gap-2 text-left text-xs font-semibold text-[var(--text-primary)]"
+                className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs font-semibold text-[var(--text-primary)]"
               >
-                <Activity className="h-3.5 w-3.5 text-[var(--text-secondary)]" aria-hidden="true" />
-                <span>Stabilkan Video</span>
+                <Activity className="h-3.5 w-3.5 shrink-0 text-[var(--text-secondary)]" aria-hidden="true" />
+                <span className="truncate">Stabilkan Video</span>
               </button>
               <button
                 type="button"
@@ -1428,7 +1426,7 @@ export function VideoControlPanel({
                   });
                   setAdvancedOpen('stabilize');
                 }}
-                className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
+                className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold ${
                   videoEdit.stabilize.enabled
                     ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                     : 'glass-inner-rim text-[var(--text-secondary)]'
@@ -1440,7 +1438,7 @@ export function VideoControlPanel({
 
             {advancedOpen === 'stabilize' && (
               <div data-testid="video-stabilize-card" className="mt-3 space-y-2.5 border-t border-[var(--border-hairline)] pt-3">
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2.5">
                   {(
                     [
                       { value: 'light', label: 'Ringan' },
@@ -1457,7 +1455,7 @@ export function VideoControlPanel({
                           stabilize: { ...videoEdit.stabilize, enabled: true, mode: opt.value },
                         })
                       }
-                      className={`min-h-[36px] rounded-xl border text-xs font-medium ${
+                      className={`min-h-[38px] min-w-0 max-w-full overflow-hidden rounded-xl border px-2.5 text-xs font-medium ${
                         videoEdit.stabilize.mode === opt.value
                           ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'glass-inner-rim text-[var(--text-primary)]'
@@ -1476,18 +1474,18 @@ export function VideoControlPanel({
           </div>
 
           {/* Card: Audio & Suara */}
-          <div className="glass-frosted-card rounded-[22px] border p-4">
+          <div className="glass-frosted-card min-w-0 max-w-full overflow-hidden rounded-[22px] border p-4">
             <button
               type="button"
               onClick={() => setAdvancedOpen('audio')}
-              className="flex w-full items-center justify-between gap-2 text-xs font-semibold text-[var(--text-primary)]"
+              className="flex w-full min-w-0 items-center justify-between gap-2 text-xs font-semibold text-[var(--text-primary)]"
             >
-              <span className="flex items-center gap-2">
-                <Volume2 className="h-3.5 w-3.5 text-[var(--text-secondary)]" aria-hidden="true" />
-                <span>Audio &amp; Suara</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <Volume2 className="h-3.5 w-3.5 shrink-0 text-[var(--text-secondary)]" aria-hidden="true" />
+                <span className="truncate">Audio &amp; Suara</span>
               </span>
               <ChevronDown
-                className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${
+                className={`h-3.5 w-3.5 shrink-0 text-[var(--text-muted)] transition-transform ${
                   advancedOpen === 'audio' ? 'rotate-180' : ''
                 }`}
                 aria-hidden="true"
@@ -1649,7 +1647,7 @@ export function VideoControlPanel({
                       <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                         Kejernihan Audio
                       </span>
-                      <div className="mt-2 grid grid-cols-4 gap-2">
+                      <div className="mt-2 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                         {AUDIO_CLARITY_OPTIONS.map((opt) => (
                           <button
                             key={opt.kbps}
@@ -1661,7 +1659,7 @@ export function VideoControlPanel({
                                 audio: { ...videoEdit.audio, enabled: true, bitrateKbps: opt.kbps },
                               })
                             }
-                            className={`min-h-[38px] rounded-xl border py-1 text-[11px] font-medium ${
+                            className={`min-h-[38px] min-w-0 max-w-full overflow-hidden rounded-xl border px-2 py-1 text-[11px] font-medium ${
                               videoEdit.audio.bitrateKbps === opt.kbps
                                 ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                                 : 'glass-inner-rim text-[var(--text-primary)]'
@@ -1679,18 +1677,18 @@ export function VideoControlPanel({
           </div>
 
           {/* Card: Subtitle / Teks Video */}
-          <div className="glass-frosted-card rounded-[22px] border p-4">
+          <div className="glass-frosted-card min-w-0 max-w-full overflow-hidden rounded-[22px] border p-4">
             <button
               type="button"
               onClick={() => setAdvancedOpen('subtitle')}
-              className="flex w-full items-center justify-between gap-2 text-xs font-semibold text-[var(--text-primary)]"
+              className="flex w-full min-w-0 items-center justify-between gap-2 text-xs font-semibold text-[var(--text-primary)]"
             >
-              <span className="flex items-center gap-2">
-                <Captions className="h-3.5 w-3.5 text-[var(--text-secondary)]" aria-hidden="true" />
-                <span>Subtitle / Teks Video ({videoEdit.subtitle.cues.length})</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <Captions className="h-3.5 w-3.5 shrink-0 text-[var(--text-secondary)]" aria-hidden="true" />
+                <span className="truncate">Subtitle / Teks Video ({videoEdit.subtitle.cues.length})</span>
               </span>
               <ChevronDown
-                className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${
+                className={`h-3.5 w-3.5 shrink-0 text-[var(--text-muted)] transition-transform ${
                   advancedOpen === 'subtitle' ? 'rotate-180' : ''
                 }`}
                 aria-hidden="true"
@@ -1708,17 +1706,17 @@ export function VideoControlPanel({
                   className="sr-only"
                 />
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2.5">
                   <Button
                     variant="secondary"
                     size="sm"
                     disabled={isProcessing}
                     data-testid="upload-subtitle-btn"
                     onClick={() => subFileInputRef.current?.click()}
-                    className="px-2.5 text-[11px]"
+                    className="min-w-0 max-w-full overflow-hidden px-2.5 text-[11px]"
                   >
                     <Upload className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                    <span>Unggah SRT/VTT</span>
+                    <span className="truncate">Unggah SRT/VTT</span>
                   </Button>
                   <Button
                     variant="secondary"
@@ -1726,10 +1724,10 @@ export function VideoControlPanel({
                     disabled={isProcessing}
                     data-testid="add-subtitle-cue-btn"
                     onClick={handleAddBlankCue}
-                    className="px-2.5 text-[11px]"
+                    className="min-w-0 max-w-full overflow-hidden px-2.5 text-[11px]"
                   >
                     <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                    <span>Tambah Teks</span>
+                    <span className="truncate">Tambah Teks</span>
                   </Button>
                 </div>
 
@@ -1743,7 +1741,7 @@ export function VideoControlPanel({
                   <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                     Tampilan Teks
                   </span>
-                  <div className="mt-1 grid grid-cols-2 gap-1.5">
+                  <div className="mt-1.5 grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       disabled={isProcessing}
@@ -1753,13 +1751,13 @@ export function VideoControlPanel({
                           subtitle: { ...videoEdit.subtitle, enabled: true, mode: 'hardsub' },
                         })
                       }
-                      className={`min-h-[36px] rounded-xl border px-2.5 text-[11px] font-semibold ${
+                      className={`min-h-[38px] min-w-0 max-w-full overflow-hidden rounded-xl border px-2.5 text-[11px] font-semibold ${
                         videoEdit.subtitle.mode === 'hardsub'
                           ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'glass-inner-rim text-[var(--text-primary)]'
                       }`}
                     >
-                      Tanam di Video
+                      <span className="block truncate">Tanam di Video</span>
                     </button>
                     <button
                       type="button"
@@ -1770,13 +1768,13 @@ export function VideoControlPanel({
                           subtitle: { ...videoEdit.subtitle, enabled: true, mode: 'softsub' },
                         })
                       }
-                      className={`min-h-[36px] rounded-xl border px-2.5 text-[11px] font-semibold ${
+                      className={`min-h-[38px] min-w-0 max-w-full overflow-hidden rounded-xl border px-2.5 text-[11px] font-semibold ${
                         videoEdit.subtitle.mode === 'softsub'
                           ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                           : 'glass-inner-rim text-[var(--text-primary)]'
                       }`}
                     >
-                      Teks Terpisah
+                      <span className="block truncate">Teks Terpisah</span>
                     </button>
                   </div>
                 </div>
@@ -1911,18 +1909,18 @@ export function VideoControlPanel({
           </div>
 
           {/* Card: Ambil Foto dari Frame */}
-          <div className="glass-frosted-card rounded-[22px] border p-4">
+          <div className="glass-frosted-card min-w-0 max-w-full overflow-hidden rounded-[22px] border p-4">
             <button
               type="button"
               onClick={() => setAdvancedOpen('frame')}
-              className="flex w-full items-center justify-between gap-2 text-xs font-semibold text-[var(--text-primary)]"
+              className="flex w-full min-w-0 items-center justify-between gap-2 text-xs font-semibold text-[var(--text-primary)]"
             >
-              <span className="flex items-center gap-2">
-                <Camera className="h-3.5 w-3.5 text-[var(--text-secondary)]" aria-hidden="true" />
-                <span>Ambil Foto dari Frame</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <Camera className="h-3.5 w-3.5 shrink-0 text-[var(--text-secondary)]" aria-hidden="true" />
+                <span className="truncate">Ambil Foto dari Frame</span>
               </span>
               <ChevronDown
-                className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${
+                className={`h-3.5 w-3.5 shrink-0 text-[var(--text-muted)] transition-transform ${
                   advancedOpen === 'frame' ? 'rotate-180' : ''
                 }`}
                 aria-hidden="true"
@@ -1939,16 +1937,16 @@ export function VideoControlPanel({
                   size="sm"
                   data-testid="capture-frame-btn"
                   onClick={onCaptureFrame}
-                  className="w-full"
+                  className="w-full min-w-0 max-w-full overflow-hidden"
                 >
-                  <Camera className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Ambil Foto dari Frame Ini</span>
+                  <Camera className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">Ambil Foto dari Frame Ini</span>
                 </Button>
 
                 {capturedFrame && (
                   <div
                     data-testid="captured-frame-card"
-                    className="glass-inner-rim flex flex-col gap-2.5 rounded-2xl border p-3"
+                    className="glass-inner-rim flex min-w-0 max-w-full flex-col gap-2.5 overflow-hidden rounded-2xl border p-3"
                   >
                     <img
                       src={capturedFrame.url}
@@ -1960,19 +1958,19 @@ export function VideoControlPanel({
                         href={capturedFrame.url}
                         download={capturedFrame.file.name}
                         data-testid="download-frame-link"
-                        className="glass-inner-rim inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border px-3 py-1.5 text-center text-[11px] font-semibold leading-tight text-[var(--text-primary)] hover:border-[var(--border-active)]"
+                        className="glass-inner-rim inline-flex min-h-[40px] min-w-0 max-w-full items-center justify-center gap-1.5 overflow-hidden rounded-xl border px-3 py-1.5 text-center text-[11px] font-semibold leading-tight text-[var(--text-primary)] hover:border-[var(--border-active)]"
                       >
                         <Download className="h-3 w-3 shrink-0" aria-hidden="true" />
-                        <span>Unduh PNG</span>
+                        <span className="truncate">Unduh PNG</span>
                       </a>
                       <button
                         type="button"
                         data-testid="edit-frame-as-photo-btn"
                         onClick={onEditCapturedFrameAsPhoto}
-                        className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-full bg-[var(--accent-primary)] px-3 py-1.5 text-center text-[11px] font-semibold leading-tight text-[var(--ink-on-accent)] hover:bg-[var(--accent-primary-hover)]"
+                        className="inline-flex min-h-[40px] min-w-0 max-w-full items-center justify-center gap-1.5 overflow-hidden rounded-full bg-[var(--accent-primary)] px-3 py-1.5 text-center text-[11px] font-semibold leading-tight text-[var(--ink-on-accent)] hover:bg-[var(--accent-primary-hover)]"
                       >
                         <ImagePlus className="h-3 w-3 shrink-0" aria-hidden="true" />
-                        <span>Edit di Foto</span>
+                        <span className="truncate">Edit di Foto</span>
                       </button>
                     </div>
                   </div>

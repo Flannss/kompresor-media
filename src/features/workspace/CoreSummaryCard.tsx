@@ -124,17 +124,17 @@ export function CoreSummaryCard({
     <section
       data-testid="core-summary-card"
       aria-label="Ringkasan Inti"
-      className={`glass-frosted-card rounded-[22px] border ${
-        compactOnDesktop ? 'p-4 lg:rounded-2xl lg:px-4 lg:py-3' : 'p-4'
+      className={`glass-frosted-card min-w-0 max-w-full overflow-hidden rounded-[22px] border ${
+        compactOnDesktop ? 'p-4 lg:rounded-2xl lg:px-4 lg:py-3.5' : 'p-4'
       }`}
     >
       <div
-        className={`flex items-center justify-between gap-3 ${
-          compactOnDesktop ? 'mb-2.5 lg:mb-2' : 'mb-2.5'
+        className={`flex min-w-0 items-center justify-between gap-3 ${
+          compactOnDesktop ? 'mb-3 lg:mb-2.5' : 'mb-3'
         }`}
       >
         <h2
-          className={`font-semibold uppercase tracking-wider text-[var(--text-muted)] ${
+          className={`min-w-0 truncate font-semibold uppercase tracking-wider text-[var(--text-muted)] ${
             compactOnDesktop ? 'text-[11px] lg:text-[10.5px]' : 'text-[11px]'
           }`}
         >
@@ -143,7 +143,7 @@ export function CoreSummaryCard({
         {elapsedSecText && (
           <span
             data-testid="core-summary-elapsed"
-            className="text-[11px] font-medium text-[var(--text-muted)] tabular-nums"
+            className="shrink-0 text-[11px] font-medium text-[var(--text-muted)] tabular-nums"
           >
             {elapsedSecText}
           </span>
@@ -153,7 +153,7 @@ export function CoreSummaryCard({
       <div
         className={`grid grid-cols-2 text-xs tabular-nums ${
           compactOnDesktop
-            ? 'gap-3.5 lg:grid-cols-3 lg:gap-x-3.5 lg:gap-y-2.5'
+            ? 'gap-3.5 lg:gap-x-4 lg:gap-y-2.5'
             : 'gap-3.5'
         }`}
       >
@@ -170,10 +170,10 @@ export function CoreSummaryCard({
 
         <div className="min-w-0 space-y-1">
           <span className="block text-[10.5px] leading-snug text-[var(--text-muted)]">Ukuran</span>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <span
               data-testid="core-summary-size"
-              className="break-words text-[11.5px] font-semibold leading-snug text-[var(--text-primary)] sm:text-xs"
+              className="max-w-full break-words text-[11.5px] font-semibold leading-snug text-[var(--text-primary)] sm:text-xs"
             >
               {isPreviewPhotoResult
                 ? outputBytes !== null
@@ -186,7 +186,7 @@ export function CoreSummaryCard({
             {savingsBadge && (
               <span
                 data-testid="core-summary-savings"
-                className={`rounded-md px-2 py-0.5 text-[10px] font-semibold leading-snug ${
+                className={`max-w-full rounded-md px-2 py-0.5 text-[10px] font-semibold leading-snug ${
                   savingsPositive
                     ? 'bg-[var(--status-ok-bg)] text-[var(--status-ok-ink)]'
                     : 'glass-inner-rim border text-[var(--text-secondary)]'
@@ -200,7 +200,7 @@ export function CoreSummaryCard({
               imageProcessResult.sharpnessDeltaPct > 0 && (
                 <span
                   data-testid="core-summary-sharpness"
-                  className="glass-inner-rim rounded-md border px-2 py-0.5 text-[10px] font-semibold leading-snug text-[var(--text-primary)] tabular-nums"
+                  className="glass-inner-rim max-w-full rounded-md border px-2 py-0.5 text-[10px] font-semibold leading-snug text-[var(--text-primary)] tabular-nums"
                 >
                   Ketajaman +{imageProcessResult.sharpnessDeltaPct}%
                 </span>
@@ -218,7 +218,7 @@ export function CoreSummaryCard({
           </span>
         </div>
 
-        <div className={`min-w-0 ${compactOnDesktop ? 'lg:col-span-3' : ''}`}>
+        <div className={`min-w-0 ${compactOnDesktop ? 'col-span-2' : ''}`}>
           <div className={compactOnDesktop ? 'lg:flex lg:items-center lg:gap-2.5' : ''}>
             <span
               className={`block text-[10.5px] leading-snug text-[var(--text-muted)] ${
@@ -229,14 +229,14 @@ export function CoreSummaryCard({
             </span>
             <div
               data-testid="core-summary-modules"
-              className={`flex flex-wrap gap-1.5 ${
+              className={`flex min-w-0 flex-wrap gap-1.5 ${
                 compactOnDesktop ? 'mt-1.5 lg:mt-0 lg:gap-1.5' : 'mt-1.5'
               }`}
             >
               {activeModules.map((mod) => (
                 <span
                   key={mod}
-                  className="glass-inner-rim rounded-md border px-2 py-0.5 text-[10.5px] font-medium leading-snug text-[var(--text-secondary)]"
+                  className="glass-inner-rim max-w-full truncate rounded-md border px-2 py-0.5 text-[10.5px] font-medium leading-snug text-[var(--text-secondary)]"
                 >
                   {mod}
                 </span>
@@ -249,7 +249,7 @@ export function CoreSummaryCard({
       {!isImage && videoProcessResult && (
         <p
           data-testid="video-hd-proof-badge"
-          className="glass-inner-rim mt-2.5 rounded-xl border px-3 py-1.5 text-[10.5px] font-semibold leading-snug text-[var(--text-primary)] tabular-nums"
+          className="glass-inner-rim mt-3 max-w-full break-words rounded-xl border px-3 py-2 text-[10.5px] font-semibold leading-snug text-[var(--text-primary)] tabular-nums"
         >
           Hasil HD · {videoProcessResult.outputWidth}×{videoProcessResult.outputHeight}
           {videoProcessResult.appliedFps ? ` · ${videoProcessResult.appliedFps} fps` : ''}

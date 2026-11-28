@@ -693,7 +693,7 @@ async function executeFfmpegTranscode(
       elapsedMs: performance.now() - t0,
     });
 
-    const presetTag = profile.performanceTier === 'desktop' ? 'veryfast' : 'superfast';
+    const presetTag = built.encoderPreset;
     const engineDetailParts = [
       `ffmpeg-wasm-st (${presetTag})`,
       mountedViaWorkerFs ? 'workerfs-zero-copy' : '',

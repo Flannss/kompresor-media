@@ -93,22 +93,22 @@ export function QueuePanel({
         data-testid="queue-strip-mobile"
         className="flex flex-col gap-2 border-b border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3.5 py-2 sm:px-5 lg:hidden"
       >
-        <div className="flex items-center justify-between gap-2 text-xs">
-          <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--text-primary)] tabular-nums">
-            <span>{batchRunning && batchStatusLabel ? batchStatusLabel : 'Antrean'}</span>
-            <span className="rounded-full border border-[var(--border-strong)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--text-primary)]">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold text-[var(--text-primary)] tabular-nums">
+            <span className="truncate">{batchRunning && batchStatusLabel ? batchStatusLabel : 'Antrean'}</span>
+            <span className="shrink-0 rounded-full border border-[var(--border-strong)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--text-primary)]">
               {items.length}/{maxTotal}
             </span>
           </span>
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
             {sameKindCount >= 2 && (
               <button
                 type="button"
                 data-testid="queue-apply-all-mobile"
                 onClick={onApplyToAll}
-                className="inline-flex min-h-[34px] items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 text-[11px] font-medium text-[var(--text-secondary)] hover:border-[var(--border-active)] hover:text-[var(--text-primary)]"
+                className="inline-flex min-h-[34px] shrink-0 items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-elevated)] px-2.5 text-[11px] font-medium text-[var(--text-secondary)] hover:border-[var(--border-active)] hover:text-[var(--text-primary)]"
               >
-                <CopyCheck className="h-3 w-3" aria-hidden="true" />
+                <CopyCheck className="h-3 w-3 shrink-0" aria-hidden="true" />
                 <span>Samakan</span>
               </button>
             )}
@@ -116,15 +116,15 @@ export function QueuePanel({
               type="button"
               disabled={batchRunning}
               onClick={onProcessAll}
-              className="inline-flex min-h-[34px] items-center gap-1 rounded-full bg-[var(--accent-primary)] px-3 text-[11px] font-semibold text-[var(--ink-on-accent)] disabled:opacity-50"
+              className="inline-flex min-h-[34px] shrink-0 items-center gap-1 rounded-full bg-[var(--accent-primary)] px-3 text-[11px] font-semibold text-[var(--ink-on-accent)] disabled:opacity-50"
             >
-              <Play className="h-3 w-3" aria-hidden="true" />
+              <Play className="h-3 w-3 shrink-0" aria-hidden="true" />
               <span>{batchRunning ? `${batchCompleted}/${batchTotal}` : `Proses Semua`}</span>
             </button>
           </div>
         </div>
 
-        <div className="no-scrollbar -my-2.5 flex snap-x items-center gap-2.5 overflow-x-auto py-2.5">
+        <div className="no-scrollbar -my-2.5 flex min-w-0 max-w-full snap-x items-center gap-2.5 overflow-x-auto py-2.5">
           {items.map((item) => {
             const active = item.id === activeItemId;
             const badge = getStatusBadge(item.status);
@@ -133,7 +133,7 @@ export function QueuePanel({
             return (
               <div
                 key={item.id}
-                className={`glass-inner-rim flex shrink-0 snap-start items-center gap-2 rounded-2xl border p-2 transition-colors ${
+                className={`glass-inner-rim flex min-w-0 max-w-full shrink-0 snap-start items-center gap-2 overflow-hidden rounded-2xl border p-2 transition-colors ${
                   active
                     ? 'border-[var(--border-active)] bg-[var(--bg-subtle)]'
                     : ''

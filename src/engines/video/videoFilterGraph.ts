@@ -318,6 +318,7 @@ export interface BuiltFfmpegArgs {
   outputFileNameOnFs: string;
   subtitleFileNameOnFs: string | null;
   filterGraph: BuiltFfmpegFilterGraph;
+  encoderPreset: 'veryfast' | 'superfast';
 }
 
 export function buildFfmpegArgs(params: {
@@ -388,6 +389,24 @@ export function buildFfmpegArgs(params: {
 
   args.push('-vf', fg.vfChain);
 
+  // Enforce strict Constant Frame Rate when target FPS is selected (fixes VFR phone stutter)
+  if (edit.fpsCap && edit.fpsCap > 0) {
+    args.push('-fps_mode', 'cfr');
+  }
+
+  // Reserve superfast+fastdecode exclusively for explicit low-RAM/720p mobile saves;
+  // use veryfast without fastdecode everywhere else for smooth motion & B-frame efficiency.
+  const isExplicitMobileLightMode =
+    isMobileTier &&
+    (edit.qualityTier === 'light' ||
+      edit.targetResolution === '720p' ||
+      edit.presetId === 'web-light' ||
+      edit.presetId === 'whatsapp-fast');
+  const encoderPreset: 'veryfast' | 'superfast' = isExplicitMobileLightMode
+    ? 'superfast'
+    : 'veryfast';
+  const gopFps = edit.fpsCap && edit.fpsCap > 0 ? Math.min(60, Math.round(edit.fpsCap)) : 30;
+
   if (edit.outputFormat === 'webm') {
     const kbps = Math.max(400, Math.round(edit.targetBitrateBps / 1000));
     args.push(
@@ -413,8 +432,8 @@ export function buildFfmpegArgs(params: {
       '-level',
       '4.1',
       '-preset',
-      isMobileTier ? 'superfast' : 'veryfast',
-      ...(isMobileTier ? ['-tune', 'fastdecode'] : []),
+      encoderPreset,
+      ...(isExplicitMobileLightMode ? ['-tune', 'fastdecode'] : []),
       '-crf',
       String(crf),
       '-maxrate',
@@ -432,9 +451,9 @@ export function buildFfmpegArgs(params: {
       '-color_range',
       'tv',
       '-g',
-      '60',
+      String(gopFps * 2),
       '-keyint_min',
-      '30',
+      String(gopFps),
       '-sc_threshold',
       edit.presetId === 'vlog-hd' ? '40' : '0',
       ...(edit.presetId === 'vlog-hd' ? ['-x264-params', 'aq-mode=2'] : [])
@@ -447,9 +466,10 @@ export function buildFfmpegArgs(params: {
   if (isAudioMuted(edit) || sourceMetadata.hasAudioHint === false) {
     args.push('-an');
   } else {
-    if (fg.afChain) {
-      args.push('-af', fg.afChain);
-    }
+    const effectiveAfChain = fg.afChain
+      ? `${fg.afChain},aresample=async=1:first_pts=0`
+      : 'aresample=async=1:first_pts=0';
+    args.push('-af', effectiveAfChain);
     const aBitrate = getEffectiveAudioBitrateKbps(edit);
     if (edit.outputFormat === 'webm') {
       args.push('-c:a', 'libopus', '-b:a', `${aBitrate}k`);
@@ -475,5 +495,6 @@ export function buildFfmpegArgs(params: {
     outputFileNameOnFs,
     subtitleFileNameOnFs: attachSoftsub ? (subtitleInputFileName ?? null) : null,
     filterGraph: fg,
+    encoderPreset,
   };
 }

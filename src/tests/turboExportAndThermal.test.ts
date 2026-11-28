@@ -132,7 +132,7 @@ describe('KM-T016 Turbo Export Speed & Mobile Thermal Safety', () => {
     expect(shouldUseFfmpegBackend(stabilized)).toBe(true);
   });
 
-  it('uses fast thermal-safe superfast + fastdecode on mobile FFmpeg fallback and omits slow 3D hqdn3d on Natural HD / Sharp 1080p', () => {
+  it('uses smooth veryfast on mobile 1080p HD, reserves superfast+fastdecode for mobile 720p/light, and omits slow 3D hqdn3d on Natural HD', () => {
     const waStatus = structuredClone(getMediaPreset('whatsapp-status').video);
     const mobileBuilt = buildFfmpegArgs({
       inputFileNameOnFs: 'input.mp4',
@@ -144,13 +144,29 @@ describe('KM-T016 Turbo Export Speed & Mobile Thermal Safety', () => {
     expect(mobileBuilt.filterGraph.vfChain).not.toContain('hqdn3d=');
     expect(mobileBuilt.filterGraph.vfChain).toContain('scale=1920:1080:flags=lanczos,setsar=1');
     expect(mobileBuilt.filterGraph.vfChain).toContain('unsharp=5:5:0.36:5:5:0.0');
-    expect(mobileBuilt.args[mobileBuilt.args.indexOf('-preset') + 1]).toBe('superfast');
-    expect(mobileBuilt.args[mobileBuilt.args.indexOf('-tune') + 1]).toBe('fastdecode');
+    expect(mobileBuilt.encoderPreset).toBe('veryfast');
+    expect(mobileBuilt.args[mobileBuilt.args.indexOf('-preset') + 1]).toBe('veryfast');
+    expect(mobileBuilt.args).not.toContain('-tune');
     expect(mobileBuilt.args[mobileBuilt.args.indexOf('-pix_fmt') + 1]).toBe('yuv420p');
     expect(mobileBuilt.args[mobileBuilt.args.indexOf('-colorspace') + 1]).toBe('bt709');
     expect(mobileBuilt.args[mobileBuilt.args.indexOf('-maxrate') + 1]).toBe('4800k');
     expect(mobileBuilt.args[mobileBuilt.args.indexOf('-bufsize') + 1]).toBe('9600k');
     expect(mobileBuilt.args[mobileBuilt.args.indexOf('-threads') + 1]).toBe('1');
+
+    // Explicit mobile light / 720p mode uses superfast + fastdecode
+    const mobileLightEdit = structuredClone(waStatus);
+    mobileLightEdit.qualityTier = 'light';
+    mobileLightEdit.targetResolution = '720p';
+    mobileLightEdit.maxHeightPx = 720;
+    const mobileLightBuilt = buildFfmpegArgs({
+      inputFileNameOnFs: 'input.mp4',
+      sourceMetadata: { width: 1280, height: 720, durationSec: 12, hasAudioHint: true },
+      edit: mobileLightEdit,
+      performanceTier: 'low-memory-mobile',
+    });
+    expect(mobileLightBuilt.encoderPreset).toBe('superfast');
+    expect(mobileLightBuilt.args[mobileLightBuilt.args.indexOf('-preset') + 1]).toBe('superfast');
+    expect(mobileLightBuilt.args[mobileLightBuilt.args.indexOf('-tune') + 1]).toBe('fastdecode');
 
     // Malam & Minim Cahaya still preserves temporal hqdn3d cleanly even on mobile
     const nightEdit = structuredClone(waStatus);

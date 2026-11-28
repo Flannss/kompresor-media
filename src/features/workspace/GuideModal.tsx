@@ -47,7 +47,7 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
             <div className="min-w-0">
               <h2
                 id="guide-modal-title"
-                className="font-editorial text-base font-semibold leading-snug text-[var(--text-primary)] sm:text-lg"
+                className="font-editorial break-words text-base font-semibold leading-snug text-[var(--text-primary)] sm:text-lg"
               >
                 Panduan Singkat Kompresor Media
               </h2>
@@ -68,8 +68,8 @@ export function GuideModal({ open, onClose }: GuideModalProps) {
           </button>
         </div>
 
-        <div className="mt-4 space-y-3.5 overflow-y-auto pr-1 text-xs leading-relaxed text-[var(--text-secondary)]">
-          <section className="glass-inner-rim rounded-2xl border p-4">
+        <div className="mt-4 min-w-0 space-y-3.5 overflow-x-hidden overflow-y-auto pr-1 text-xs leading-relaxed text-[var(--text-secondary)]">
+          <section className="glass-inner-rim min-w-0 max-w-full overflow-hidden break-words rounded-2xl border p-4">
             <h3 className="font-semibold leading-snug text-[var(--text-primary)]">1. Alur 3 Langkah</h3>
             <ol className="mt-2 list-decimal space-y-1.5 pl-4 leading-relaxed">
               <li>

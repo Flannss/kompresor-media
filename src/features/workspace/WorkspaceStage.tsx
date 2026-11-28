@@ -678,14 +678,14 @@ export function WorkspaceStage({
           <div
             data-testid="studio-stage-dock"
             onPointerMove={handleGlassPointerMove}
-            className="glass-dynamic-pill my-1 flex max-w-full flex-wrap items-center justify-center gap-2 rounded-[22px] border px-3 py-2 sm:my-0 sm:rounded-full"
+            className="glass-dynamic-pill my-1 flex min-w-0 max-w-full flex-wrap items-center justify-center gap-2 overflow-hidden rounded-[22px] border px-3 py-2 sm:my-0 sm:rounded-full"
           >
             {isImage ? (
               <>
                 <div
                   role="group"
                   aria-label="Zoom Detail"
-                  className="glass-inner-rim relative z-10 inline-flex items-center gap-0.5 rounded-full border p-0.5 text-[11px]"
+                  className="glass-inner-rim relative z-10 inline-flex max-w-full flex-wrap items-center gap-0.5 overflow-hidden rounded-full border p-0.5 text-[11px]"
                 >
                   {(
                     [

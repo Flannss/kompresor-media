@@ -1,4 +1,5 @@
 import type { VideoProcessProgress, VideoProcessRequest } from '../contracts';
+import { getDeviceProfile } from '../../shared/utils/deviceCapability';
 import { compute1080pTargetDimensions } from '../shared/colorGrades';
 import { VideoCancelledError } from './videoErrors';
 import {
@@ -63,8 +64,37 @@ export function canUseMediaRecorderMp4(): boolean {
   return pickSupportedMp4RecorderMime() !== null;
 }
 
+export const MEDIARECORDER_PROGRESS_THROTTLE_MS = 500;
+export const MEDIARECORDER_MAX_DROP_RATIO = 0.2;
+
+export function evaluateMediaRecorderSmoothness(params: {
+  capturedFrames: number;
+  durationSec: number;
+  expectedFps: number;
+}): { expectedFrames: number; dropRatio: number; isSmooth: boolean } {
+  const { capturedFrames, durationSec, expectedFps } = params;
+  if (
+    !Number.isFinite(durationSec) ||
+    durationSec < 1.5 ||
+    !Number.isFinite(expectedFps) ||
+    expectedFps <= 0
+  ) {
+    return { expectedFrames: 0, dropRatio: 0, isSmooth: true };
+  }
+  const expectedFrames = Math.max(1, Math.floor(durationSec * expectedFps));
+  const safeCaptured = Number.isFinite(capturedFrames) ? Math.max(0, capturedFrames) : 0;
+  const dropRatio = Math.max(0, Number((1 - safeCaptured / expectedFrames).toFixed(4)));
+  return {
+    expectedFrames,
+    dropRatio,
+    isSmooth: dropRatio <= MEDIARECORDER_MAX_DROP_RATIO,
+  };
+}
+
 type VideoWithRvfc = HTMLVideoElement & {
-  requestVideoFrameCallback?: (cb: () => void) => number;
+  requestVideoFrameCallback?: (
+    cb: (now: DOMHighResTimeStamp, metadata: { mediaTime: number; presentedFrames: number }) => void
+  ) => number;
   cancelVideoFrameCallback?: (handle: number) => void;
 };
 
@@ -301,6 +331,11 @@ export async function runMediaRecorderVideoTranscode(
       );
     }
 
+    const isMobileDevice = getDeviceProfile().performanceTier !== 'desktop';
+    let capturedFrames = 0;
+    let consecutiveSlowFilterFrames = 0;
+    let disableSoftwareFilter = false;
+
     const chunks: BlobPart[] = [];
     recorder.ondataavailable = (ev) => {
       if (ev.data && ev.data.size > 0) {
@@ -308,18 +343,32 @@ export async function runMediaRecorderVideoTranscode(
       }
     };
 
-    const drawFrame = () => {
+    const drawFrame = (): number => {
+      const drawStart = performance.now();
       const srcW = Math.max(1, video.videoWidth || sourceMetadata.width);
       const srcH = Math.max(1, video.videoHeight || sourceMetadata.height);
       const rect = computeDrawRect(srcW, srcH, dims.width, dims.height, coverFit);
       ctx.save();
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, dims.width, dims.height);
-      if ('filter' in ctx && visual.cssFilter !== 'none') {
+      const applyFilter = !disableSoftwareFilter && visual.cssFilter !== 'none';
+      if ('filter' in ctx && applyFilter) {
         ctx.filter = visual.cssFilter;
       }
       ctx.drawImage(video, rect.dx, rect.dy, rect.dw, rect.dh);
       ctx.restore();
+      const drawElapsedMs = performance.now() - drawStart;
+      if (isMobileDevice && applyFilter) {
+        if (drawElapsedMs > 16) {
+          consecutiveSlowFilterFrames += 1;
+          if (consecutiveSlowFilterFrames >= 3) {
+            disableSoftwareFilter = true;
+          }
+        } else {
+          consecutiveSlowFilterFrames = 0;
+        }
+      }
+      return drawElapsedMs;
     };
 
     const stopPromise = new Promise<void>((resolve, reject) => {
@@ -329,6 +378,8 @@ export async function runMediaRecorderVideoTranscode(
       }
       let finished = false;
       let lastDrawAt = -1000;
+      let lastProgressEmitAt = -MEDIARECORDER_PROGRESS_THROTTLE_MS;
+      let lastPresentedMediaTime = -1;
       const frameIntervalMs = 1000 / targetFps;
       const playStartedAt = Date.now();
       let lastAdvanceAt = playStartedAt;
@@ -453,11 +504,11 @@ export async function runMediaRecorderVideoTranscode(
         }
       }, 400);
 
-      const tick = (now: number) => {
+      const tick = (now: number, frameMeta?: { mediaTime: number }) => {
         if (finished || cancelled || signal?.aborted) {
           return;
         }
-        const curTime = video.currentTime;
+        const curTime = frameMeta?.mediaTime ?? video.currentTime;
         if (Math.abs(curTime - lastObservedTime) >= 0.01) {
           lastObservedTime = curTime;
           lastAdvanceAt = Date.now();
@@ -468,28 +519,41 @@ export async function runMediaRecorderVideoTranscode(
           return;
         }
 
-        if (now - lastDrawAt >= frameIntervalMs * 0.88) {
+        const isNewDecodedFrame =
+          !frameMeta ||
+          lastPresentedMediaTime < 0 ||
+          frameMeta.mediaTime > lastPresentedMediaTime + 1e-4;
+
+        if (isNewDecodedFrame && now - lastDrawAt >= frameIntervalMs * 0.85) {
+          if (frameMeta) {
+            lastPresentedMediaTime = frameMeta.mediaTime;
+          }
           lastDrawAt = now;
           drawFrame();
-          const ratio = Math.min(
-            0.97,
-            Math.max(
-              0.08,
-              (curTime - trim.startSec) / Math.max(0.1, trim.durationSec)
-            )
-          );
-          onProgress({
-            requestId,
-            backend: 'mediarecorder-native',
-            stage: 'transcoding',
-            ratio,
-            elapsedMs: performance.now() - t0,
-            detail: 'Menyandikan MP4 dengan Mode Cepat Hardware HP…',
-          });
+          capturedFrames += 1;
+
+          if (now - lastProgressEmitAt >= MEDIARECORDER_PROGRESS_THROTTLE_MS) {
+            lastProgressEmitAt = now;
+            const ratio = Math.min(
+              0.97,
+              Math.max(
+                0.08,
+                (curTime - trim.startSec) / Math.max(0.1, trim.durationSec)
+              )
+            );
+            onProgress({
+              requestId,
+              backend: 'mediarecorder-native',
+              stage: 'transcoding',
+              ratio,
+              elapsedMs: performance.now() - t0,
+              detail: 'Menyandikan MP4 dengan Mode Cepat Hardware HP…',
+            });
+          }
         }
 
         if (typeof video.requestVideoFrameCallback === 'function') {
-          rvfcId = video.requestVideoFrameCallback(() => tick(performance.now()));
+          rvfcId = video.requestVideoFrameCallback((cbNow, meta) => tick(cbNow, meta));
         } else {
           rafId = requestAnimationFrame((ts) => tick(ts));
         }
@@ -497,7 +561,7 @@ export async function runMediaRecorderVideoTranscode(
 
       // Paint first frame before starting recorder so output never starts black
       drawFrame();
-      recorder.start(250);
+      recorder.start(1000);
 
       video.play().then(
         () => {
@@ -515,6 +579,21 @@ export async function runMediaRecorderVideoTranscode(
 
     if (signal?.aborted || cancelled) {
       throw new VideoCancelledError();
+    }
+
+    const expectedFps = Math.min(
+      targetFps,
+      sourceMetadata.fpsHint && sourceMetadata.fpsHint > 0 ? sourceMetadata.fpsHint : targetFps
+    );
+    const smoothness = evaluateMediaRecorderSmoothness({
+      capturedFrames,
+      durationSec: trim.durationSec,
+      expectedFps,
+    });
+    if (!smoothness.isSmooth) {
+      throw new VideoFallbackRequiredError(
+        `Mode cepat hardware HP melewatkan ${Math.round(smoothness.dropRatio * 100)}% frame — beralih otomatis agar gerakan tetap mulus.`
+      );
     }
 
     const outputBlob = new Blob(chunks, {

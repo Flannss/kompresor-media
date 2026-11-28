@@ -377,7 +377,7 @@ export function PhotoControlPanel({
 
       {/* TAB 1: TUJUAN & FORMAT */}
       {activeTab === 'utama' && (
-        <div key="photo-tab-utama" className="km-tab-enter space-y-5">
+        <div key="photo-tab-utama" className="km-tab-enter space-y-6">
           <div className="space-y-3">
             <div>
               <h2 className="text-xs font-semibold text-[var(--text-primary)]">Pilih Tujuan</h2>
@@ -386,7 +386,7 @@ export function PhotoControlPanel({
               </p>
             </div>
             <div
-              className="no-scrollbar -mx-1 -my-2.5 flex snap-x gap-2.5 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-2 md:gap-2.5 md:overflow-visible md:p-0"
+              className="no-scrollbar -mx-1 -my-2.5 flex snap-x gap-3 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-2 md:gap-3 md:overflow-visible md:p-0"
               role="radiogroup"
               aria-label="Pilih tujuan penggunaan foto"
             >
@@ -404,27 +404,25 @@ export function PhotoControlPanel({
                     aria-checked={selected}
                     data-testid={`preset-${preset.id}`}
                     onClick={() => onSelectPreset(preset.id)}
-                    className={`glass-frosted-card flex min-h-[54px] shrink-0 snap-start flex-col items-start justify-center whitespace-nowrap rounded-2xl border px-3.5 py-3 text-left transition-all duration-150 hover:-translate-y-0.5 active:scale-[0.985] md:min-h-[60px] md:whitespace-normal ${
+                    className={`glass-frosted-card flex min-h-[68px] min-w-[186px] max-w-[230px] shrink-0 snap-start flex-col items-start justify-between overflow-hidden whitespace-normal rounded-2xl border px-3.5 py-3 text-left transition-all duration-150 hover:-translate-y-0.5 active:scale-[0.985] md:min-h-[76px] md:min-w-0 md:max-w-full ${
                       selected
                         ? 'border-[var(--border-active)] [background-image:var(--accent-wash-gradient)] text-[var(--text-primary)] ring-1 ring-[var(--border-strong)]'
                         : 'text-[var(--text-secondary)] hover:border-[var(--border-active)]'
                     }`}
                   >
-                    <span className="flex w-full items-center justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span
-                          aria-hidden="true"
-                          className={`h-2 w-2 shrink-0 rounded-full ${badgeMeta.dot}`}
-                        />
-                        <span className="truncate text-xs font-semibold text-[var(--text-primary)]">
-                          {preset.label}
-                        </span>
-                      </span>
-                      <span className="glass-inner-rim shrink-0 rounded-md border px-2 py-0.5 text-[9.5px] font-semibold text-[var(--text-secondary)]">
+                    <span className="mb-1.5 flex w-full min-w-0 items-center justify-between gap-2">
+                      <span
+                        aria-hidden="true"
+                        className={`h-2 w-2 shrink-0 rounded-full ${badgeMeta.dot}`}
+                      />
+                      <span className="glass-inner-rim max-w-full shrink-0 truncate rounded-md border px-2 py-0.5 text-[9.5px] font-semibold leading-tight text-[var(--text-secondary)]">
                         {badgeMeta.tag}
                       </span>
                     </span>
-                    <span className="mt-1.5 text-[11px] leading-snug text-[var(--text-muted)]">
+                    <span className="w-full min-w-0 break-words text-xs font-semibold leading-snug text-[var(--text-primary)]">
+                      {preset.label}
+                    </span>
+                    <span className="mt-1 w-full min-w-0 break-words text-[11px] leading-snug text-[var(--text-muted)]">
                       {preset.targetLimitLabel}
                     </span>
                   </button>
@@ -433,7 +431,7 @@ export function PhotoControlPanel({
             </div>
           </div>
 
-          <div className="glass-frosted-card space-y-4 rounded-[22px] border p-4">
+          <div className="glass-frosted-card min-w-0 max-w-full space-y-4 overflow-hidden rounded-[22px] border p-4">
             <div>
               <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                 Format Output
@@ -596,17 +594,17 @@ export function PhotoControlPanel({
       {activeTab === 'tampilan' && (
         <div key="photo-tab-tampilan" className="km-tab-enter space-y-5">
           {/* 9 Real Pixel-Level Pro Photo Tools */}
-          <section className="glass-frosted-card space-y-3.5 rounded-[22px] border p-4">
-            <div className="flex items-center justify-between gap-2.5">
-              <div>
-                <h3 className="font-editorial text-[14px] font-semibold text-[var(--text-primary)]">
+          <section className="glass-frosted-card min-w-0 max-w-full space-y-4 overflow-hidden rounded-[22px] border p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2.5">
+              <div className="min-w-0 flex-1">
+                <h3 className="font-editorial text-[14px] font-semibold leading-snug text-[var(--text-primary)]">
                   Alat Sempurnakan Foto
                 </h3>
-                <span className="mt-0.5 hidden text-[12px] leading-relaxed text-[var(--text-muted)] md:block">
+                <span className="mt-1 hidden text-[12px] leading-relaxed text-[var(--text-muted)] md:block">
                   Perbaiki masalah foto tertentu (blur, kabut, foto lama, atau wajah).
                 </span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 {activeTools.length > 0 && (
                   <button
                     type="button"
@@ -617,20 +615,20 @@ export function PhotoControlPanel({
                         { commitHistory: true, preservePreset: true }
                       )
                     }
-                    className="glass-inner-rim inline-flex min-h-[34px] items-center gap-1 rounded-full border px-3 text-[11px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+                    className="glass-inner-rim inline-flex min-h-[34px] shrink-0 items-center gap-1 rounded-full border px-3 text-[11px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
                   >
                     <RotateCcw className="h-3 w-3" aria-hidden="true" />
                     <span>Reset</span>
                   </button>
                 )}
-                <span className="glass-inner-rim rounded-full border border-[var(--border-strong)] px-3 py-1 text-[11px] font-semibold text-[var(--text-primary)] tabular-nums">
+                <span className="glass-inner-rim shrink-0 rounded-full border border-[var(--border-strong)] px-3 py-1 text-[11px] font-semibold text-[var(--text-primary)] tabular-nums">
                   {activeTools.length > 0 ? `${activeTools.length} aktif` : '9 alat'}
                 </span>
               </div>
             </div>
 
             <div
-              className="grid grid-cols-2 gap-2.5"
+              className="grid grid-cols-2 gap-3"
               role="group"
               aria-label="Alat sempurnakan foto"
             >
@@ -645,7 +643,7 @@ export function PhotoControlPanel({
                     aria-pressed={active}
                     title={tool.desc}
                     onClick={() => toggleProTool(tool.id)}
-                    className={`glass-inner-rim flex min-h-[46px] flex-col items-start justify-center rounded-2xl border px-3.5 py-2.5 text-left transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 active:scale-[0.985] md:min-h-[54px] ${
+                    className={`glass-inner-rim flex min-h-[48px] min-w-0 max-w-full flex-col items-start justify-center overflow-hidden rounded-2xl border px-3.5 py-3 text-left transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 active:scale-[0.985] md:min-h-[58px] ${
                       idx === 8 ? 'col-span-2' : ''
                     } ${
                       active
@@ -654,14 +652,14 @@ export function PhotoControlPanel({
                     }`}
                   >
                     <span
-                      className={`flex w-full items-center gap-2 text-[11.5px] font-semibold leading-tight ${
+                      className={`flex w-full min-w-0 items-center gap-2 text-[11.5px] font-semibold leading-tight ${
                         active ? 'text-[var(--text-primary)]' : 'text-[var(--text-primary)]'
                       }`}
                     >
                       <ToolIcon className="h-3.5 w-3.5 shrink-0 opacity-85" aria-hidden="true" />
                       <span className="truncate whitespace-nowrap">{tool.title}</span>
                     </span>
-                    <span className="mt-1 hidden line-clamp-1 text-[10.5px] leading-snug text-[var(--text-muted)] md:block">
+                    <span className="mt-1 hidden line-clamp-2 w-full min-w-0 text-[10.5px] leading-snug text-[var(--text-muted)] md:block">
                       {tool.desc}
                     </span>
                   </button>
@@ -671,7 +669,7 @@ export function PhotoControlPanel({
 
             <p
               data-testid="mobile-active-pro-tool-hint"
-              className="glass-inner-rim rounded-xl border px-3.5 py-2.5 text-[11.5px] leading-relaxed text-[var(--text-secondary)] md:hidden"
+              className="glass-inner-rim min-w-0 max-w-full overflow-hidden rounded-xl border px-3.5 py-2.5 text-[11.5px] leading-relaxed text-[var(--text-secondary)] md:hidden"
             >
               <span className="font-semibold text-[var(--text-primary)]">
                 {activeHintToolMeta.title}:{' '}
@@ -684,7 +682,7 @@ export function PhotoControlPanel({
                 <span className="block text-[11px] font-medium text-[var(--text-secondary)]">
                   Profil Warna (Warnai Foto)
                 </span>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {COLOURISE_PROFILE_OPTIONS.map((opt) => {
                     const selected =
                       (imageEdit.colouriseProfile ?? 'warm-portrait') === opt.id;
@@ -738,8 +736,8 @@ export function PhotoControlPanel({
           </section>
 
           {/* Quality Model Selector */}
-          <section className="glass-frosted-card space-y-3.5 rounded-[22px] border p-4">
-            <div>
+          <section className="glass-frosted-card min-w-0 max-w-full space-y-3.5 overflow-hidden rounded-[22px] border p-4">
+            <div className="min-w-0">
               <h3 className="text-xs font-semibold text-[var(--text-primary)]">
                 Model Kualitas Foto
               </h3>
@@ -748,7 +746,7 @@ export function PhotoControlPanel({
               </p>
             </div>
             <div
-              className="no-scrollbar -mx-1 -my-2.5 flex snap-x gap-2.5 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-2 md:gap-2.5 md:overflow-visible md:p-0"
+              className="no-scrollbar -mx-1 -my-2.5 flex snap-x gap-3 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-2 md:gap-3 md:overflow-visible md:p-0"
               role="radiogroup"
               aria-label="Model kualitas foto"
             >
@@ -767,7 +765,7 @@ export function PhotoControlPanel({
                         { commitHistory: true, preservePreset: true }
                       )
                     }
-                    className={`glass-inner-rim flex min-h-[58px] min-w-[172px] shrink-0 snap-start flex-col items-start justify-center rounded-2xl border px-3.5 py-2.5 text-left transition-all md:min-h-[62px] md:min-w-0 ${
+                    className={`glass-inner-rim flex min-h-[70px] min-w-[184px] max-w-[220px] shrink-0 snap-start flex-col items-start justify-between overflow-hidden whitespace-normal rounded-2xl border px-3.5 py-3 text-left transition-all md:min-h-[74px] md:min-w-0 md:max-w-full ${
                       idx === 4 ? 'md:col-span-2' : ''
                     } ${
                       selected
@@ -775,17 +773,15 @@ export function PhotoControlPanel({
                         : 'hover:border-[var(--border-active)]'
                     }`}
                   >
-                    <span className="flex w-full items-center justify-between gap-2">
-                      <span className="truncate text-xs font-semibold text-[var(--text-primary)]">
-                        {model.title}
+                    {model.badge && (
+                      <span className="glass-inner-rim mb-1.5 inline-flex max-w-full shrink-0 truncate rounded-md border px-2 py-0.5 text-[9.5px] font-semibold leading-tight text-[var(--text-secondary)]">
+                        {model.badge}
                       </span>
-                      {model.badge && (
-                        <span className="glass-inner-rim shrink-0 rounded-md border px-2 py-0.5 text-[9.5px] font-semibold text-[var(--text-secondary)]">
-                          {model.badge}
-                        </span>
-                      )}
+                    )}
+                    <span className="w-full min-w-0 break-words text-xs font-semibold leading-snug text-[var(--text-primary)]">
+                      {model.title}
                     </span>
-                    <span className="mt-1 line-clamp-1 w-full text-[11px] leading-snug text-[var(--text-muted)]">
+                    <span className="mt-1 line-clamp-2 w-full min-w-0 text-[11px] leading-snug text-[var(--text-muted)]">
                       {model.desc}
                     </span>
                   </button>
@@ -793,7 +789,7 @@ export function PhotoControlPanel({
               })}
             </div>
 
-            <div className="glass-inner-rim rounded-2xl border p-4">
+            <div className="glass-inner-rim min-w-0 max-w-full overflow-hidden rounded-2xl border p-4">
               <Slider
                 label="Kekuatan Model"
                 testId="slider-quality-model-strength"
@@ -814,13 +810,13 @@ export function PhotoControlPanel({
           </section>
 
           {/* Target Resolution */}
-          <section className="glass-frosted-card space-y-3.5 rounded-[22px] border p-4">
-            <div className="flex items-center justify-between gap-2.5">
+          <section className="glass-frosted-card min-w-0 max-w-full space-y-3.5 overflow-hidden rounded-[22px] border p-4">
+            <div className="flex min-w-0 items-center justify-between gap-2.5">
               <h3 className="text-xs font-semibold text-[var(--text-primary)]">Target Resolusi</h3>
-              <span className="text-[11px] text-[var(--text-muted)]">Perjelas bertahap</span>
+              <span className="shrink-0 text-[11px] text-[var(--text-muted)]">Perjelas bertahap</span>
             </div>
 
-            <div className="no-scrollbar -mx-1 -my-2.5 flex snap-x gap-2 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-3 md:gap-2 md:overflow-visible md:p-0">
+            <div className="no-scrollbar -mx-1 -my-2.5 flex snap-x gap-2.5 overflow-x-auto px-1 py-2.5 md:mx-0 md:my-0 md:grid md:grid-cols-2 md:gap-2.5 md:overflow-visible md:p-0">
               {TARGET_RESOLUTION_OPTIONS.map((opt) => {
                 const isLocked8k = opt.id === '8k' && !deviceProfile.allow8KPhotoExport;
                 const active = imageEdit.targetResolution === opt.id;
@@ -845,7 +841,7 @@ export function PhotoControlPanel({
                         { commitHistory: true, preservePreset: true }
                       )
                     }
-                    className={`flex min-h-[52px] min-w-[100px] shrink-0 snap-start flex-col items-center justify-center gap-1 whitespace-nowrap rounded-xl border px-3 py-2 text-center transition-all tabular-nums disabled:cursor-not-allowed disabled:opacity-45 md:min-w-0 md:px-2 ${
+                    className={`flex min-h-[56px] min-w-[120px] max-w-full shrink-0 snap-start flex-col items-center justify-center gap-1 overflow-hidden whitespace-nowrap rounded-xl border px-3 py-2.5 text-center transition-all tabular-nums disabled:cursor-not-allowed disabled:opacity-45 md:min-w-0 md:whitespace-normal ${
                       active
                         ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--ink-on-accent)]'
                         : 'glass-inner-rim text-[var(--text-primary)] hover:border-[var(--border-active)]'
@@ -853,10 +849,10 @@ export function PhotoControlPanel({
                   >
                     <span className="flex items-center gap-1 text-[11px] font-semibold">
                       {opt.label}
-                      {isLocked8k && <Lock className="h-2.5 w-2.5" aria-hidden="true" />}
+                      {isLocked8k && <Lock className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />}
                     </span>
                     <span
-                      className={`text-[9.5px] ${
+                      className={`max-w-full break-words text-[10px] leading-snug ${
                         active ? 'text-[var(--ink-on-accent)]/85' : 'text-[var(--text-muted)]'
                       }`}
                     >
@@ -921,10 +917,10 @@ export function PhotoControlPanel({
           </section>
 
           {/* 12 Filter Warna */}
-          <section className="glass-frosted-card space-y-3.5 rounded-[22px] border p-4">
-            <div className="flex items-start justify-between gap-2.5">
-              <div>
-                <h3 className="text-xs font-semibold text-[var(--text-primary)]">
+          <section className="glass-frosted-card min-w-0 max-w-full space-y-4 overflow-hidden rounded-[22px] border p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2.5">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-xs font-semibold leading-snug text-[var(--text-primary)]">
                   Filter Warna (12 Tampilan)
                 </h3>
                 <p className="mt-1 text-[12px] leading-relaxed text-[var(--text-muted)]">
@@ -946,7 +942,7 @@ export function PhotoControlPanel({
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3">
               {PHOTO_FILTER_PRESETS.map((look) => {
                 const active = imageEdit.photoFilterId === look.id;
                 const cssFilter = getPhotoFilterCssPreview(look.id, 100);
@@ -958,13 +954,13 @@ export function PhotoControlPanel({
                     aria-pressed={active}
                     onClick={() => onSelectPhotoFilter(look.id)}
                     title={look.description}
-                    className={`group flex min-w-0 flex-col overflow-hidden rounded-xl border text-left transition-all duration-150 hover:-translate-y-0.5 ${
+                    className={`group flex min-w-0 max-w-full flex-col overflow-hidden rounded-xl border text-left transition-all duration-150 hover:-translate-y-0.5 ${
                       active
                         ? 'glass-inner-rim border-[var(--border-active)] [background-image:var(--accent-wash-gradient)] ring-1 ring-[var(--border-active)]'
                         : 'glass-inner-rim hover:border-[var(--border-active)]'
                     }`}
                   >
-                    <div className="relative h-12 w-full overflow-hidden bg-[var(--bg-subtle)]">
+                    <div className="relative h-14 w-full overflow-hidden bg-[var(--bg-subtle)]">
                       {baseThumbnailUrl ? (
                         <img
                           src={baseThumbnailUrl}
@@ -994,7 +990,7 @@ export function PhotoControlPanel({
                         className="absolute inset-x-0 bottom-0 h-1 opacity-90"
                       />
                     </div>
-                    <div className="w-full px-2.5 py-2">
+                    <div className="w-full min-w-0 px-2.5 py-2">
                       <span className="block truncate text-[11px] font-semibold text-[var(--text-primary)]">
                         {look.title}
                       </span>
@@ -1028,27 +1024,27 @@ export function PhotoControlPanel({
 
       {/* TAB 3: EDIT & BINGKAI */}
       {activeTab === 'edit' && (
-        <div key="photo-tab-edit" className="km-tab-enter flex flex-col gap-4 sm:gap-3.5">
-          <div className="grid grid-cols-2 gap-2.5">
+        <div key="photo-tab-edit" className="km-tab-enter flex min-w-0 max-w-full flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <Button
               variant={isCropping ? 'primary' : 'secondary'}
               size="md"
               data-testid="open-crop-btn"
               onClick={onToggleCrop}
-              className="min-h-[44px] text-xs"
+              className="min-h-[44px] min-w-0 max-w-full overflow-hidden text-xs"
             >
-              <Crop className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>{isCropping ? 'Tutup Potong' : 'Potong / Crop'}</span>
+              <Crop className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">{isCropping ? 'Tutup Potong' : 'Potong / Crop'}</span>
             </Button>
             <Button
               variant="secondary"
               size="md"
               data-testid="rotate-90-btn"
               onClick={onRotate90}
-              className="min-h-[44px] text-xs"
+              className="min-h-[44px] min-w-0 max-w-full overflow-hidden text-xs"
             >
-              <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>
+              <RotateCw className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">
                 Putar 90°{imageEdit.rotationDeg > 0 ? ` (${imageEdit.rotationDeg}°)` : ''}
               </span>
             </Button>
@@ -1057,24 +1053,24 @@ export function PhotoControlPanel({
               size="md"
               data-testid="flip-h-btn"
               onClick={onFlipH}
-              className="min-h-[44px] text-xs"
+              className="min-h-[44px] min-w-0 max-w-full overflow-hidden text-xs"
             >
-              <FlipHorizontal2 className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Balik H</span>
+              <FlipHorizontal2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">Balik H</span>
             </Button>
             <Button
               variant={imageEdit.flipV ? 'primary' : 'secondary'}
               size="md"
               data-testid="flip-v-btn"
               onClick={onFlipV}
-              className="min-h-[44px] text-xs"
+              className="min-h-[44px] min-w-0 max-w-full overflow-hidden text-xs"
             >
-              <FlipVertical2 className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Balik V</span>
+              <FlipVertical2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">Balik V</span>
             </Button>
           </div>
 
-          <div className="glass-frosted-card rounded-[22px] border p-4">
+          <div className="glass-frosted-card min-w-0 max-w-full overflow-hidden rounded-[22px] border p-4">
             <Slider
               label="Luruskan"
               testId="slider-straighten"

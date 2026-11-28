@@ -265,7 +265,7 @@ export function UploadZone({
               <path d="M22 60 A38 38 0 0 1 60 22" stroke="var(--text-primary)" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
             <div className="space-y-4">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
                 <div className="glass-inner-rim flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border text-[var(--text-primary)]">
                   {isAnalyzing ? (
                     <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
@@ -274,7 +274,7 @@ export function UploadZone({
                   )}
                 </div>
 
-                <span className="glass-inner-rim shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[11px] font-semibold leading-snug text-[var(--text-secondary)] tabular-nums">
+                <span className="glass-inner-rim max-w-full shrink-0 overflow-hidden truncate rounded-full border px-3.5 py-1.5 text-[11px] font-semibold leading-snug text-[var(--text-secondary)] tabular-nums">
                   RealPhoto · 2K–8K
                 </span>
               </div>
@@ -325,7 +325,7 @@ export function UploadZone({
               <line x1="34" y1="22" x2="86" y2="22" stroke="var(--text-secondary)" strokeWidth="1.2" strokeLinecap="round" />
             </svg>
             <div className="space-y-4">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
                 <div className="glass-inner-rim flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border text-[var(--text-primary)]">
                   {isAnalyzing ? (
                     <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
@@ -334,7 +334,7 @@ export function UploadZone({
                   )}
                 </div>
 
-                <span className="glass-inner-rim shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[11px] font-semibold leading-snug text-[var(--text-primary)] tabular-nums">
+                <span className="glass-inner-rim max-w-full shrink-0 overflow-hidden truncate rounded-full border px-3.5 py-1.5 text-[11px] font-semibold leading-snug text-[var(--text-primary)] tabular-nums">
                   1080p HD · Vlog &amp; 30+ mnt
                 </span>
               </div>

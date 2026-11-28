@@ -1,6 +1,6 @@
 import type {
   AudioCodec,
-  ConversionVideoOptions,
+  AudioSample as MediabunnyAudioSample,
   VideoCodec,
   VideoSample as MediabunnyVideoSample,
 } from 'mediabunny';
@@ -38,6 +38,8 @@ export class VideoFallbackRequiredError extends Error {
 }
 
 export const DEFAULT_WEBCODECS_STALL_MS = 15_000;
+export const MIN_VFR_FRAME_DURATION_US = 8_000;
+export const MAX_VFR_FRAME_DURATION_US = 100_000;
 
 /**
  * Normalizes VFR / smartphone frame timestamps to strictly increasing microseconds so
@@ -129,6 +131,29 @@ export function resolveHardwareVideoBitrateBps(edit: VideoEditState): number {
 }
 
 /**
+ * Builds a WebCodecs VideoEncoderConfig prioritizing smooth motion & quality cadence over
+ * frame-dropping realtime shortcuts.
+ */
+export function buildHardwareH264EncoderConfig(params: {
+  codec: string;
+  width: number;
+  height: number;
+  bitrate: number;
+  framerate?: number;
+}): VideoEncoderConfig {
+  return {
+    codec: params.codec,
+    width: params.width,
+    height: params.height,
+    bitrate: params.bitrate,
+    framerate: params.framerate ?? 30,
+    hardwareAcceleration: 'prefer-hardware',
+    latencyMode: 'quality',
+    avc: { format: 'avc' },
+  };
+}
+
+/**
  * Probes WebCodecs hardware H.264 encoder profiles in preference order (High -> Main -> Baseline).
  */
 export async function probeHardwareH264Codec(params: {
@@ -146,15 +171,15 @@ export async function probeHardwareH264Codec(params: {
 
   for (const codec of HARDWARE_H264_CODEC_CANDIDATES) {
     try {
-      const support = await VideoEncoder.isConfigSupported({
-        codec,
-        width: params.width,
-        height: params.height,
-        bitrate: params.bitrate,
-        framerate: params.framerate ?? 30,
-        hardwareAcceleration: 'prefer-hardware',
-        avc: { format: 'avc' },
-      });
+      const support = await VideoEncoder.isConfigSupported(
+        buildHardwareH264EncoderConfig({
+          codec,
+          width: params.width,
+          height: params.height,
+          bitrate: params.bitrate,
+          framerate: params.framerate,
+        })
+      );
       if (support.supported) {
         return support.config?.codec ?? codec;
       }
@@ -501,30 +526,101 @@ function createWebGlVideoPipeline(
   };
 }
 
-function createGpuVideoFrameProcessor(params: {
+export interface ScheduledFrameSlot {
+  frameIndex: number;
+  outTimestampUs: number;
+  outDurationUs: number;
+  isKeyFrame: boolean;
+}
+
+/**
+ * Generates uniform CFR frame timestamps & 2-second keyframe cadence without drift or 1us glitches.
+ */
+export function buildCfrFrameSchedule(params: {
+  totalFrames: number;
+  targetFps: number;
+  keyframeIntervalSec?: number;
+}): ScheduledFrameSlot[] {
+  const totalFrames = Math.max(0, Math.floor(params.totalFrames));
+  const targetFps = Math.max(1, params.targetFps);
+  const keyIntervalFrames = Math.max(
+    1,
+    Math.round((params.keyframeIntervalSec ?? 2) * targetFps)
+  );
+  const slots: ScheduledFrameSlot[] = [];
+  for (let i = 0; i < totalFrames; i += 1) {
+    const outTimestampUs = Math.round((i * 1_000_000) / targetFps);
+    const nextTimestampUs = Math.round(((i + 1) * 1_000_000) / targetFps);
+    slots.push({
+      frameIndex: i,
+      outTimestampUs,
+      outDurationUs: Math.max(1, nextTimestampUs - outTimestampUs),
+      isKeyFrame: i % keyIntervalFrames === 0,
+    });
+  }
+  return slots;
+}
+
+/**
+ * Normalizes VFR / "Asli" frame timings using 1-frame lookahead while keeping every
+ * frame duration clamped to [MIN_VFR_FRAME_DURATION_US, MAX_VFR_FRAME_DURATION_US].
+ */
+export function normalizeVfrFrameTimingsUs(params: {
+  rawTimestampsUs: number[];
+  rawDurationsUs?: number[];
+  fallbackFps?: number;
+}): Array<{ outTimestampUs: number; outDurationUs: number }> {
+  const { rawTimestampsUs, rawDurationsUs, fallbackFps = 30 } = params;
+  if (rawTimestampsUs.length === 0) return [];
+  const defaultDurUs = Math.min(
+    MAX_VFR_FRAME_DURATION_US,
+    Math.max(MIN_VFR_FRAME_DURATION_US, Math.round(1_000_000 / Math.max(1, fallbackFps)))
+  );
+  const baseRawUs = Number.isFinite(rawTimestampsUs[0]) ? Math.round(rawTimestampsUs[0]) : 0;
+  const startOffsetsUs: number[] = [];
+  for (let i = 0; i < rawTimestampsUs.length; i += 1) {
+    const raw = Number.isFinite(rawTimestampsUs[i])
+      ? Math.max(0, Math.round(rawTimestampsUs[i] - baseRawUs))
+      : 0;
+    if (i === 0) {
+      startOffsetsUs.push(0);
+    } else {
+      startOffsetsUs.push(Math.max(startOffsetsUs[i - 1] + MIN_VFR_FRAME_DURATION_US, raw));
+    }
+  }
+  return startOffsetsUs.map((outTimestampUs, i) => {
+    const explicitDur = rawDurationsUs?.[i];
+    const rawDeltaUs =
+      i + 1 < startOffsetsUs.length
+        ? startOffsetsUs[i + 1] - outTimestampUs
+        : explicitDur !== undefined && Number.isFinite(explicitDur) && explicitDur > 0
+          ? Math.round(explicitDur)
+          : defaultDurUs;
+    const outDurationUs = Math.min(
+      MAX_VFR_FRAME_DURATION_US,
+      Math.max(MIN_VFR_FRAME_DURATION_US, rawDeltaUs)
+    );
+    return { outTimestampUs, outDurationUs };
+  });
+}
+
+function createGpuVideoFrameRenderer(params: {
   VideoSampleCtor: typeof MediabunnyVideoSample;
   edit: VideoEditState;
   width: number;
   height: number;
-  targetFps?: number | null;
   cues: SubtitleCue[];
   useHardsub: boolean;
-  onFrameActivity?: () => void;
 }): {
-  process: NonNullable<ConversionVideoOptions['process']>;
+  render: (
+    sample: MediabunnyVideoSample,
+    outTimestampSec: number,
+    outDurationSec: number
+  ) => MediabunnyVideoSample;
   getEngineModeLabel: () => string;
   dispose: () => void;
 } {
-  const {
-    VideoSampleCtor,
-    edit,
-    width,
-    height,
-    targetFps = null,
-    cues,
-    useHardsub,
-    onFrameActivity,
-  } = params;
+  const { VideoSampleCtor, edit, width, height, cues, useHardsub } = params;
   const visual = resolveGpuVisualParams(edit);
   const coverFit = edit.enhanceSuite.upscale1080.enabled && !edit.enhanceSuite.upscale1080.keepAspect;
 
@@ -535,8 +631,6 @@ function createGpuVideoFrameProcessor(params: {
   let fallbackCtx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null = null;
   let usedWebGl = false;
   let used2dCanvas = false;
-  let lastEmittedFpsSlot: number | null = null;
-  let lastOutputTsUs = -1;
 
   const ensure2dContext = () => {
     if (!fallbackCanvas) {
@@ -566,26 +660,7 @@ function createGpuVideoFrameProcessor(params: {
     getEngineModeLabel: () =>
       usedWebGl && !used2dCanvas ? 'WebGL GPU' : glHandle ? 'WebGL GPU' : 'Canvas GPU',
 
-    process: (sample) => {
-      onFrameActivity?.();
-
-      // Early 60fps -> 30fps skip BEFORE GPU/canvas drawing or VideoFrame allocation
-      if (targetFps && targetFps > 0) {
-        const slot = Math.floor(sample.timestamp * targetFps + 1e-4);
-        if (lastEmittedFpsSlot !== null && slot <= lastEmittedFpsSlot) {
-          return null;
-        }
-        lastEmittedFpsSlot = slot;
-      }
-
-      // Normalize VFR / duplicate timestamps to strictly increasing microseconds
-      const rawTsSec = Number.isFinite(sample.timestamp) ? sample.timestamp : 0;
-      const monotonicTsUs = normalizeMonotonicTimestampUs(rawTsSec * 1_000_000, lastOutputTsUs);
-      lastOutputTsUs = monotonicTsUs;
-      const outTimestampSec = monotonicTsUs / 1_000_000;
-      const outDurationSec =
-        Number.isFinite(sample.duration) && sample.duration > 0 ? sample.duration : 1 / 60;
-
+    render: (sample, outTimestampSec, outDurationSec) => {
       if (!useHardsub && glHandle && sample.rotation === 0 && !sample.flip) {
         const vf = sample.toVideoFrame();
         try {
@@ -613,7 +688,6 @@ function createGpuVideoFrameProcessor(params: {
             colorSpace: BT709_COLOR_SPACE,
           });
         } catch {
-          // Tear down WebGL path cleanly if GPU VideoFrame import isn't supported and switch to 2D canvas
           const g = glHandle;
           glHandle = null;
           if (g) {
@@ -627,7 +701,6 @@ function createGpuVideoFrameProcessor(params: {
         }
       }
 
-      // GPU-backed 2D OffscreenCanvas fallback (also renders hardsub subtitles when active)
       used2dCanvas = true;
       const { canvas, ctx } = ensure2dContext();
       const srcW = Math.max(1, sample.displayWidth);
@@ -644,7 +717,7 @@ function createGpuVideoFrameProcessor(params: {
       ctx.restore();
 
       if (useHardsub) {
-        const active = findActiveCuesAtTime(cues, rawTsSec);
+        const active = findActiveCuesAtTime(cues, outTimestampSec);
         if (active.length > 0) {
           drawHardsubCuesOnCanvas(ctx, width, height, active, edit.subtitle.size, edit.subtitle.position);
         }
@@ -719,9 +792,10 @@ export async function runWebCodecsVideoTranscode(
 
   const {
     ALL_FORMATS,
+    AudioSampleSink,
+    AudioSampleSource,
     BlobSource,
     BufferTarget,
-    Conversion,
     ConversionCanceledError,
     Input,
     MkvOutputFormat,
@@ -730,6 +804,8 @@ export async function runWebCodecsVideoTranscode(
     Output,
     Quality,
     VideoSample,
+    VideoSampleSink,
+    VideoSampleSource,
     WebMOutputFormat,
     canEncodeAudio,
     canEncodeVideo,
@@ -835,23 +911,38 @@ export async function runWebCodecsVideoTranscode(
 
     const muted = isAudioMuted(edit);
     const audioBitrateBps = Math.min(160_000, Math.max(96_000, getEffectiveAudioBitrateKbps(edit) * 1000));
+    const audioQuality = new Quality({
+      bitrate: audioBitrateBps,
+      bitrateMode: 'variable',
+    });
     const primaryAudio = await input.getPrimaryAudioTrack().catch(() => null);
     let discardAudio = muted || !primaryAudio;
+    let audioTransform: { numberOfChannels?: number; sampleRate?: number } | undefined;
 
-    // Safely bypass audio track if absent, 0-channel, or non-decodable so audio-less/exotic clips never stall
     if (!discardAudio && primaryAudio) {
       const channels = await primaryAudio.getNumberOfChannels().catch(() => 0);
+      const sampleRate = await primaryAudio.getSampleRate().catch(() => 48_000);
       const decodable = await primaryAudio.canDecode().catch(() => false);
       if (channels <= 0 || !decodable) {
         discardAudio = true;
       } else {
-        const canAud = await canEncodeAudio(selectedAudioCodec, {
-          quality: new Quality({ bitrate: audioBitrateBps, bitrateMode: 'variable' }),
+        const canDirect = await canEncodeAudio(selectedAudioCodec, {
+          numberOfChannels: channels,
+          sampleRate,
+          quality: audioQuality,
         }).catch(() => false);
-        if (!canAud) {
-          throw new VideoFallbackRequiredError(
-            `Encoder audio ${selectedAudioCodec.toUpperCase()} tidak tersedia.`
-          );
+        if (!canDirect) {
+          const canStereo48k = await canEncodeAudio(selectedAudioCodec, {
+            numberOfChannels: 2,
+            sampleRate: 48_000,
+            quality: audioQuality,
+          }).catch(() => false);
+          if (!canStereo48k) {
+            throw new VideoFallbackRequiredError(
+              `Encoder audio ${selectedAudioCodec.toUpperCase()} tidak tersedia.`
+            );
+          }
+          audioTransform = { numberOfChannels: 2, sampleRate: 48_000 };
         }
       }
     }
@@ -884,99 +975,67 @@ export async function runWebCodecsVideoTranscode(
       shiftedCues = adjustCuesForTrim(edit.subtitle.cues, trim.startSec, trim.endSec);
     }
 
-    const gpuProcessor = createGpuVideoFrameProcessor({
+    const gpuRenderer = createGpuVideoFrameRenderer({
       VideoSampleCtor: VideoSample,
       edit,
       width: targetDims.width,
       height: targetDims.height,
-      targetFps: effectiveFps ?? null,
       cues: shiftedCues,
       useHardsub,
-      onFrameActivity: touchActivity,
     });
 
     const coverFit =
       edit.enhanceSuite.upscale1080.enabled && !edit.enhanceSuite.upscale1080.keepAspect;
 
-    const videoOptions: ConversionVideoOptions = {
-      fit: coverFit ? 'cover' : 'contain',
+    const videoSource = new VideoSampleSource({
       codec: selectedVideoCodec,
       ...(probedH264Codec ? { fullCodecString: probedH264Codec } : {}),
       quality: videoQuality,
+      latencyMode: 'quality',
       hardwareAcceleration: 'prefer-hardware',
       keyFrameInterval: 2,
-      forceTranscode: true,
-      ...(effectiveFps ? { frameRate: effectiveFps } : {}),
-      process: gpuProcessor.process,
-      processedWidth: targetDims.width,
-      processedHeight: targetDims.height,
-    };
-
-    let conversion: Awaited<ReturnType<typeof Conversion.init>>;
-    try {
-      touchActivity();
-      conversion = await runWithStallWatchdog({
-        promise: Conversion.init({
-          input,
-          output,
-          tracks: 'primary',
-          copy: false,
-          showWarnings: false,
-          ...(trim.isTrimmed ? { trim: { start: trim.startSec, end: trim.endSec } } : {}),
-          video: videoOptions,
-          audio: discardAudio
-            ? { discard: true }
-            : {
-                codec: selectedAudioCodec,
-                quality: new Quality({
-                  bitrate: audioBitrateBps,
-                  bitrateMode: 'variable',
-                }),
-                forceTranscode: edit.outputFormat === 'webm',
-              },
-        }),
-        stallTimeoutMs,
-        getLastActivityAt: () => lastActivityAt,
-        onStall: () => gpuProcessor.dispose(),
-        onAbortCleanup: () => gpuProcessor.dispose(),
-        signal,
-        stallMessage: 'Inisialisasi hardware WebCodecs terlalu lama — beralih ke mode berikutnya.',
-      });
-    } catch (initErr) {
-      gpuProcessor.dispose();
-      if (initErr instanceof VideoCancelledError || initErr instanceof ConversionCanceledError || signal?.aborted) {
-        throw new VideoCancelledError();
-      }
-      if (initErr instanceof VideoFallbackRequiredError) {
-        throw initErr;
-      }
-      throw new VideoFallbackRequiredError(
-        initErr instanceof Error ? initErr.message : 'Inisialisasi hardware WebCodecs gagal.'
-      );
-    }
-
-    const unexpectedDiscard = conversion.discardedTracks.find(
-      (d) => d.reason !== 'discarded_by_user'
+      sizeChangeBehavior: coverFit ? 'cover' : 'contain',
+      onEncoderConfig: (cfg) => {
+        cfg.latencyMode = 'quality';
+        if (effectiveFps) {
+          cfg.framerate = effectiveFps;
+        }
+      },
+    });
+    output.addVideoTrack(
+      videoSource,
+      effectiveFps ? { frameRate: effectiveFps } : undefined
     );
-    if (!conversion.isValid || unexpectedDiscard) {
-      gpuProcessor.dispose();
-      const reason = unexpectedDiscard?.reason ?? 'konfigurasi trek tidak valid';
-      throw new VideoFallbackRequiredError(`WebCodecs tidak dapat memproses trek (${reason}).`);
+
+    const audioSource =
+      !discardAudio && primaryAudio
+        ? new AudioSampleSource({
+            codec: selectedAudioCodec,
+            quality: audioQuality,
+            ...(audioTransform ? { transform: audioTransform } : {}),
+          })
+        : null;
+    if (audioSource) {
+      output.addAudioTrack(audioSource);
     }
 
-    touchActivity();
-    conversion.onProgress = (progressRatio) => {
-      if (signal?.aborted) return;
-      touchActivity();
-      const clamped = Math.min(
-        0.98,
-        Math.max(0.05, Number.isFinite(progressRatio) ? progressRatio : 0)
-      );
+    let stopped = false;
+    let emittedVideoFrames = 0;
+    let lastProgressRatio = 0;
+    const totalExpectedDurationSec = Math.max(0.05, trim.durationSec || sourceMetadata.durationSec || 1);
+
+    const emitTranscodeProgress = (currentTimeSec: number) => {
+      if (signal?.aborted || stopped) return;
+      const ratio = Math.min(0.97, Math.max(0.06, 0.06 + (currentTimeSec / totalExpectedDurationSec) * 0.91));
+      if (ratio - lastProgressRatio < 0.01 && ratio < 0.96) {
+        return;
+      }
+      lastProgressRatio = ratio;
       onProgress({
         requestId,
         backend: 'webcodecs-mediabunny',
         stage: 'transcoding',
-        ratio: clamped,
+        ratio,
         elapsedMs: performance.now() - t0,
         detail: useHardsub
           ? 'Merender subtitle dengan akselerasi hardware GPU…'
@@ -984,21 +1043,239 @@ export async function runWebCodecsVideoTranscode(
       });
     };
 
+    const sinkStartSec = trim.isTrimmed ? trim.startSec : 0;
+    const sinkEndSec = trim.isTrimmed ? trim.endSec : Number.POSITIVE_INFINITY;
+    const clipDurationUs = trim.isTrimmed
+      ? Math.max(MIN_VFR_FRAME_DURATION_US, Math.round(trim.durationSec * 1_000_000))
+      : Number.POSITIVE_INFINITY;
+
+    const pumpVideo = async () => {
+      const videoSink = new VideoSampleSink(primaryVideo, {
+        hardwareAcceleration: 'prefer-hardware',
+      });
+      const sampleIter = videoSink.samples(sinkStartSec, sinkEndSec);
+      const slotTsUs = (slotIdx: number) =>
+        effectiveFps ? Math.round((slotIdx * 1_000_000) / effectiveFps) : 0;
+      const keyIntervalFrames = effectiveFps ? Math.max(1, Math.round(effectiveFps * 2)) : 60;
+
+      let cfrSlotIdx = 0;
+      let nextVfrStartUs = 0;
+      let lastVfrKeyTsUs = -1;
+      let heldSample: MediabunnyVideoSample | null = null;
+
+      const emitFrame = async (
+        srcSample: MediabunnyVideoSample,
+        outTimestampUs: number,
+        outDurationUs: number,
+        isKeyFrame: boolean
+      ) => {
+        touchActivity();
+        const outTimestampSec = outTimestampUs / 1_000_000;
+        const outDurationSec = Math.max(MIN_VFR_FRAME_DURATION_US / 1_000_000, outDurationUs / 1_000_000);
+        const renderedSample = gpuRenderer.render(srcSample, outTimestampSec, outDurationSec);
+        try {
+          await videoSource.add(renderedSample, { keyFrame: isKeyFrame });
+          emittedVideoFrames += 1;
+          touchActivity();
+          emitTranscodeProgress(outTimestampSec + outDurationSec);
+        } finally {
+          renderedSample.close();
+        }
+      };
+
+      const pullNextValidSample = async (): Promise<MediabunnyVideoSample | null> => {
+        while (!signal?.aborted && !stopped) {
+          const step = await sampleIter.next();
+          if (step.done) return null;
+          const candidate = step.value;
+          const candidateEnd = candidate.timestamp + Math.max(0, candidate.duration);
+          if (trim.isTrimmed && candidateEnd <= sinkStartSec && candidate.duration > 0) {
+            candidate.close();
+            continue;
+          }
+          if (trim.isTrimmed && candidate.timestamp >= sinkEndSec) {
+            candidate.close();
+            return null;
+          }
+          return candidate;
+        }
+        return null;
+      };
+
+      try {
+        heldSample = await pullNextValidSample();
+        while (heldSample && !signal?.aborted && !stopped) {
+          const nextSample = await pullNextValidSample();
+          const currRelUs = Math.max(0, Math.round((heldSample.timestamp - sinkStartSec) * 1_000_000));
+
+          if (effectiveFps) {
+            const nextRelUs = nextSample
+              ? Math.max(currRelUs + 1, Math.round((nextSample.timestamp - sinkStartSec) * 1_000_000))
+              : Number.POSITIVE_INFINITY;
+            const midpointUs = nextSample
+              ? (currRelUs + nextRelUs) / 2
+              : Math.min(
+                  clipDurationUs,
+                  currRelUs +
+                    Math.max(
+                      Math.round(1_000_000 / effectiveFps),
+                      Math.round((heldSample.duration > 0 ? heldSample.duration : 1 / effectiveFps) * 1_000_000)
+                    )
+                );
+
+            let emittedForHeld = 0;
+            while (!signal?.aborted && !stopped) {
+              const gridTsUs = slotTsUs(cfrSlotIdx);
+              if (gridTsUs >= clipDurationUs && cfrSlotIdx > 0) break;
+              if (nextSample) {
+                if (gridTsUs > midpointUs && cfrSlotIdx > 0) break;
+              } else if ((gridTsUs >= midpointUs && cfrSlotIdx > 0) || emittedForHeld >= 2) {
+                break;
+              }
+              const nextGridTsUs = slotTsUs(cfrSlotIdx + 1);
+              const outDurationUs = Math.max(1, nextGridTsUs - gridTsUs);
+              const isKeyFrame = cfrSlotIdx % keyIntervalFrames === 0;
+              await emitFrame(heldSample, gridTsUs, outDurationUs, isKeyFrame);
+              cfrSlotIdx += 1;
+              emittedForHeld += 1;
+            }
+          } else {
+            const outTimestampUs = emittedVideoFrames === 0 ? 0 : Math.max(nextVfrStartUs, currRelUs);
+            const fallbackDurUs = Math.min(
+              MAX_VFR_FRAME_DURATION_US,
+              Math.max(
+                MIN_VFR_FRAME_DURATION_US,
+                Math.round((heldSample.duration > 0 ? heldSample.duration : 1 / 30) * 1_000_000)
+              )
+            );
+            const nextRawRelUs = nextSample
+              ? Math.max(
+                  outTimestampUs + MIN_VFR_FRAME_DURATION_US,
+                  Math.round((nextSample.timestamp - sinkStartSec) * 1_000_000)
+                )
+              : outTimestampUs + fallbackDurUs;
+            const outDurationUs = Math.min(
+              MAX_VFR_FRAME_DURATION_US,
+              Math.max(MIN_VFR_FRAME_DURATION_US, nextRawRelUs - outTimestampUs)
+            );
+            nextVfrStartUs = outTimestampUs + MIN_VFR_FRAME_DURATION_US;
+            const isKeyFrame =
+              emittedVideoFrames === 0 ||
+              lastVfrKeyTsUs < 0 ||
+              outTimestampUs - lastVfrKeyTsUs >= 2_000_000;
+            if (isKeyFrame) {
+              lastVfrKeyTsUs = outTimestampUs;
+            }
+            await emitFrame(heldSample, outTimestampUs, outDurationUs, isKeyFrame);
+          }
+
+          heldSample.close();
+          heldSample = nextSample;
+        }
+      } finally {
+        heldSample?.close();
+        await sampleIter.return?.().catch(() => {});
+        videoSource.close();
+      }
+    };
+
+    const pumpAudio = async () => {
+      if (!audioSource || !primaryAudio) return;
+      const audioSink = new AudioSampleSink(primaryAudio);
+      const audIter = audioSink.samples(sinkStartSec, sinkEndSec);
+      let prevAudioTsSec = -1;
+
+      try {
+        while (!signal?.aborted && !stopped) {
+          const step = await audIter.next();
+          if (step.done) break;
+          const rawSample: MediabunnyAudioSample = step.value;
+          let trimmedSample: MediabunnyAudioSample = rawSample;
+          try {
+            touchActivity();
+            const sampleStart = rawSample.timestamp;
+            const sampleEnd = rawSample.timestamp + rawSample.duration;
+            if (trim.isTrimmed && (sampleEnd <= trim.startSec || sampleStart >= trim.endSec)) {
+              continue;
+            }
+            if (trim.isTrimmed) {
+              const startFrame =
+                sampleStart < trim.startSec
+                  ? Math.min(
+                      rawSample.numberOfFrames,
+                      Math.max(0, Math.round((trim.startSec - sampleStart) * rawSample.sampleRate))
+                    )
+                  : 0;
+              const endFrame =
+                sampleEnd > trim.endSec
+                  ? Math.max(
+                      startFrame,
+                      Math.min(
+                        rawSample.numberOfFrames,
+                        Math.round((trim.endSec - sampleStart) * rawSample.sampleRate)
+                      )
+                    )
+                  : rawSample.numberOfFrames;
+              if (endFrame <= startFrame) {
+                continue;
+              }
+              if (startFrame > 0 || endFrame < rawSample.numberOfFrames) {
+                trimmedSample = rawSample.trim(startFrame, endFrame);
+              }
+            }
+            const relStartSec = Math.max(0, trimmedSample.timestamp - sinkStartSec);
+            const monotonicTsSec =
+              prevAudioTsSec < 0 ? relStartSec : Math.max(prevAudioTsSec + 1e-6, relStartSec);
+            prevAudioTsSec = monotonicTsSec;
+            trimmedSample.setTimestamp(monotonicTsSec);
+            await audioSource.add(trimmedSample);
+            touchActivity();
+          } finally {
+            if (trimmedSample !== rawSample) {
+              trimmedSample.close();
+            }
+            rawSample.close();
+          }
+        }
+      } finally {
+        await audIter.return?.().catch(() => {});
+        audioSource.close();
+      }
+    };
+
+    const runPipeline = async () => {
+      touchActivity();
+      await output.start();
+      await Promise.all([pumpVideo(), pumpAudio()]);
+      if (signal?.aborted) {
+        throw new VideoCancelledError();
+      }
+      if (emittedVideoFrames === 0) {
+        throw new VideoFallbackRequiredError('Tidak ada frame video yang berhasil diproses WebCodecs.');
+      }
+      touchActivity();
+      await output.finalize();
+    };
+
     try {
       await runWithStallWatchdog({
-        promise: conversion.execute(),
+        promise: runPipeline(),
         stallTimeoutMs,
         getLastActivityAt: () => lastActivityAt,
         onStall: () => {
-          void conversion.cancel();
+          stopped = true;
+          void output.cancel().catch(() => {});
         },
         onAbortCleanup: () => {
-          void conversion.cancel();
+          stopped = true;
+          void output.cancel().catch(() => {});
         },
         signal,
         stallMessage: 'Penyandian hardware WebCodecs terhenti (15 dtk) — beralih ke mode berikutnya.',
       });
     } catch (err) {
+      stopped = true;
+      void output.cancel().catch(() => {});
       if (err instanceof VideoCancelledError || err instanceof ConversionCanceledError || signal?.aborted) {
         throw new VideoCancelledError();
       }
@@ -1009,7 +1286,7 @@ export async function runWebCodecsVideoTranscode(
         err instanceof Error ? err.message : 'Eksekusi hardware WebCodecs gagal.'
       );
     } finally {
-      gpuProcessor.dispose();
+      gpuRenderer.dispose();
     }
 
     if (signal?.aborted) {
@@ -1028,7 +1305,7 @@ export async function runWebCodecsVideoTranscode(
       elapsedMs: performance.now() - t0,
     });
 
-    const gpuMode = gpuProcessor.getEngineModeLabel();
+    const gpuMode = gpuRenderer.getEngineModeLabel();
     return {
       outputBlob: new Blob([target.buffer], { type: formatMeta.mime }),
       outputFileName: buildVideoExportFileName(
@@ -1039,7 +1316,7 @@ export async function runWebCodecsVideoTranscode(
       outputWidth: targetDims.width,
       outputHeight: targetDims.height,
       durationSec: trim.durationSec,
-      engineDetail: `webcodecs-hardware (${probedH264Codec ?? selectedVideoCodec} · ${gpuMode})`,
+      engineDetail: `webcodecs-hardware (${probedH264Codec ?? selectedVideoCodec} · ${gpuMode} · CFR quality)`,
     };
   } finally {
     input.dispose();

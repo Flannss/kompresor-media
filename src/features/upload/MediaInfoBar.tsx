@@ -255,7 +255,7 @@ export function MediaInfoBar({
     <div className="flex w-full max-w-full flex-col items-center gap-2.5">
       <div
         onPointerMove={handleGlassPointerMove}
-        className="glass-dynamic-pill max-w-full rounded-2xl px-4 py-2.5 sm:rounded-full sm:px-5 sm:py-2"
+        className="glass-dynamic-pill max-w-full overflow-hidden rounded-2xl px-4 py-2.5 sm:rounded-full sm:px-5 sm:py-2"
       >
         {metadata.kind === 'image' ? renderPhotoSummary(metadata) : renderVideoSummary(metadata)}
       </div>

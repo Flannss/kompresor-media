@@ -233,10 +233,10 @@ export function ExportSharePanel({
         data-testid={mediaKind === 'image' ? 'download-photo-btn' : 'download-video-btn'}
         disabled={!canExport}
         onClick={() => void handleDownload()}
-        className="min-h-[48px] w-full rounded-full font-semibold sm:min-h-[46px] lg:min-h-[44px]"
+        className="min-h-[48px] w-full max-w-full overflow-hidden rounded-full font-semibold sm:min-h-[46px] lg:min-h-[44px]"
       >
-        <Download className="h-4 w-4" aria-hidden="true" />
-        <span>{downloadLabel}</span>
+        <Download className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span className="truncate">{downloadLabel}</span>
       </Button>
 
       {likelyMobile ? (
@@ -246,10 +246,10 @@ export function ExportSharePanel({
           data-testid="whatsapp-share-btn"
           disabled={!canExport || sharing}
           onClick={() => void handleSharePlatform('whatsapp')}
-          className="glass-inner-rim min-h-[44px] w-full rounded-full"
+          className="glass-inner-rim min-h-[44px] w-full max-w-full overflow-hidden rounded-full"
         >
-          <Share2 className="h-4 w-4 text-[var(--text-primary)]" aria-hidden="true" />
-          <span>{preparingFullRes ? `Merender ${renderResTag} penuh…` : 'Bagikan'}</span>
+          <Share2 className="h-4 w-4 shrink-0 text-[var(--text-primary)]" aria-hidden="true" />
+          <span className="truncate">{preparingFullRes ? `Merender ${renderResTag} penuh…` : 'Bagikan'}</span>
         </Button>
       ) : (
         <div className="grid grid-cols-3 gap-2.5" role="group" aria-label="Kirim cepat ke aplikasi">
@@ -259,9 +259,9 @@ export function ExportSharePanel({
             data-testid="whatsapp-share-btn"
             disabled={!canExport || sharing}
             onClick={() => void handleSharePlatform('whatsapp')}
-            className="glass-inner-rim min-h-[42px] rounded-full px-2.5 text-[11px] font-semibold lg:min-h-[36px]"
+            className="glass-inner-rim min-h-[42px] min-w-0 max-w-full overflow-hidden rounded-full px-2 text-[11px] font-semibold lg:min-h-[38px]"
           >
-            WhatsApp
+            <span className="truncate">WhatsApp</span>
           </Button>
           <Button
             variant="secondary"
@@ -269,9 +269,9 @@ export function ExportSharePanel({
             data-testid="instagram-share-btn"
             disabled={!canExport || sharing}
             onClick={() => void handleSharePlatform('instagram')}
-            className="glass-inner-rim min-h-[42px] rounded-full px-2.5 text-[11px] font-semibold lg:min-h-[36px]"
+            className="glass-inner-rim min-h-[42px] min-w-0 max-w-full overflow-hidden rounded-full px-2 text-[11px] font-semibold lg:min-h-[38px]"
           >
-            Instagram
+            <span className="truncate">Instagram</span>
           </Button>
           <Button
             variant="secondary"
@@ -279,9 +279,9 @@ export function ExportSharePanel({
             data-testid="tiktok-share-btn"
             disabled={!canExport || sharing}
             onClick={() => void handleSharePlatform('tiktok')}
-            className="glass-inner-rim min-h-[42px] rounded-full px-2.5 text-[11px] font-semibold lg:min-h-[36px]"
+            className="glass-inner-rim min-h-[42px] min-w-0 max-w-full overflow-hidden rounded-full px-2 text-[11px] font-semibold lg:min-h-[38px]"
           >
-            TikTok
+            <span className="truncate">TikTok</span>
           </Button>
         </div>
       )}
@@ -289,7 +289,7 @@ export function ExportSharePanel({
       {exportedWidth && exportedHeight && exportedBytes !== null && (
         <p
           data-testid="exported-dimensions-badge"
-          className="glass-inner-rim break-words rounded-2xl border px-3.5 py-2 text-center text-[11px] font-medium leading-relaxed text-[var(--text-secondary)] tabular-nums lg:py-1.5 lg:text-[10.5px]"
+          className="glass-inner-rim max-w-full overflow-hidden break-words rounded-2xl border px-3.5 py-2 text-center text-[11px] font-medium leading-relaxed text-[var(--text-secondary)] tabular-nums lg:py-1.5 lg:text-[10.5px]"
         >
           {needsFullResPreparation
             ? `Pratinjau cepat (${exportedWidth}×${exportedHeight}) · Hasil penuh dirender saat simpan`

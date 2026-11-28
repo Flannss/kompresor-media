@@ -130,6 +130,7 @@
   .glass-dynamic-pill {
     position: relative;
     isolation: isolate;
+    max-width: 100%;
     background: var(--glass-pill-bg);
     box-shadow: var(--glass-pill-shadow);
     -webkit-backdrop-filter: blur(12px) saturate(150%) brightness(1.03);
@@ -153,6 +154,7 @@
 
   /* Tier 2 — Frosted Editorial Surface (Landing Studio Cards & Inspector Panel Shells) */
   .glass-frosted-card {
+    max-width: 100%;
     background: var(--glass-frosted-bg);
     border-color: var(--glass-frosted-border);
     box-shadow: var(--glass-frosted-shadow);
@@ -166,6 +168,7 @@
 
   /* Tier 3 — Deep Smoked Glass (Modals, Export & Confirm Sheets, Alert Banners) */
   .glass-sheet-modal {
+    max-width: 100%;
     background: var(--glass-sheet-bg);
     border-color: var(--glass-sheet-border);
     box-shadow: var(--glass-sheet-shadow);
@@ -175,6 +178,7 @@
 
   /* Inner Companion — ZERO backdrop-filter for badges, chips & nested controls */
   .glass-inner-rim {
+    max-width: 100%;
     background: var(--glass-inner-bg);
     border-color: var(--glass-inner-border);
     box-shadow: var(--glass-inner-shadow);
